@@ -1,0 +1,124 @@
+name: Publish VSIX
+on:
+  workflow_run:
+    workflows: ["Release version on merge"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing annotated version tag on main
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: vsix-release
+  cancel-in-progress: false
+jobs:
+  resolve:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      skip: ${{ steps.release.outputs.skip }}
+      tag: ${{ steps.release.outputs.tag }}
+      sha: ${{ steps.release.outputs.sha }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Resolve trusted version tag
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/vsix_release.py resolve
+  build:
+    needs: resolve
+    if: needs.resolve.outputs.skip == 'false'
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Install packaging tools and test tagged source
+        run: |
+          if (Test-Path package-lock.json) {
+            npm ci --ignore-scripts
+          }
+          npm test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build VSIX from the tagged source
+        env:
+          RELEASE_VERSION: ${{ needs.resolve.outputs.version }}
+        run: |
+          New-Item -ItemType Directory -Path release-assets -Force | Out-Null
+          $readmeArgs = @()
+          if (Test-Path docs/extension-readme.md) { $readmeArgs = @('--readme-path', 'docs/extension-readme.md') }
+          npx --yes @vscode/vsce@4.1.0 package @readmeArgs --out "release-assets/codex-switch-$env:RELEASE_VERSION.vsix"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix-release
+          path: release-assets/
+          retention-days: 7
+          if-no-files-found: error
+  publish:
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: vsix-release
+          path: release-assets
+      - name: Verify and publish immutable VSIX and checksum
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.sha }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+        run: python3 scripts/vsix_release.py publish --tag "$RELEASE_TAG"
+  readme:
+    needs: [resolve, publish]
+    if: >-
+      ${{ always() && !cancelled() && needs.resolve.result == 'success' &&
+          needs.resolve.outputs.tag != '' &&
+          (needs.publish.result == 'success' ||
+           (needs.resolve.outputs.skip == 'true' && needs.publish.result == 'skipped')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Link the verified release in README
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.sha }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+        run: python3 scripts/vsix_release.py readme --tag "$RELEASE_TAG"

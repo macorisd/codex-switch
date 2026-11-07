@@ -8,6 +8,7 @@ venv/
 # Generated extension packages and test output
 *.vsix
 dist/
+release-assets/
 build/
 coverage/
 .pytest_cache/
