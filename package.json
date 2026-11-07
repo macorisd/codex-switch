@@ -2,35 +2,96 @@
   "name": "codex-provider-switch",
   "displayName": "Codex Switch",
   "description": "Alterna entre ChatGPT Plus y DeepSeek en Codex desde la barra lateral.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "macor-local",
   "license": "GPL-3.0-only",
-  "repository": { "type": "git", "url": "https://github.com/macorisd/codex-switch.git" },
-  "engines": { "vscode": "^1.100.0" },
-  "categories": ["Other"],
-  "extensionKind": ["ui"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/macorisd/codex-switch.git"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
   "main": "./extension.js",
-  "activationEvents": ["onView:codexSwitch.selector", "onUri"],
-  "capabilities": { "untrustedWorkspaces": { "supported": false } },
+  "activationEvents": [
+    "onView:codexSwitch.selector",
+    "onUri"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
   "contributes": {
     "viewsContainers": {
-      "activitybar": [{ "id": "codexSwitch", "title": "Codex Switch", "icon": "media/switch.svg" }]
+      "activitybar": [
+        {
+          "id": "codexSwitch",
+          "title": "Codex Switch",
+          "icon": "media/sidebar.svg"
+        }
+      ]
     },
     "views": {
-      "codexSwitch": [{ "type": "webview", "id": "codexSwitch.selector", "name": "Proveedor", "contextualTitle": "Codex Switch" }]
+      "codexSwitch": [
+        {
+          "type": "webview",
+          "id": "codexSwitch.selector",
+          "name": "Proveedor",
+          "contextualTitle": "Codex Switch"
+        }
+      ]
     },
     "commands": [
-      { "command": "codexSwitch.open", "title": "Codex Switch: Abrir selector", "icon": "$(arrow-swap)" },
-      { "command": "codexSwitch.refresh", "title": "Codex Switch: Actualizar modelos", "icon": "$(refresh)" },
-      { "command": "codexSwitch.key", "title": "Codex Switch: Guardar clave de DeepSeek", "icon": "$(key)" }
+      {
+        "command": "codexSwitch.open",
+        "title": "Codex Switch: Abrir selector",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "codexSwitch.refresh",
+        "title": "Codex Switch: Actualizar modelos",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "codexSwitch.key",
+        "title": "Codex Switch: Guardar clave de DeepSeek",
+        "icon": "$(key)"
+      }
     ],
     "menus": {
-      "view/title": [{ "command": "codexSwitch.refresh", "when": "view == codexSwitch.selector", "group": "navigation" }]
+      "view/title": [
+        {
+          "command": "codexSwitch.refresh",
+          "when": "view == codexSwitch.selector",
+          "group": "navigation"
+        }
+      ]
     }
   },
   "scripts": {
-    "test": "node --test test/*.test.js && python backend/test_switcher.py",
-    "package": "npx @vscode/vsce package"
+    "brand": "node scripts/build-brand-assets.cjs",
+    "test": "node --test test/*.test.js && python backend/test_switcher.py && python -m unittest discover -s scripts -p test_*.py",
+    "package": "vsce package --readme-path docs/extension-readme.md"
   },
-  "files": ["extension.js", "media", "backend/bridge.py", "backend/switcher.py", "backend/credential_helper.py", "backend/catalog.json", "README.md", "LICENSE"]
+  "files": [
+    "extension.js",
+    "media",
+    "backend/bridge.py",
+    "backend/switcher.py",
+    "backend/credential_helper.py",
+    "backend/catalog.json",
+    "docs/banner.svg",
+    "docs/extension-readme.md",
+    "LICENSE"
+  ],
+  "devDependencies": {
+    "@vscode/vsce": "4.1.0"
+  }
 }

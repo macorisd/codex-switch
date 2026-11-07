@@ -29,6 +29,21 @@ Source: explicit user instructions and initialization answers, 2026-11-07.
   and a version table listing the changes in codex-switch.
 - Keep a suitable `.gitignore` for source, tooling, packaging and local state.
 
+## Brand assets
+
+Source: user-supplied logo and explicit instructions, 2026-11-07.
+
+- Preserve the supplied purple rosette silhouette and its internal six-tooth
+  gear when vectorizing the logo. Remove the white rounded-square backdrop.
+- Reuse one vector geometry for the colored logo, README banner and sidebar
+  icon; avoid redrawing or simplifying the icon into a different symbol.
+- Start the README with an SVG banner in the same general composition as
+  microplanner: logo on the left, product title and a short subtitle. Include
+  only the title and subtitle; omit platform labels, badges and extra copy.
+- Use a transparent monochrome SVG for the VS Code Activity Bar, with the gear
+  expressed as negative space. It replaces the original two-arrow symbol and
+  follows the editor's icon color in both light and dark themes.
+
 ## Credentials and verification
 
 - Preserve the existing API key, ChatGPT sign-in and user configuration during
@@ -42,3 +57,17 @@ Source: explicit user instructions and initialization answers, 2026-11-07.
   visual verification from automated tests alone.
 - This is a VS Code extension project. microplanner's Flutter, Windows release
   bundle and physical Android verification rules do not apply here.
+
+## Release artifacts
+
+Source: explicit user request, 2026-11-07.
+
+- Every GitHub version release must provide the corresponding installable VSIX.
+  Package the source at its immutable version tag and verify that the manifest
+  version matches the tag before publication.
+- After successful artifact publication, automatically hyperlink the matching
+  version in the README history table to its GitHub Release. Preserve the
+  banner, provider table, descriptions and other version rows.
+- Release publication must be repeatable without replacing different existing
+  artifacts or moving tags. An existing tag without a Release must be
+  recoverable through a manual workflow dispatch.
