@@ -1,0 +1,36 @@
+# Local dependencies and Python caches
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Generated extension packages and test output
+*.vsix
+dist/
+build/
+coverage/
+.pytest_cache/
+.vscode-test/
+test-results/
+playwright-report/
+*.log
+
+# Editor and operating-system state
+.idea/
+.vscode/*.local.*
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.tmp
+
+# Credentials and runtime state (normally kept outside the repository)
+.env
+.env.*
+!.env.example
+*.dpapi
+auth.json
+config.toml
+previous-settings.json
+*.toml.bak
+*.lnk

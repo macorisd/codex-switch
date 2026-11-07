@@ -1,0 +1,166 @@
+name: Release version on merge
+on:
+  pull_request_target:
+    types: [closed]
+    branches: ["main"]
+permissions:
+  contents: write
+  pull-requests: read
+jobs:
+  tag:
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify merged PR and publish immutable version tag
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: python3 {0}
+        run: |
+          """Embedded into the project workflow. Standard library only; no checkout.
+
+          PR text is parsed as data. This code never executes a command from a PR, changes
+          branches, moves a tag or merges a PR. Tests inject a fake API with no network.
+          """
+          import json
+          import os
+          import re
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          VERSION = re.compile(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\Z')
+          MARKER = re.compile(r'<!-- release-metadata (\{[^\r\n]*\}) -->')
+
+
+          def version(value):
+              if not isinstance(value, str) or not VERSION.fullmatch(value):
+                  raise ValueError('Expected major.minor.patch')
+              return tuple(map(int, value.split('.')))
+
+
+          def increment(value, kind):
+              major, minor, patch = version(value)
+              if kind == 'major':
+                  return f'{major+1}.0.0'
+              if kind == 'minor':
+                  return f'{major}.{minor+1}.0'
+              if kind == 'patch':
+                  return f'{major}.{minor}.{patch+1}'
+              raise ValueError('Unsupported release kind')
+
+
+          def peel(api, repo, obj):
+              for _ in range(8):
+                  if obj['type'] == 'commit':
+                      return obj['sha']
+                  if obj['type'] != 'tag':
+                      break
+                  obj = api('GET', f'/repos/{repo}/git/tags/{obj["sha"]}')['object']
+              raise ValueError('Tag must resolve to a commit')
+
+
+          def find_tag(api, repo, tag):
+              try:
+                  ref = api('GET', f'/repos/{repo}/git/ref/tags/{urllib.parse.quote(tag, safe="")}')
+              except urllib.error.HTTPError as error:
+                  if error.code == 404:
+                      return None
+                  raise
+              return peel(api, repo, ref['object'])
+
+
+          def release(event, api):
+              pr = event.get('pull_request', {})
+              if not pr.get('merged'):
+                  return {'status': 'skipped', 'reason': 'PR is not merged'}
+              repo = event['repository']['full_name']
+              if pr['head']['repo']['full_name'] != repo or pr['base']['repo']['full_name'] != repo:
+                  return {'status': 'skipped', 'reason': 'Only same-repository branches are supported'}
+              matches = MARKER.findall(pr.get('body') or '')
+              if not matches:
+                  return {'status': 'skipped', 'reason': 'No release metadata'}
+              if len(matches) != 1:
+                  raise ValueError('Expected exactly one release marker')
+              data = json.loads(matches[0])
+              if data.get('schema') != 1 or data.get('tagPrefix') not in ('', 'v'):
+                  raise ValueError('Invalid release metadata')
+              if data.get('mainBranch') != pr['base']['ref'] or data.get('branch') != pr['head']['ref']:
+                  raise ValueError('Release branch metadata does not match merged PR')
+              if not re.fullmatch(r'(feature|feat|fix|bugfix|chore|docs|refactor|test|ci|perf|build|release)/[A-Za-z0-9][A-Za-z0-9._/-]*', data['branch']):
+                  raise ValueError('Expected a descriptive feature or fix branch')
+              if data.get('kind') not in ('patch', 'minor', 'major'):
+                  raise ValueError('Invalid release kind')
+              if data['kind'] != 'patch' and not re.fullmatch(
+                      r'(?:docs/)?plans/plan-\d{8}T\d{9}Z-version'+re.escape(data['version'])+r'\.md', data.get('plan') or ''):
+                  raise ValueError('Plan release must identify its PLAN')
+              version(data['version'])
+              base = data['baseVersion']
+              version(base)
+              sha = pr['merge_commit_sha']
+              if not re.fullmatch('[a-f0-9]{40}', sha or ''):
+                  raise ValueError('Missing verified merge commit SHA')
+              # Re-read immutable facts from GitHub; do not tag a stale event head.
+              actual = api('GET', f'/repos/{repo}/pulls/{pr["number"]}')
+              if not actual.get('merged') or actual.get('merge_commit_sha') != sha:
+                  raise ValueError('PR merge has not been confirmed by GitHub')
+              comparison = api('GET', f'/repos/{repo}/compare/{sha}...{urllib.parse.quote(pr["base"]["ref"], safe="")}')
+              if comparison.get('merge_base_commit', {}).get('sha') != sha:
+                  raise ValueError('Merge commit is not reachable from the main branch')
+              tag = data['tagPrefix'] + data['version']
+              existing = find_tag(api, repo, tag)
+              if existing is not None:
+                  if existing != sha:
+                      raise ValueError('Tag already exists on another commit; never overwrite it')
+                  return {'status': 'existing', 'tag': tag, 'commit': sha}
+              known = []
+              page = 1
+              while True:
+                  tags = api('GET', f'/repos/{repo}/tags?per_page=100&page={page}')
+                  for item in tags:
+                      name = item['name']
+                      if name.startswith(data['tagPrefix']):
+                          candidate = name[len(data['tagPrefix']):]
+                          if VERSION.fullmatch(candidate):
+                              known.append(candidate)
+                  if len(tags) < 100:
+                      break
+                  page += 1
+              if known:
+                  latest = max(known, key=version)
+                  if version(base) > version(latest):
+                      raise ValueError('Claimed base version is ahead of published tags')
+                  base = latest
+              if data['version'] != increment(base, data['kind']):
+                  raise ValueError('Release version is stale or out of order; revise the release explicitly')
+              obj = api('POST', f'/repos/{repo}/git/tags', {
+                  'tag': tag, 'message': f'Release {data["version"]} (PR #{pr["number"]})',
+                  'object': sha, 'type': 'commit'})
+              try:
+                  api('POST', f'/repos/{repo}/git/refs', {'ref': 'refs/tags/' + tag, 'sha': obj['sha']})
+              except urllib.error.HTTPError as error:
+                  if error.code not in (409, 422) or find_tag(api, repo, tag) != sha:
+                      raise
+              if find_tag(api, repo, tag) != sha:
+                  raise ValueError('Tag publication could not be verified')
+              return {'status': 'published', 'tag': tag, 'commit': sha}
+
+
+          def main():
+              api_url = os.environ.get('GITHUB_API_URL', 'https://api.github.com').rstrip('/')
+              with open(os.environ['GITHUB_EVENT_PATH'], encoding='utf-8') as stream:
+                  event = json.load(stream)
+
+              def api(method, path, payload=None):
+                  request = urllib.request.Request(api_url + path, method=method,
+                            data=None if payload is None else json.dumps(payload).encode('utf-8'),
+                            headers={'Authorization': 'Bearer ' + os.environ['GITHUB_TOKEN'],
+                                     'Accept': 'application/vnd.github+json', 'Content-Type': 'application/json',
+                                     'User-Agent': 'version-release'})
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      return json.load(response)
+              print(json.dumps(release(event, api)))
+
+
+          if __name__ == '__main__':
+              main()
