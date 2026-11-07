@@ -55,6 +55,19 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
 - Verify backend/configuration behavior and the extension tests when their code
   changes. For visible changes, inspect the actual VS Code sidebar; do not claim
   visual verification from automated tests alone.
+- Before opening or updating a PR, install the exact VSIX built from that PR's
+  final source into the user's **current VS Code instance and active profile**.
+  Verify the version actually loaded in that window and its visible changes.
+  Installing into the default CLI profile, inspecting an installation directory,
+  or testing only in an isolated development host is not sufficient.
+- Reload that actual window when needed so the user can inspect the proposed
+  changes before merging. Preserve workspace, open editors, credentials and
+  configuration. If an active agent connection prevents a safe reload, explain
+  the concrete blocker and do not claim the installation is active or publish
+  the PR as ready until the current-window check is complete.
+- This current-window installation requirement was explicitly added by the user
+  on 2026-11-07 after a CLI installation left the current window stale. It applies
+  to every future codex-switch PR and update.
 - This is a VS Code extension project. microplanner's Flutter, Windows release
   bundle and physical Android verification rules do not apply here.
 

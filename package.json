@@ -2,7 +2,7 @@
   "name": "codex-provider-switch",
   "displayName": "Codex Switch",
   "description": "Alterna entre ChatGPT Plus y DeepSeek en Codex desde la barra lateral.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "macor-local",
   "license": "GPL-3.0-only",
   "repository": {
