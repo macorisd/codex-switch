@@ -15,7 +15,7 @@ between providers. Requires Windows and Python 3.11+ on `PATH`.
 
 | Version | Changes |
 | --- | --- |
-| 0.1.1 | Move source into this repository, bundle the local connector with the extension, and document project conventions. |
+| [0.1.1](https://github.com/macorisd/codex-switch/releases/tag/v0.1.1) | Move source into this repository, bundle the local connector with the extension, and document project conventions. |
 | 0.1.0 | Initial sidebar selector for ChatGPT and DeepSeek, model and reasoning selection, encrypted API key storage, and connection checks. |
 
 <details>
