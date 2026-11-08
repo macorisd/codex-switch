@@ -87,8 +87,8 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
   only the title and subtitle; omit platform labels, badges and extra copy.
 - The banner subtitle ends with a period and the title/subtitle block is
   optically centered vertically against the logo.
-- Add a restrained purple vector detail on the right side of the banner that
-  evokes switching between providers while remaining subordinate to the title.
+- The banner background is a single diagonal two-stop gradient from white to a
+  soft purple. Do not add decorative motifs or additional vector details.
 - Use a transparent monochrome SVG for the VS Code Activity Bar, with the gear
   expressed as negative space. It replaces the original two-arrow symbol and
   follows the editor's icon color in both light and dark themes.
