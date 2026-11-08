@@ -58,7 +58,10 @@ Source: explicit user instructions, 2026-11-08.
   as **Provider (subtitle)**, has a checkbox and controls to move it up or down;
   checking and unchecking update the Provider section immediately and reliably.
   Unchecked providers are absent from that section and checked providers appear
-  in the managed order. Persist that selection and order across reloads.
+  in the managed order. Persist that selection and order across reloads. The
+  active provider cannot be unchecked and must remain visible in Current
+  Configuration and the Provider section; repair any persisted layout that hides
+  it.
 - Do not add introductory, explanatory, footer or other informational copy to
   the sidebar. Do not add model selectors or reasoning-effort controls.
 - Use the first available model from the refreshed catalog when switching to

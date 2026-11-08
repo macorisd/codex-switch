@@ -32,6 +32,14 @@
     });
   }
 
+  function adoptProviderLayout(layout, revision) {
+    if (revision < layoutRevision) return;
+    layoutRevision = revision;
+    providerLayout = layout.map(entry => ({ ...entry }));
+    const active = providerLayout.find(entry => entry.id === state?.provider);
+    if (active) active.visible = true;
+  }
+
   function renderManageList() {
     $('manage-list').replaceChildren(...providerLayout.map((entry, index) => {
       const info = providerInfo(entry.id);
@@ -43,9 +51,12 @@
       label.className = 'manage-choice';
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
-      checkbox.checked = entry.visible;
+      const locked = isActive(entry.id);
+      checkbox.checked = locked || entry.visible;
+      checkbox.disabled = locked;
       checkbox.setAttribute('aria-label', `Show ${info.name} (${info.subtitle})`);
       checkbox.addEventListener('change', () => {
+        if (locked) return;
         entry.visible = checkbox.checked;
         renderProviderOrder();
         sendLayout();
@@ -85,8 +96,9 @@
     const orderedCards = providerLayout
       .map(entry => ({ entry, card: cards.get(entry.id) }))
       .filter(({ card }) => card);
-    for (const { entry, card } of orderedCards) card.hidden = !entry.visible;
-    $('provider-list').replaceChildren(...orderedCards.filter(({ entry }) => entry.visible).map(({ card }) => card));
+    const visible = ({ entry }) => entry.visible || isActive(entry.id);
+    for (const { entry, card } of orderedCards) card.hidden = !visible({ entry });
+    $('provider-list').replaceChildren(...orderedCards.filter(visible).map(({ card }) => card));
   }
 
   function showFeedback(ok, message) {
@@ -169,8 +181,7 @@
       state = data.state;
       busy = data.busy;
       if ((state.providerLayoutRevision || 0) >= layoutRevision) {
-        layoutRevision = state.providerLayoutRevision || 0;
-        providerLayout = state.providerLayout.map(entry => ({ ...entry }));
+        adoptProviderLayout(state.providerLayout, state.providerLayoutRevision || 0);
       }
       render();
     } else if (data.type === 'busy') {
@@ -181,6 +192,14 @@
       pendingAction = null;
       showFeedback(data.ok, data.message);
       render();
+    } else if (data.type === 'providerLayout') {
+      adoptProviderLayout(data.layout, data.revision);
+      renderManageList();
+      renderProviderOrder();
+    } else if (data.type === 'providerLayoutError') {
+      adoptProviderLayout(data.layout, data.revision);
+      renderManageList();
+      renderProviderOrder();
     }
   });
 

@@ -160,6 +160,7 @@ test('sidebar boots with the requested English provider interface', async () => 
   assert.doesNotMatch(h.view.webview.html, /<footer|<select|reasoning|type="password"|notice|intro|feedback-icon/i);
   const viewSource = fs.readFileSync(path.join(extensionRoot, 'media', 'view.js'), 'utf8');
   assert.equal(viewSource.includes('${info.name} (${info.subtitle})'), true);
+  assert.equal(viewSource.includes('checkbox.disabled = locked'), true);
   assert.match(viewSource, /}, 3000\);/);
   await h.receive({ action: 'ready' });
   const latest = h.messages.at(-1).state;
@@ -205,8 +206,9 @@ test('provider visibility and order are validated and persisted', async () => {
     { id: 'openai', visible: false },
   ];
   assert.deepEqual(plain(h.globalValues.get('providerLayout')), expected);
-  assert.deepEqual(plain(h.messages.at(-1).state.providerLayout), expected);
-  assert.equal(h.messages.at(-1).state.providerLayoutRevision, 2);
+  const acknowledgement = h.messages.find(message => message.type === 'providerLayout');
+  assert.deepEqual(plain(acknowledgement.layout), expected);
+  assert.equal(acknowledgement.revision, 2);
 });
 
 test('queued provider changes keep the latest checkbox and order state', async () => {
@@ -233,8 +235,25 @@ test('queued provider changes keep the latest checkbox and order state', async (
     { id: 'deepseek', visible: false },
   ];
   assert.deepEqual(plain(h.globalValues.get('providerLayout')), expected);
-  assert.deepEqual(plain(h.messages.at(-1).state.providerLayout), expected);
-  assert.equal(h.messages.at(-1).state.providerLayoutRevision, 2);
+  const acknowledgements = h.messages.filter(message => message.type === 'providerLayout');
+  assert.deepEqual(plain(acknowledgements.at(-1).layout), expected);
+  assert.equal(acknowledgements.at(-1).revision, 2);
+});
+
+test('the provider section always keeps the active provider visible', async () => {
+  const h = harness({
+    globalValues: {
+      providerLayout: [
+        { id: 'deepseek', visible: true },
+        { id: 'openai', visible: false },
+      ],
+    },
+  });
+  await h.receive({ action: 'ready' });
+  assert.deepEqual(plain(h.messages.at(-1).state.providerLayout), [
+    { id: 'deepseek', visible: true },
+    { id: 'openai', visible: true },
+  ]);
 });
 
 test('catalog and connection actions emit colored feedback results', async () => {

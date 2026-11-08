@@ -57,6 +57,7 @@ class Selector {
     this.busy = false;
     this.layoutRevision = 0;
     this.layoutUpdate = Promise.resolve();
+    this.activeProvider = null;
   }
 
   resolveWebviewView(view) {
@@ -83,10 +84,11 @@ class Selector {
     if (!this.view) return;
     try {
       const state = await backend({ action: 'status' });
+      this.activeProvider = state.provider;
       const webviewState = {
         ...state,
         providers: PROVIDERS,
-        providerLayout: this.providerLayout(),
+        providerLayout: this.providerLayout(state.provider),
         providerLayoutRevision: this.layoutRevision,
       };
       await this.view.webview.postMessage({ type: 'state', state: webviewState, busy: this.busy });
@@ -95,7 +97,7 @@ class Selector {
     }
   }
 
-  providerLayout() {
+  providerLayout(activeProvider = this.activeProvider) {
     const saved = this.context.globalState.get(PROVIDER_LAYOUT_KEY, []);
     const known = new Set(PROVIDERS.map(provider => provider.id));
     const seen = new Set();
@@ -110,6 +112,8 @@ class Selector {
     for (const provider of PROVIDERS) {
       if (!seen.has(provider.id)) layout.push({ id: provider.id, visible: true });
     }
+    const active = layout.find(entry => entry.id === activeProvider);
+    if (active) active.visible = true;
     return layout;
   }
 
@@ -126,12 +130,27 @@ class Selector {
     for (const provider of PROVIDERS) {
       if (!seen.has(provider.id)) layout.push({ id: provider.id, visible: true });
     }
+    const active = layout.find(entry => entry.id === this.activeProvider);
+    if (active) active.visible = true;
     const nextRevision = Number.isInteger(revision) ? revision : this.layoutRevision + 1;
     this.layoutUpdate = this.layoutUpdate.catch(() => {}).then(async () => {
       if (nextRevision < this.layoutRevision) return;
       this.layoutRevision = nextRevision;
-      await this.context.globalState.update(PROVIDER_LAYOUT_KEY, layout);
-      await this.update();
+      try {
+        await this.context.globalState.update(PROVIDER_LAYOUT_KEY, layout);
+        await this.view?.webview.postMessage({
+          type: 'providerLayout',
+          layout,
+          revision: nextRevision,
+        });
+      } catch (error) {
+        await this.view?.webview.postMessage({
+          type: 'providerLayoutError',
+          layout: this.providerLayout(),
+          revision: this.layoutRevision,
+          message: error.message,
+        });
+      }
     });
     return this.layoutUpdate;
   }
