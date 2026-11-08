@@ -6,11 +6,11 @@ const root = path.join(__dirname, '..');
 const logo = fs.readFileSync(path.join(root, 'media/logo.svg'), 'utf8');
 const geometry = logo.match(/<path id="mark"[^>]*d="([^"]+)"/)[1];
 const defs = logo.match(/<defs>([\s\S]+?)<\/defs>/)[1];
-const title = 'codex-switch';
-const subtitle = 'Your project. Your choice of model.';
+const title = 'Codex Switch';
+const subtitle = 'Switch AI providers in Codex with a click';
 const banner = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title description">
   <title id="title">${title}</title>
-  <desc id="description">The purple codex-switch rosette and gear beside the words: ${subtitle}</desc>
+  <desc id="description">The purple Codex Switch rosette and gear beside the words: ${subtitle}</desc>
   <defs>
     <linearGradient id="background" x2="1" y2="1"><stop stop-color="#F5F3FF"/><stop offset="1" stop-color="#EFF4FF"/></linearGradient>
     ${defs}

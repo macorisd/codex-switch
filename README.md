@@ -1,21 +1,34 @@
 <p align="center">
-  <img src="docs/banner.svg" alt="codex-switch: your project, your choice of model" width="100%">
+  <img src="docs/banner.svg" alt="Codex Switch: Switch AI providers in Codex with a click" width="100%">
 </p>
 
-A minimal VS Code sidebar extension for switching the model provider used by
-Codex. The sidebar shows the current provider and the actions for ChatGPT and
-DeepSeek, with persistent provider visibility and ordering controls. API keys
-stay encrypted locally; API usage is billed separately.
+Codex Switch is a VS Code sidebar extension that moves Codex between your existing ChatGPT subscription and DeepSeek API providers.
+Current provider, provider visibility, model catalog and switching actions stay in one focused panel.
+DeepSeek credentials remain encrypted for your Windows user and provider switches reload VS Code automatically.
 
-| Provider | Access | Integrated models |
+| Provider | Access | Available models |
 | --- | --- | --- |
 | ChatGPT | Existing ChatGPT subscription and sign-in | Models available to your account |
-| DeepSeek | DeepSeek API key | `deepseek-flash`, `deepseek-v4-pro` |
+| DeepSeek | Encrypted DeepSeek API key | `deepseek-flash`, `deepseek-v4-pro` |
 
-Open **Codex Switch** from the rosette-and-gear icon in the Activity Bar. Use
-**Update model catalog** to refresh DeepSeek's model list. History and tools may vary
-between providers. Switching providers reloads VS Code automatically. Requires
-Windows and Python 3.11+ on `PATH`.
+## Install
+
+1. Open [GitHub Releases](https://github.com/macorisd/codex-switch/releases) and
+   choose the newest version with a VSIX attached.
+2. Download `codex-switch-<version>.vsix`.
+3. In VS Code, open **Extensions**, choose **Install from VSIX...**, and select
+   the downloaded file.
+4. Reload VS Code, open **Codex Switch** from the Activity Bar, configure
+   DeepSeek if needed, and switch providers.
+
+Codex Switch requires Windows and Python 3.11+ on `PATH`. Runtime credentials and
+configuration stay in `%USERPROFILE%\.codex\provider-switcher`, outside the
+repository.
+
+## Version History
+
+The table describes the changes introduced by each version. Release links open
+the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
@@ -25,11 +38,44 @@ Windows and Python 3.11+ on `PATH`.
 | 0.1.0 | Initial sidebar selector for ChatGPT and DeepSeek, model and reasoning selection, encrypted API key storage, and connection checks. |
 
 <details>
-<summary>Development</summary>
+<summary><strong>Developer setup</strong></summary>
 
-Run `npm test` to check the extension and backend. Run `npm run package` to
-generate a VSIX, then install it with `code --install-extension <file.vsix>`.
-Runtime data stays in `%USERPROFILE%\.codex\provider-switcher`, outside the
-repository. Project conventions: [docs/decisions](docs/decisions/README.md).
+Use Node.js 24, npm, Python 3.11+, and VS Code 1.100 or newer on Windows. Windows
+DPAPI encrypts the local DeepSeek credential.
+
+1. Clone the repository and install the locked dependencies:
+
+   ```powershell
+   git clone https://github.com/macorisd/codex-switch.git
+   cd codex-switch
+   npm ci
+   ```
+
+2. Run the extension, backend, webview, and release tests:
+
+   ```powershell
+   npm test
+   ```
+
+3. Regenerate the banner and Activity Bar icon when the logo changes, then build
+   the installable package:
+
+   ```powershell
+   npm run brand
+   npm run package
+   ```
+
+4. Install the resulting VSIX in the VS Code profile you are testing:
+
+   ```powershell
+   code --install-extension codex-provider-switch-<version>.vsix --force
+   ```
+
+Runtime state remains in `%USERPROFILE%\.codex\provider-switcher`. Preserve
+`auth.json`, `config.toml`, the encrypted key, and local configuration backups
+when testing provider switches. Never commit credentials or runtime state.
+
+See [project decisions](docs/decisions/README.md) for the product and delivery
+rules used by this repository.
 
 </details>

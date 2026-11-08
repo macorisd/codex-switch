@@ -27,8 +27,12 @@ Source: explicit user instructions and initialization answers, 2026-11-07.
   requires the appropriate Codex client reload and a new conversation. After a
   successful **Switch to ChatGPT** or **Switch to DeepSeek** action, reload VS
   Code automatically without an additional confirmation prompt.
-- Keep the README minimal: a short explanation, a table of integrated providers,
-  and a version table listing the changes in codex-switch.
+- Follow microplanner's README structure: an SVG banner, a three-line product
+  explanation, the available-provider and model table, **Install**, **Version
+  History**, and a **Developer setup** disclosure. Use **Codex Switch** as the
+  banner title and **Switch AI providers in Codex with a click** as its subtitle.
+- Document installation from the latest GitHub Release, plus local development,
+  tests, packaging and runtime-state requirements in the developer disclosure.
 - Keep a suitable `.gitignore` for source, tooling, packaging and local state.
 
 ## Sidebar interface
