@@ -55,6 +55,8 @@ class Selector {
   constructor(context) {
     this.context = context;
     this.busy = false;
+    this.layoutRevision = 0;
+    this.layoutUpdate = Promise.resolve();
   }
 
   resolveWebviewView(view) {
@@ -85,6 +87,7 @@ class Selector {
         ...state,
         providers: PROVIDERS,
         providerLayout: this.providerLayout(),
+        providerLayoutRevision: this.layoutRevision,
       };
       await this.view.webview.postMessage({ type: 'state', state: webviewState, busy: this.busy });
     } catch (error) {
@@ -110,7 +113,7 @@ class Selector {
     return layout;
   }
 
-  async saveProviderLayout(value) {
+  async saveProviderLayout(value, revision) {
     if (!Array.isArray(value)) return;
     const known = new Set(PROVIDERS.map(provider => provider.id));
     const seen = new Set();
@@ -123,8 +126,14 @@ class Selector {
     for (const provider of PROVIDERS) {
       if (!seen.has(provider.id)) layout.push({ id: provider.id, visible: true });
     }
-    await this.context.globalState.update(PROVIDER_LAYOUT_KEY, layout);
-    await this.update();
+    const nextRevision = Number.isInteger(revision) ? revision : this.layoutRevision + 1;
+    this.layoutUpdate = this.layoutUpdate.catch(() => {}).then(async () => {
+      if (nextRevision < this.layoutRevision) return;
+      this.layoutRevision = nextRevision;
+      await this.context.globalState.update(PROVIDER_LAYOUT_KEY, layout);
+      await this.update();
+    });
+    return this.layoutUpdate;
   }
 
   async promptForApiKey() {
@@ -160,7 +169,7 @@ class Selector {
   async run(message) {
     if (!message || typeof message.action !== 'string') return;
     if (message.action === 'ready') return this.update();
-    if (message.action === 'saveProviderLayout') return this.saveProviderLayout(message.layout);
+    if (message.action === 'saveProviderLayout') return this.saveProviderLayout(message.layout, message.revision);
     if (!['saveKey', 'verify', 'refresh', 'apply'].includes(message.action) || this.busy) return;
 
     this.busy = true;

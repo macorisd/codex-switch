@@ -9,6 +9,8 @@
   let busy = false;
   let pendingAction = null;
   let providerLayout = [];
+  let layoutRevision = 0;
+  let feedbackTimer;
   const send = message => vscode.postMessage(message);
   const isActive = provider => state?.provider === provider;
   const providerInfo = id => state?.providers.find(provider => provider.id === id);
@@ -22,9 +24,11 @@
   }
 
   function sendLayout() {
+    layoutRevision += 1;
     send({
       action: 'saveProviderLayout',
       layout: providerLayout.map(({ id, visible }) => ({ id, visible })),
+      revision: layoutRevision,
     });
   }
 
@@ -40,20 +44,21 @@
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
       checkbox.checked = entry.visible;
-      checkbox.setAttribute('aria-label', `Show ${info.name}`);
+      checkbox.setAttribute('aria-label', `Show ${info.name} (${info.subtitle})`);
       checkbox.addEventListener('change', () => {
         entry.visible = checkbox.checked;
-        render();
+        renderProviderOrder();
         sendLayout();
       });
       const name = document.createElement('span');
-      name.textContent = info.name;
+      name.textContent = `${info.name} (${info.subtitle})`;
       label.append(checkbox, name);
 
       const move = (offset) => {
         const target = index + offset;
         [providerLayout[index], providerLayout[target]] = [providerLayout[target], providerLayout[index]];
-        render();
+        renderManageList();
+        renderProviderOrder();
         sendLayout();
       };
       const up = document.createElement('button');
@@ -85,21 +90,25 @@
   }
 
   function showFeedback(ok, message) {
+    clearTimeout(feedbackTimer);
     $('action-feedback').hidden = false;
     $('action-feedback').classList.toggle('success', ok);
     $('action-feedback').classList.toggle('error', !ok);
-    $('action-feedback').querySelector('.feedback-icon').textContent = ok ? '\u2713' : '!';
     $('feedback-text').textContent = message;
+    feedbackTimer = setTimeout(() => {
+      $('action-feedback').hidden = true;
+      $('feedback-text').textContent = '';
+    }, 3000);
   }
 
   function clearFeedback() {
+    clearTimeout(feedbackTimer);
     $('action-feedback').hidden = true;
     $('feedback-text').textContent = '';
   }
 
   function render() {
     if (!state) return;
-    providerLayout = state.providerLayout;
     const active = providerInfo(state.provider);
     $('current').textContent = active ? `${active.name} (${active.subtitle})` : state.provider;
 
@@ -130,10 +139,16 @@
     renderProviderOrder();
   }
 
-  $('manage-providers').addEventListener('click', () => {
+  function setManageOpen(open) {
     const panel = $('manage-panel');
-    panel.hidden = !panel.hidden;
-    $('manage-providers').setAttribute('aria-expanded', String(!panel.hidden));
+    panel.hidden = !open;
+    $('manage-providers').setAttribute('aria-expanded', String(open));
+  }
+
+  $('manage-providers').addEventListener('click', () => setManageOpen($('manage-panel').hidden));
+  $('close-manage').addEventListener('click', () => setManageOpen(false));
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !$('manage-panel').hidden) setManageOpen(false);
   });
   $('set-key').addEventListener('click', () => send({ action: 'saveKey' }));
   $('openai').addEventListener('click', () => send({ action: 'apply', provider: 'openai' }));
@@ -153,6 +168,10 @@
     if (data.type === 'state') {
       state = data.state;
       busy = data.busy;
+      if ((state.providerLayoutRevision || 0) >= layoutRevision) {
+        layoutRevision = state.providerLayoutRevision || 0;
+        providerLayout = state.providerLayout.map(entry => ({ ...entry }));
+      }
       render();
     } else if (data.type === 'busy') {
       busy = data.busy;

@@ -18,6 +18,7 @@ between providers. Requires Windows and Python 3.11+ on `PATH`.
 
 | Version | Changes |
 | --- | --- |
+| 0.1.6 | Auto-hide action feedback after 3 seconds without an icon, add a close control and full provider labels to Manage Providers, and make provider visibility and ordering reliable. |
 | 0.1.5 | Show provider subtitles in the current configuration, manage provider visibility and order, restore the native API key dialog with status feedback, highlight the active card, and add colored action results. |
 | 0.1.4 | Simplify the English sidebar to the current provider, ChatGPT and DeepSeek actions, a fixed DeepSeek model list, and a masked API key field. |
 | 0.1.3 | Require installation and verification in the current VS Code window before submitting changes for review. |

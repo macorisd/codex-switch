@@ -51,11 +51,14 @@ Source: explicit user instructions, 2026-11-08.
 - **Set API key** opens VS Code's native password dialog. The key is not entered,
   displayed or retained in the sidebar GUI.
 - **Update model catalog** and **Check connection** show a prominent green
-  success feedback or red error feedback in the DeepSeek card.
+  success feedback or red error feedback in the DeepSeek card. The feedback has
+  no icon or emoji, remains visible for exactly 3 seconds, then disappears.
 - A **Manage Providers** action next to the Provider heading opens the complete
-  provider list. Each provider has a checkbox and controls to move it up or down;
-  unchecked providers are removed from the Provider section and checked providers
-  appear in the managed order. Persist that selection and order across reloads.
+  provider list, with an X control that closes the panel. Each provider is labeled
+  as **Provider (subtitle)**, has a checkbox and controls to move it up or down;
+  checking and unchecking update the Provider section immediately and reliably.
+  Unchecked providers are absent from that section and checked providers appear
+  in the managed order. Persist that selection and order across reloads.
 - Do not add introductory, explanatory, footer or other informational copy to
   the sidebar. Do not add model selectors or reasoning-effort controls.
 - Use the first available model from the refreshed catalog when switching to
