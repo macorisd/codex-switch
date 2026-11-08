@@ -15,29 +15,48 @@
     </section>
 
     <section class="provider-section" aria-labelledby="provider-label">
-      <h2 id="provider-label">Provider</h2>
+      <div class="provider-heading">
+        <h2 id="provider-label">Provider</h2>
+        <button class="text-button" id="manage-providers" aria-expanded="false">Manage Providers</button>
+      </div>
 
-      <article class="provider-card">
-        <header>
-          <h3>ChatGPT</h3>
-          <p>Your Plan</p>
-        </header>
-        <button class="primary" id="openai">Switch to ChatGPT</button>
-      </article>
+      <div class="manage-panel" id="manage-panel" hidden>
+        <ul class="manage-list" id="manage-list" aria-label="All providers"></ul>
+      </div>
 
-      <article class="provider-card">
-        <header>
-          <h3>DeepSeek</h3>
-          <p>API key</p>
-        </header>
-        <input id="key" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="DeepSeek API key">
-        <ul class="model-list" id="models" aria-label="Available DeepSeek models"></ul>
-        <div class="secondary-actions">
-          <button id="refresh">Update model catalog</button>
-          <button id="verify">Check connection</button>
-        </div>
-        <button class="primary" id="deepseek-switch">Switch to DeepSeek</button>
-      </article>
+      <div class="provider-list" id="provider-list">
+        <article class="provider-card" data-provider="openai">
+          <header>
+            <h3>ChatGPT</h3>
+            <p>Your Plan</p>
+          </header>
+          <button class="primary" id="openai">Switch to ChatGPT</button>
+        </article>
+
+        <article class="provider-card" data-provider="deepseek">
+          <header>
+            <h3>DeepSeek</h3>
+            <p>API key</p>
+          </header>
+          <div class="credential-row">
+            <div class="credential-status">
+              <span class="status-dot not-configured" id="key-dot" aria-hidden="true"></span>
+              <span id="key-status">Not configured</span>
+            </div>
+            <button class="text-button" id="set-key">Set API key</button>
+          </div>
+          <ul class="model-list" id="models" aria-label="Available DeepSeek models"></ul>
+          <div class="secondary-actions">
+            <button id="refresh">Update model catalog</button>
+            <button id="verify">Check connection</button>
+          </div>
+          <div class="action-feedback" id="action-feedback" role="status" aria-live="polite" hidden>
+            <span class="feedback-icon" aria-hidden="true"></span>
+            <span id="feedback-text"></span>
+          </div>
+          <button class="primary" id="deepseek-switch">Switch to DeepSeek</button>
+        </article>
+      </div>
     </section>
   </main>
   <script nonce="{{NONCE}}" src="{{SCRIPT}}"></script>

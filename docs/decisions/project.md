@@ -36,19 +36,28 @@ Source: explicit user instructions, 2026-11-08.
 - The view tab is titled **Codex Switch**. All visible interface copy is in
   English.
 - Show only **Current Configuration** and **Provider**. Current Configuration
-  names the active provider, ChatGPT or DeepSeek, and never exposes a concrete
-  model.
+  names the active provider and its subtitle, such as **ChatGPT (Your Plan)** or
+  **DeepSeek (API key)**, and never exposes a concrete model.
 - Under Provider, show one section for **ChatGPT** with the subtitle
   **Your Plan**, and one section for **DeepSeek** with the subtitle **API key**.
+- Highlight the active provider's card with a blue perimeter.
 - ChatGPT contains only a **Switch to ChatGPT** button, or a disabled
   **Current Setting** button when it is active.
-- DeepSeek contains only an API key input, the available models as a
+- DeepSeek shows a red or green status circle with **Not configured** or
+  **Configured**, a **Set API key** button, the available models as a
   non-interactive fixed list, **Update model catalog**, **Check connection**, and
   **Switch to DeepSeek**, or a disabled **Current Setting** button when it is
   active.
-- Do not add introductory, explanatory, credential-status, footer or other
-  informational copy to the sidebar. Do not add provider selection controls,
-  model selectors or reasoning-effort controls.
+- **Set API key** opens VS Code's native password dialog. The key is not entered,
+  displayed or retained in the sidebar GUI.
+- **Update model catalog** and **Check connection** show a prominent green
+  success feedback or red error feedback in the DeepSeek card.
+- A **Manage Providers** action next to the Provider heading opens the complete
+  provider list. Each provider has a checkbox and controls to move it up or down;
+  unchecked providers are removed from the Provider section and checked providers
+  appear in the managed order. Persist that selection and order across reloads.
+- Do not add introductory, explanatory, footer or other informational copy to
+  the sidebar. Do not add model selectors or reasoning-effort controls.
 - Use the first available model from the refreshed catalog when switching to
   DeepSeek because model choice is internal to the provider action.
 
@@ -73,9 +82,9 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
   migration. Credentials and local configuration backups remain outside Git.
 - Keep DeepSeek credentials encrypted for the Windows user. Never put a key in
   settings, process arguments, logs, source or VSIX artifacts.
-- The DeepSeek API key is entered through the sidebar's masked input as requested
-  on 2026-11-08. Send it once from the webview to the extension process to save
-  it; never return, prefill or retain that value in webview state.
+- Enter the DeepSeek API key through VS Code's native password dialog as refined
+  on 2026-11-08. The sidebar only receives the configured/not-configured state;
+  never send, prefill or retain the key in the webview.
 - Never force `forced_login_method = "api"` to switch providers: this was
   observed to sign out an existing ChatGPT account during initial setup.
 - Verify backend/configuration behavior and the extension tests when their code

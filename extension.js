@@ -8,6 +8,11 @@ const crypto = require('node:crypto');
 
 const root = path.join(os.homedir(), '.codex', 'provider-switcher');
 const python = 'python';
+const PROVIDERS = Object.freeze([
+  Object.freeze({ id: 'openai', name: 'ChatGPT', subtitle: 'Your Plan' }),
+  Object.freeze({ id: 'deepseek', name: 'DeepSeek', subtitle: 'API key' }),
+]);
+const PROVIDER_LAYOUT_KEY = 'providerLayout';
 
 function backend(request) {
   return new Promise((resolve, reject) => {
@@ -76,20 +81,70 @@ class Selector {
     if (!this.view) return;
     try {
       const state = await backend({ action: 'status' });
-      await this.view.webview.postMessage({ type: 'state', state, busy: this.busy });
+      const webviewState = {
+        ...state,
+        providers: PROVIDERS,
+        providerLayout: this.providerLayout(),
+      };
+      await this.view.webview.postMessage({ type: 'state', state: webviewState, busy: this.busy });
     } catch (error) {
       await vscode.window.showErrorMessage(error.message);
     }
   }
 
-  async saveIncomingKey(message) {
-    const key = typeof message.key === 'string' ? message.key.trim() : '';
-    if (!key) return;
-    if (!/^sk-[A-Za-z0-9_-]{12,}$/.test(key)) {
+  providerLayout() {
+    const saved = this.context.globalState.get(PROVIDER_LAYOUT_KEY, []);
+    const known = new Set(PROVIDERS.map(provider => provider.id));
+    const seen = new Set();
+    const layout = [];
+    if (Array.isArray(saved)) {
+      for (const entry of saved) {
+        if (!entry || !known.has(entry.id) || seen.has(entry.id)) continue;
+        seen.add(entry.id);
+        layout.push({ id: entry.id, visible: entry.visible !== false });
+      }
+    }
+    for (const provider of PROVIDERS) {
+      if (!seen.has(provider.id)) layout.push({ id: provider.id, visible: true });
+    }
+    return layout;
+  }
+
+  async saveProviderLayout(value) {
+    if (!Array.isArray(value)) return;
+    const known = new Set(PROVIDERS.map(provider => provider.id));
+    const seen = new Set();
+    const layout = [];
+    for (const entry of value) {
+      if (!entry || !known.has(entry.id) || seen.has(entry.id)) continue;
+      seen.add(entry.id);
+      layout.push({ id: entry.id, visible: Boolean(entry.visible) });
+    }
+    for (const provider of PROVIDERS) {
+      if (!seen.has(provider.id)) layout.push({ id: provider.id, visible: true });
+    }
+    await this.context.globalState.update(PROVIDER_LAYOUT_KEY, layout);
+    await this.update();
+  }
+
+  async promptForApiKey() {
+    const key = await vscode.window.showInputBox({
+      title: 'DeepSeek API key',
+      prompt: 'The key is encrypted for your Windows user and is not shown in the sidebar.',
+      password: true,
+      ignoreFocusOut: true,
+      placeHolder: 'sk-...',
+      validateInput: value => /^sk-[A-Za-z0-9_-]{12,}$/.test(value.trim())
+        ? undefined
+        : 'Enter a valid API key that starts with sk-.',
+    });
+    if (key === undefined) return false;
+    const value = key.trim();
+    if (!/^sk-[A-Za-z0-9_-]{12,}$/.test(value)) {
       throw new Error('The API key must start with sk- and contain no spaces.');
     }
-    await backend({ action: 'saveKey', key });
-    await this.view?.webview.postMessage({ type: 'keySaved' });
+    await backend({ action: 'saveKey', key: value });
+    return true;
   }
 
   promptForReload(provider) {
@@ -105,26 +160,43 @@ class Selector {
   async run(message) {
     if (!message || typeof message.action !== 'string') return;
     if (message.action === 'ready') return this.update();
+    if (message.action === 'saveProviderLayout') return this.saveProviderLayout(message.layout);
     if (!['saveKey', 'verify', 'refresh', 'apply'].includes(message.action) || this.busy) return;
 
     this.busy = true;
     await this.view?.webview.postMessage({ type: 'busy', busy: true });
     try {
-      await this.saveIncomingKey(message);
-      if (message.action === 'verify') {
+      if (message.action === 'saveKey') {
+        await this.promptForApiKey();
+      } else if (message.action === 'verify') {
         await backend({ action: 'verify' });
+        await this.view?.webview.postMessage({
+          type: 'actionResult',
+          ok: true,
+          message: 'Connection successful.',
+        });
       } else if (message.action === 'refresh') {
         await backend({ action: 'refresh' });
+        await this.view?.webview.postMessage({
+          type: 'actionResult',
+          ok: true,
+          message: 'Model catalog updated.',
+        });
       } else if (message.action === 'apply') {
         if (!['openai', 'deepseek'].includes(message.provider)) throw new Error('Unsupported provider.');
         await backend({ action: 'apply', provider: message.provider });
         this.promptForReload(message.provider);
       }
-      if (message.action !== 'saveKey') {
-        await this.view?.webview.postMessage({ type: 'actionSuccess', action: message.action });
-      }
     } catch (error) {
-      await vscode.window.showErrorMessage(error.message);
+      if (['verify', 'refresh'].includes(message.action)) {
+        await this.view?.webview.postMessage({
+          type: 'actionResult',
+          ok: false,
+          message: error.message,
+        });
+      } else {
+        await vscode.window.showErrorMessage(error.message);
+      }
     } finally {
       this.busy = false;
       await this.update();

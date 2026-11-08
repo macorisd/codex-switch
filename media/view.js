@@ -2,28 +2,17 @@
 (() => {
   const vscode = acquireVsCodeApi();
   const $ = id => document.getElementById(id);
+  const cards = new Map(
+    [...document.querySelectorAll('.provider-card')].map(card => [card.dataset.provider, card]),
+  );
   let state;
   let busy = false;
   let pendingAction = null;
-  let successAction = null;
-  let successTimer;
-  const defaultButtonText = {
-    refresh: 'Update model catalog',
-    verify: 'Check connection',
-  };
-  const busyButtonText = {
-    refresh: 'Updating...',
-    verify: 'Checking...',
-  };
+  let providerLayout = [];
   const send = message => vscode.postMessage(message);
   const isActive = provider => state?.provider === provider;
-  const pendingKey = () => $('key').value.trim();
-  const canUseDeepSeek = () => Boolean(state?.hasKey || pendingKey());
-
-  function withKey(message) {
-    const key = pendingKey();
-    return key ? { ...message, key } : message;
-  }
+  const providerInfo = id => state?.providers.find(provider => provider.id === id);
+  const hasDeepSeekKey = () => Boolean(state?.hasKey);
 
   function actionButton(id, text, disabled) {
     const button = $(id);
@@ -32,60 +21,132 @@
     button.classList.toggle('current-setting', disabled && text === 'Current Setting');
   }
 
+  function sendLayout() {
+    send({
+      action: 'saveProviderLayout',
+      layout: providerLayout.map(({ id, visible }) => ({ id, visible })),
+    });
+  }
+
+  function renderManageList() {
+    $('manage-list').replaceChildren(...providerLayout.map((entry, index) => {
+      const info = providerInfo(entry.id);
+      const item = document.createElement('li');
+      item.className = 'manage-item';
+      item.dataset.provider = entry.id;
+
+      const label = document.createElement('label');
+      label.className = 'manage-choice';
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = entry.visible;
+      checkbox.setAttribute('aria-label', `Show ${info.name}`);
+      checkbox.addEventListener('change', () => {
+        entry.visible = checkbox.checked;
+        render();
+        sendLayout();
+      });
+      const name = document.createElement('span');
+      name.textContent = info.name;
+      label.append(checkbox, name);
+
+      const move = (offset) => {
+        const target = index + offset;
+        [providerLayout[index], providerLayout[target]] = [providerLayout[target], providerLayout[index]];
+        render();
+        sendLayout();
+      };
+      const up = document.createElement('button');
+      up.type = 'button';
+      up.className = 'order-button';
+      up.textContent = '\u2191';
+      up.setAttribute('aria-label', `Move ${info.name} up`);
+      up.disabled = index === 0;
+      up.addEventListener('click', () => move(-1));
+      const down = document.createElement('button');
+      down.type = 'button';
+      down.className = 'order-button';
+      down.textContent = '\u2193';
+      down.setAttribute('aria-label', `Move ${info.name} down`);
+      down.disabled = index === providerLayout.length - 1;
+      down.addEventListener('click', () => move(1));
+
+      item.append(label, up, down);
+      return item;
+    }));
+  }
+
+  function renderProviderOrder() {
+    const orderedCards = providerLayout
+      .map(entry => ({ entry, card: cards.get(entry.id) }))
+      .filter(({ card }) => card);
+    for (const { entry, card } of orderedCards) card.hidden = !entry.visible;
+    $('provider-list').replaceChildren(...orderedCards.filter(({ entry }) => entry.visible).map(({ card }) => card));
+  }
+
+  function showFeedback(ok, message) {
+    $('action-feedback').hidden = false;
+    $('action-feedback').classList.toggle('success', ok);
+    $('action-feedback').classList.toggle('error', !ok);
+    $('action-feedback').querySelector('.feedback-icon').textContent = ok ? '\u2713' : '!';
+    $('feedback-text').textContent = message;
+  }
+
+  function clearFeedback() {
+    $('action-feedback').hidden = true;
+    $('feedback-text').textContent = '';
+  }
+
   function render() {
     if (!state) return;
-    $('current').textContent = isActive('deepseek') ? 'DeepSeek' : 'ChatGPT';
+    providerLayout = state.providerLayout;
+    const active = providerInfo(state.provider);
+    $('current').textContent = active ? `${active.name} (${active.subtitle})` : state.provider;
 
+    for (const [id, card] of cards) card.classList.toggle('current-provider', isActive(id));
     actionButton('openai', isActive('openai') ? 'Current Setting' : 'Switch to ChatGPT', busy || isActive('openai'));
     actionButton(
       'deepseek-switch',
       isActive('deepseek') ? 'Current Setting' : 'Switch to DeepSeek',
-      busy || isActive('deepseek') || !canUseDeepSeek(),
+      busy || isActive('deepseek') || !hasDeepSeekKey(),
     );
+
+    $('key-dot').classList.toggle('configured', hasDeepSeekKey());
+    $('key-dot').classList.toggle('not-configured', !hasDeepSeekKey());
+    $('key-status').textContent = hasDeepSeekKey() ? 'Configured' : 'Not configured';
+    $('set-key').disabled = busy;
 
     $('models').replaceChildren(...state.models.map(model => {
       const item = document.createElement('li');
       item.textContent = model.name;
       return item;
     }));
-    $('key').disabled = busy;
-    $('refresh').textContent = pendingAction === 'refresh' && busy
-      ? busyButtonText.refresh
-      : successAction === 'refresh' ? 'Updated' : defaultButtonText.refresh;
+    $('refresh').textContent = pendingAction === 'refresh' && busy ? 'Updating...' : 'Update model catalog';
     $('refresh').disabled = busy;
-    $('verify').textContent = pendingAction === 'verify' && busy
-      ? busyButtonText.verify
-      : successAction === 'verify' ? 'Connected' : defaultButtonText.verify;
-    $('verify').disabled = busy || !canUseDeepSeek();
+    $('verify').textContent = pendingAction === 'verify' && busy ? 'Checking...' : 'Check connection';
+    $('verify').disabled = busy || !hasDeepSeekKey();
+
+    renderManageList();
+    renderProviderOrder();
   }
 
-  function completeAction(action) {
-    clearTimeout(successTimer);
-    successAction = action;
-    render();
-    successTimer = setTimeout(() => {
-      successAction = null;
-      render();
-    }, 1200);
-  }
-
-  $('key').addEventListener('input', render);
-  $('key').addEventListener('keydown', event => {
-    if (event.key !== 'Enter' || !pendingKey()) return;
-    event.preventDefault();
-    send(withKey({ action: 'saveKey' }));
+  $('manage-providers').addEventListener('click', () => {
+    const panel = $('manage-panel');
+    panel.hidden = !panel.hidden;
+    $('manage-providers').setAttribute('aria-expanded', String(!panel.hidden));
   });
+  $('set-key').addEventListener('click', () => send({ action: 'saveKey' }));
   $('openai').addEventListener('click', () => send({ action: 'apply', provider: 'openai' }));
-  $('deepseek-switch').addEventListener('click', () => send(withKey({ action: 'apply', provider: 'deepseek' })));
+  $('deepseek-switch').addEventListener('click', () => send({ action: 'apply', provider: 'deepseek' }));
   $('refresh').addEventListener('click', () => {
-    successAction = null;
     pendingAction = 'refresh';
+    clearFeedback();
     send({ action: 'refresh' });
   });
   $('verify').addEventListener('click', () => {
-    successAction = null;
     pendingAction = 'verify';
-    send(withKey({ action: 'verify' }));
+    clearFeedback();
+    send({ action: 'verify' });
   });
 
   window.addEventListener('message', ({ data }) => {
@@ -97,12 +158,10 @@
       busy = data.busy;
       if (!busy) pendingAction = null;
       render();
-    } else if (data.type === 'keySaved') {
-      $('key').value = '';
-      render();
-    } else if (data.type === 'actionSuccess') {
+    } else if (data.type === 'actionResult') {
       pendingAction = null;
-      completeAction(data.action);
+      showFeedback(data.ok, data.message);
+      render();
     }
   });
 
