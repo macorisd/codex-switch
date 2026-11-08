@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.svg" alt="Codex Switch: Switch AI providers in Codex with a click" width="100%">
+  <img src="docs/banner.svg" alt="Codex Switch: Switch AI providers in Codex with a click." width="100%">
 </p>
 
 Codex Switch is a VS Code sidebar extension that moves Codex between your existing ChatGPT subscription and DeepSeek API providers.

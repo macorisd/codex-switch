@@ -30,7 +30,7 @@ Source: explicit user instructions and initialization answers, 2026-11-07.
 - Follow microplanner's README structure: an SVG banner, a three-line product
   explanation, the available-provider and model table, **Install**, **Version
   History**, and a **Developer setup** disclosure. Use **Codex Switch** as the
-  banner title and **Switch AI providers in Codex with a click** as its subtitle.
+  banner title and **Switch AI providers in Codex with a click.** as its subtitle.
 - Document installation from the latest GitHub Release, plus local development,
   tests, packaging and runtime-state requirements in the developer disclosure.
 - Keep a suitable `.gitignore` for source, tooling, packaging and local state.
@@ -85,6 +85,10 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
 - Start the README with an SVG banner in the same general composition as
   microplanner: logo on the left, product title and a short subtitle. Include
   only the title and subtitle; omit platform labels, badges and extra copy.
+- The banner subtitle ends with a period and the title/subtitle block is
+  optically centered vertically against the logo.
+- Add a restrained purple vector detail on the right side of the banner that
+  evokes switching between providers while remaining subordinate to the title.
 - Use a transparent monochrome SVG for the VS Code Activity Bar, with the gear
   expressed as negative space. It replaces the original two-arrow symbol and
   follows the editor's icon color in both light and dark themes.
