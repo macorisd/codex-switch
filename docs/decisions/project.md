@@ -24,7 +24,9 @@ Source: explicit user instructions and initialization answers, 2026-11-07.
   sidebar. Its UI is minimal and follows the editor's theme.
 - Support convenient switching between an existing ChatGPT subscription and
   DeepSeek API models. Provider-specific history and tools can differ; switching
-  requires the appropriate Codex client reload and a new conversation.
+  requires the appropriate Codex client reload and a new conversation. After a
+  successful **Switch to ChatGPT** or **Switch to DeepSeek** action, reload VS
+  Code automatically without an additional confirmation prompt.
 - Keep the README minimal: a short explanation, a table of integrated providers,
   and a version table listing the changes in codex-switch.
 - Keep a suitable `.gitignore` for source, tooling, packaging and local state.

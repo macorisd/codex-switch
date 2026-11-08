@@ -2,7 +2,8 @@
 
 Switch Codex between your ChatGPT subscription and DeepSeek API models from the
 VS Code sidebar. The panel shows the current provider and the available actions
-for ChatGPT and DeepSeek. Start a new Codex conversation after switching.
+for ChatGPT and DeepSeek. VS Code reloads automatically after a successful
+switch; start a new Codex conversation afterward.
 
 The rosette-and-gear icon opens the selector. Your existing encrypted key is
 reused; **Set API key** opens VS Code's native password dialog. No keys are

@@ -14,10 +14,12 @@ stay encrypted locally; API usage is billed separately.
 
 Open **Codex Switch** from the rosette-and-gear icon in the Activity Bar. Use
 **Update model catalog** to refresh DeepSeek's model list. History and tools may vary
-between providers. Requires Windows and Python 3.11+ on `PATH`.
+between providers. Switching providers reloads VS Code automatically. Requires
+Windows and Python 3.11+ on `PATH`.
 
 | Version | Changes |
 | --- | --- |
+| 0.1.9 | Reload VS Code automatically after a provider switch succeeds. |
 | 0.1.8 | Apply the saved provider filter and order before revealing the Provider section, preventing the full list from flashing during window reload. |
 | 0.1.7 | Keep provider visibility changes responsive and ordered, and keep the active provider visible and locked against deselection. |
 | 0.1.6 | Auto-hide action feedback after 3 seconds without an icon, add a close control and full provider labels to Manage Providers, and make provider visibility and ordering reliable. |

@@ -175,16 +175,6 @@ class Selector {
     return true;
   }
 
-  promptForReload(provider) {
-    const name = provider === 'deepseek' ? 'DeepSeek' : 'ChatGPT';
-    vscode.window.showInformationMessage(
-      `Switched to ${name}. Reload VS Code to use it.`,
-      'Reload',
-    ).then(choice => {
-      if (choice === 'Reload') return vscode.commands.executeCommand('workbench.action.reloadWindow');
-    });
-  }
-
   async run(message) {
     if (!message || typeof message.action !== 'string') return;
     if (message.action === 'ready') return this.update();
@@ -213,7 +203,7 @@ class Selector {
       } else if (message.action === 'apply') {
         if (!['openai', 'deepseek'].includes(message.provider)) throw new Error('Unsupported provider.');
         await backend({ action: 'apply', provider: message.provider });
-        this.promptForReload(message.provider);
+        await vscode.commands.executeCommand('workbench.action.reloadWindow');
       }
     } catch (error) {
       if (['verify', 'refresh'].includes(message.action)) {

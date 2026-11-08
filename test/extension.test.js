@@ -291,13 +291,22 @@ test('untrusted webview messages cannot invoke arbitrary backend actions', async
   assert.equal(h.errors.length, 1);
 });
 
-test('switching sends only the provider and offers an explicit reload', async () => {
+test('switching sends only the provider and reloads immediately after success', async () => {
   const h = harness();
   await h.receive({ action: 'apply', provider: 'deepseek' });
-  const apply = h.calls.find(call => call.action === 'apply');
+  const applyIndex = h.calls.findIndex(call => call.action === 'apply');
+  const apply = h.calls[applyIndex];
   assert.equal(apply.provider, 'deepseek');
   assert.equal('model' in apply, false);
   assert.equal('effort' in apply, false);
-  assert.match(h.infos.at(-1)[0], /Switched to DeepSeek/);
+  assert(h.calls.includes('workbench.action.reloadWindow'));
+  assert(h.calls.indexOf('workbench.action.reloadWindow') > applyIndex);
+  assert.equal(h.infos.length, 0);
+});
+
+test('failed provider switching does not reload the window', async () => {
+  const h = harness({ failActions: ['apply'] });
+  await h.receive({ action: 'apply', provider: 'deepseek' });
+  assert.equal(h.errors.length, 1);
   assert.equal(h.calls.includes('workbench.action.reloadWindow'), false);
 });
