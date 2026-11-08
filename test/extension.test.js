@@ -7,64 +7,280 @@ const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
 
 const extensionRoot = path.dirname(__dirname);
-function harness() {
-  const calls = [], messages = [], commands = new Map();
-  const context = { extensionPath: extensionRoot, extensionUri: extensionRoot, subscriptions: [] };
-  let provider, receive;
+const plain = value => JSON.parse(JSON.stringify(value));
+function harness(options = {}) {
+  const calls = [];
+  const messages = [];
+  const commands = new Map();
+  const errors = [];
+  const infos = [];
+  const inputBoxes = [];
+  const globalValues = new Map(Object.entries(options.globalValues || {}));
+  const context = {
+    extensionPath: extensionRoot,
+    extensionUri: extensionRoot,
+    subscriptions: [],
+    globalState: {
+      get: (key, fallback) => globalValues.has(key) ? globalValues.get(key) : fallback,
+      update: async (key, value) => {
+        globalValues.set(key, value);
+      },
+    },
+  };
+  let provider;
+  let receive;
   const disposable = { dispose() {} };
-  const state = { provider: 'openai', model: 'gpt-6.1-sol', hasKey: true, models: [] };
+  const state = {
+    provider: 'openai',
+    model: 'gpt-6.1-sol',
+    hasKey: true,
+    models: [{ id: 'deepseek-flash', name: 'DeepSeek-Flash' }],
+  };
   const vscode = {
     Uri: { joinPath: (base, ...parts) => path.join(base, ...parts) },
     RelativePattern: class {},
     window: {
-      registerWebviewViewProvider: (id, value) => { provider = value; return disposable; },
+      registerWebviewViewProvider: (id, value) => {
+        provider = value;
+        return disposable;
+      },
       registerUriHandler: () => disposable,
-      showInputBox: async () => undefined,
+      showErrorMessage: async message => {
+        errors.push(message);
+      },
+      showInformationMessage: async (...args) => {
+        infos.push(args);
+      },
+      showInputBox: async values => {
+        inputBoxes.push(values);
+        return options.inputKey;
+      },
     },
-    workspace: { createFileSystemWatcher: () => ({ dispose() {}, onDidChange: () => disposable, onDidCreate: () => disposable }) },
-    commands: { registerCommand: (id, handler) => { commands.set(id, handler); return disposable; }, executeCommand: async id => calls.push(id) },
+    workspace: {
+      createFileSystemWatcher: () => ({
+        dispose() {},
+        onDidChange: () => disposable,
+        onDidCreate: () => disposable,
+      }),
+    },
+    commands: {
+      registerCommand: (id, handler) => {
+        commands.set(id, handler);
+        return disposable;
+      },
+      executeCommand: async id => calls.push(id),
+    },
   };
   const spawn = (exe, args) => {
     const child = new EventEmitter();
     child.stdout = new EventEmitter();
     child.stderr = { resume() {} };
-    child.stdin = { on() {}, end(text) {
-      const request = JSON.parse(text);
-      calls.push(request);
-      queueMicrotask(() => {
-        child.stdout.emit('data', JSON.stringify({ ok: true, data: state }));
-        child.emit('close', 0);
-      });
-    } };
+    child.stdin = {
+      on() {},
+      end(text) {
+        const request = JSON.parse(text);
+        calls.push(request);
+        queueMicrotask(() => {
+          if ((options.failActions || []).includes(request.action)) {
+            child.stdout.emit('data', JSON.stringify({ ok: false, error: 'Connection failed safely.' }));
+          } else {
+            child.stdout.emit('data', JSON.stringify({ ok: true, data: state }));
+          }
+          child.emit('close', 0);
+        });
+      },
+    };
     child.kill = () => {};
     return child;
   };
-  const sandbox = { module: { exports: {} }, __dirname: extensionRoot, setTimeout, clearTimeout,
-    require: name => name === 'vscode' ? vscode : name === 'node:child_process' ? { spawn } : require(name) };
+  const sandbox = {
+    module: { exports: {} },
+    __dirname: extensionRoot,
+    setTimeout,
+    clearTimeout,
+    require: name => {
+      if (name === 'vscode') return vscode;
+      if (name === 'node:child_process') return { spawn };
+      return require(name);
+    },
+  };
   vm.runInNewContext(fs.readFileSync(path.join(extensionRoot, 'extension.js'), 'utf8'), sandbox);
   sandbox.module.exports.activate(context);
-  const view = { visible: true, onDidChangeVisibility: () => disposable,
-    webview: { cspSource: 'vscode-webview:', asWebviewUri: value => value,
-      onDidReceiveMessage: fn => { receive = fn; return disposable; },
-      postMessage: async value => messages.push(value) } };
+  const view = {
+    visible: true,
+    onDidChangeVisibility: () => disposable,
+    webview: {
+      cspSource: 'vscode-webview:',
+      asWebviewUri: value => value,
+      onDidReceiveMessage: fn => {
+        receive = fn;
+        return disposable;
+      },
+      postMessage: async value => messages.push(value),
+    },
+  };
   provider.resolveWebviewView(view);
-  return { calls, messages, commands, view, receive: message => receive(message) };
+  return {
+    calls,
+    messages,
+    commands,
+    errors,
+    infos,
+    inputBoxes,
+    globalValues,
+    view,
+    receive: message => receive(message),
+  };
 }
 
-test('sidebar boots, uses a nonce CSP, and never sends a key to the webview', async () => {
+test('sidebar boots with the requested English provider interface', async () => {
   const h = harness();
   assert(h.commands.has('codexSwitch.open'));
   assert.match(h.view.webview.html, /default-src 'none'/);
   assert.doesNotMatch(h.view.webview.html, /\{\{NONCE\}\}|unsafe-inline/);
+  for (const text of [
+    '<title>Codex Switch</title>',
+    'Current Configuration',
+    'Provider',
+    'Manage Providers',
+    'ChatGPT',
+    'Your Plan',
+    'DeepSeek',
+    'API key',
+    'Set API key',
+    'Not configured',
+    'Update model catalog',
+    'Check connection',
+    'Switch to ChatGPT',
+    'Switch to DeepSeek',
+  ]) {
+    assert.equal(h.view.webview.html.includes(text), true, text);
+  }
+  assert.equal(h.view.webview.html.includes('id="close-manage"'), true);
+  assert.doesNotMatch(h.view.webview.html, /<footer|<select|reasoning|type="password"|notice|intro|feedback-icon/i);
+  const viewSource = fs.readFileSync(path.join(extensionRoot, 'media', 'view.js'), 'utf8');
+  assert.equal(viewSource.includes('${info.name} (${info.subtitle})'), true);
+  assert.equal(viewSource.includes('checkbox.disabled = locked'), true);
+  assert.match(viewSource, /}, 3000\);/);
   await h.receive({ action: 'ready' });
-  assert.equal(h.messages.at(-1).state.hasKey, true);
+  const latest = h.messages.at(-1).state;
+  assert.equal(latest.hasKey, true);
+  assert.equal(latest.key, undefined);
+  assert.deepEqual(plain(latest.providerLayout), [
+    { id: 'openai', visible: true },
+    { id: 'deepseek', visible: true },
+  ]);
+});
+
+test('Set API key uses the native password dialog and never returns the key', async () => {
+  const key = 'sk-example_1234567890';
+  const h = harness({ inputKey: key });
+  await h.receive({ action: 'saveKey' });
+  assert.equal(h.inputBoxes.length, 1);
+  assert.equal(h.inputBoxes[0].password, true);
+  assert(h.calls.some(call => call.action === 'saveKey' && call.key === key));
   assert.equal(h.messages.at(-1).state.key, undefined);
 });
 
-test('canceling native key entry does not overwrite the stored key', async () => {
+test('canceling the native API key dialog preserves the stored key', async () => {
   const h = harness();
   await h.receive({ action: 'saveKey' });
+  assert.equal(h.inputBoxes.length, 1);
   assert.equal(h.calls.some(call => call.action === 'saveKey'), false);
+});
+
+test('provider visibility and order are validated and persisted', async () => {
+  const h = harness();
+  await h.receive({
+    action: 'saveProviderLayout',
+    revision: 2,
+    layout: [
+      { id: 'deepseek', visible: true },
+      { id: 'openai', visible: false },
+      { id: 'deepseek', visible: false },
+      { id: 'unknown', visible: true },
+    ],
+  });
+  const expected = [
+    { id: 'deepseek', visible: true },
+    { id: 'openai', visible: false },
+  ];
+  assert.deepEqual(plain(h.globalValues.get('providerLayout')), expected);
+  const acknowledgement = h.messages.find(message => message.type === 'providerLayout');
+  assert.deepEqual(plain(acknowledgement.layout), expected);
+  assert.equal(acknowledgement.revision, 2);
+});
+
+test('queued provider changes keep the latest checkbox and order state', async () => {
+  const h = harness();
+  const first = h.receive({
+    action: 'saveProviderLayout',
+    revision: 1,
+    layout: [
+      { id: 'deepseek', visible: true },
+      { id: 'openai', visible: false },
+    ],
+  });
+  const second = h.receive({
+    action: 'saveProviderLayout',
+    revision: 2,
+    layout: [
+      { id: 'openai', visible: true },
+      { id: 'deepseek', visible: false },
+    ],
+  });
+  await Promise.all([first, second]);
+  const expected = [
+    { id: 'openai', visible: true },
+    { id: 'deepseek', visible: false },
+  ];
+  assert.deepEqual(plain(h.globalValues.get('providerLayout')), expected);
+  const acknowledgements = h.messages.filter(message => message.type === 'providerLayout');
+  assert.deepEqual(plain(acknowledgements.at(-1).layout), expected);
+  assert.equal(acknowledgements.at(-1).revision, 2);
+});
+
+test('the provider section always keeps the active provider visible', async () => {
+  const h = harness({
+    globalValues: {
+      providerLayout: [
+        { id: 'deepseek', visible: true },
+        { id: 'openai', visible: false },
+      ],
+    },
+  });
+  await h.receive({ action: 'ready' });
+  assert.deepEqual(plain(h.messages.at(-1).state.providerLayout), [
+    { id: 'deepseek', visible: true },
+    { id: 'openai', visible: true },
+  ]);
+});
+
+test('catalog and connection actions emit colored feedback results', async () => {
+  const h = harness();
+  await h.receive({ action: 'refresh' });
+  assert.deepEqual(plain(h.messages.find(message => message.type === 'actionResult')), {
+    type: 'actionResult',
+    ok: true,
+    message: 'Model catalog updated.',
+  });
+  await h.receive({ action: 'verify' });
+  assert.deepEqual(plain(h.messages.filter(message => message.type === 'actionResult').at(-1)), {
+    type: 'actionResult',
+    ok: true,
+    message: 'Connection successful.',
+  });
+});
+
+test('failed connection checks return red feedback instead of a webview notice', async () => {
+  const h = harness({ failActions: ['verify'] });
+  await h.receive({ action: 'verify' });
+  assert.deepEqual(plain(h.messages.find(message => message.type === 'actionResult')), {
+    type: 'actionResult',
+    ok: false,
+    message: 'Connection failed safely.',
+  });
+  assert.equal(h.errors.length, 0);
 });
 
 test('untrusted webview messages cannot invoke arbitrary backend actions', async () => {
@@ -72,15 +288,25 @@ test('untrusted webview messages cannot invoke arbitrary backend actions', async
   await h.receive({ action: 'token' });
   await h.receive({ action: 'apply', provider: 'arbitrary' });
   assert.equal(h.calls.some(call => call.action === 'token' || call.action === 'apply'), false);
-  assert.equal(h.messages.some(message => message.notice?.kind === 'error'), true);
+  assert.equal(h.errors.length, 1);
 });
 
-test('applying changes exposes an explicit reload action without reloading automatically', async () => {
+test('switching sends only the provider and reloads immediately after success', async () => {
   const h = harness();
-  await h.receive({ action: 'apply', provider: 'deepseek', model: 'deepseek-flash', effort: 'high' });
-  assert(h.calls.some(call => call.action === 'apply' && call.model === 'deepseek-flash'));
-  assert(h.messages.some(message => message.notice?.reload));
-  assert.equal(h.calls.includes('workbench.action.reloadWindow'), false);
-  await h.receive({ action: 'reload' });
+  await h.receive({ action: 'apply', provider: 'deepseek' });
+  const applyIndex = h.calls.findIndex(call => call.action === 'apply');
+  const apply = h.calls[applyIndex];
+  assert.equal(apply.provider, 'deepseek');
+  assert.equal('model' in apply, false);
+  assert.equal('effort' in apply, false);
   assert(h.calls.includes('workbench.action.reloadWindow'));
+  assert(h.calls.indexOf('workbench.action.reloadWindow') > applyIndex);
+  assert.equal(h.infos.length, 0);
+});
+
+test('failed provider switching does not reload the window', async () => {
+  const h = harness({ failActions: ['apply'] });
+  await h.receive({ action: 'apply', provider: 'deepseek' });
+  assert.equal(h.errors.length, 1);
+  assert.equal(h.calls.includes('workbench.action.reloadWindow'), false);
 });

@@ -1,8 +1,8 @@
 {
   "name": "codex-provider-switch",
   "displayName": "Codex Switch",
-  "description": "Alterna entre ChatGPT Plus y DeepSeek en Codex desde la barra lateral.",
-  "version": "0.1.2",
+  "description": "Switch Codex between ChatGPT and DeepSeek from the VS Code sidebar.",
+  "version": "0.1.3",
   "publisher": "macor-local",
   "license": "GPL-3.0-only",
   "repository": {
@@ -43,7 +43,7 @@
         {
           "type": "webview",
           "id": "codexSwitch.selector",
-          "name": "Proveedor",
+          "name": "Codex Switch",
           "contextualTitle": "Codex Switch"
         }
       ]
@@ -51,29 +51,10 @@
     "commands": [
       {
         "command": "codexSwitch.open",
-        "title": "Codex Switch: Abrir selector",
+        "title": "Codex Switch: Open",
         "icon": "$(arrow-swap)"
-      },
-      {
-        "command": "codexSwitch.refresh",
-        "title": "Codex Switch: Actualizar modelos",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "codexSwitch.key",
-        "title": "Codex Switch: Guardar clave de DeepSeek",
-        "icon": "$(key)"
       }
-    ],
-    "menus": {
-      "view/title": [
-        {
-          "command": "codexSwitch.refresh",
-          "when": "view == codexSwitch.selector",
-          "group": "navigation"
-        }
-      ]
-    }
+    ]
   },
   "scripts": {
     "brand": "node scripts/build-brand-assets.cjs",
