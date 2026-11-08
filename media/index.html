@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,28 +9,36 @@
 </head>
 <body>
   <main>
-    <header><p class="eyebrow">CODEX SWITCH</p><h1>Elige cómo trabajar.</h1><p class="intro">Tu proyecto. El modelo que prefieras.</p></header>
-    <section class="current" aria-label="Configuración actual"><span class="dot"></span><div><span class="caption">CONFIGURACIÓN ACTUAL</span><strong id="current">Cargando…</strong></div></section>
-    <section aria-labelledby="provider-label">
-      <h2 id="provider-label">Proveedor</h2>
-      <div class="providers" role="group" aria-label="Proveedor">
-        <button class="provider selected" id="openai" aria-pressed="true"><span class="provider-name">ChatGPT</span><span class="provider-detail">Tu plan Plus</span></button>
-        <button class="provider" id="deepseek" aria-pressed="false"><span class="provider-name">DeepSeek</span><span class="provider-detail">Tu API key</span></button>
-      </div>
+    <section class="current" aria-labelledby="current-label">
+      <h1 id="current-label">Current Configuration</h1>
+      <strong id="current" aria-live="polite"></strong>
     </section>
-    <section id="deepseek-options" hidden>
-      <div class="label-row"><label for="model">Modelo</label><button class="text-button" id="refresh" title="Actualizar catálogo oficial">Actualizar</button></div>
-      <select id="model" aria-describedby="model-info"></select>
-      <p class="hint" id="model-info"></p>
-      <label id="effort-label">Razonamiento</label>
-      <div class="efforts" id="efforts" role="group" aria-labelledby="effort-label"></div>
-      <div class="credential"><div><span class="key-symbol" aria-hidden="true">◇</span><span id="key-status">Clave no configurada</span></div><button class="text-button" id="key">Añadir</button></div>
-      <button class="text-button verify" id="verify">Comprobar conexión <span aria-hidden="true">↗</span></button>
+
+    <section class="provider-section" aria-labelledby="provider-label">
+      <h2 id="provider-label">Provider</h2>
+
+      <article class="provider-card">
+        <header>
+          <h3>ChatGPT</h3>
+          <p>Your Plan</p>
+        </header>
+        <button class="primary" id="openai">Switch to ChatGPT</button>
+      </article>
+
+      <article class="provider-card">
+        <header>
+          <h3>DeepSeek</h3>
+          <p>API key</p>
+        </header>
+        <input id="key" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" aria-label="DeepSeek API key">
+        <ul class="model-list" id="models" aria-label="Available DeepSeek models"></ul>
+        <div class="secondary-actions">
+          <button id="refresh">Update model catalog</button>
+          <button id="verify">Check connection</button>
+        </div>
+        <button class="primary" id="deepseek-switch">Switch to DeepSeek</button>
+      </article>
     </section>
-    <section id="chatgpt-options"><p class="hint chatgpt-hint">Usa tu sesión actual de ChatGPT y conserva tus ajustes de modelo.</p></section>
-    <button class="primary" id="apply" disabled>Configuración actual</button>
-    <div id="notice" role="status" aria-live="polite" hidden><p id="notice-text"></p><button class="text-button" id="reload" hidden>Recargar VS Code ↗</button></div>
-    <footer><p>El cambio se aplica a Codex en este equipo. Termina las tareas en curso antes de cambiar.</p><p>La API de DeepSeek se factura por separado. Historial y herramientas pueden variar.</p></footer>
   </main>
   <script nonce="{{NONCE}}" src="{{SCRIPT}}"></script>
 </body>

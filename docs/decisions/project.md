@@ -29,6 +29,29 @@ Source: explicit user instructions and initialization answers, 2026-11-07.
   and a version table listing the changes in codex-switch.
 - Keep a suitable `.gitignore` for source, tooling, packaging and local state.
 
+## Sidebar interface
+
+Source: explicit user instructions, 2026-11-08.
+
+- The view tab is titled **Codex Switch**. All visible interface copy is in
+  English.
+- Show only **Current Configuration** and **Provider**. Current Configuration
+  names the active provider, ChatGPT or DeepSeek, and never exposes a concrete
+  model.
+- Under Provider, show one section for **ChatGPT** with the subtitle
+  **Your Plan**, and one section for **DeepSeek** with the subtitle **API key**.
+- ChatGPT contains only a **Switch to ChatGPT** button, or a disabled
+  **Current Setting** button when it is active.
+- DeepSeek contains only an API key input, the available models as a
+  non-interactive fixed list, **Update model catalog**, **Check connection**, and
+  **Switch to DeepSeek**, or a disabled **Current Setting** button when it is
+  active.
+- Do not add introductory, explanatory, credential-status, footer or other
+  informational copy to the sidebar. Do not add provider selection controls,
+  model selectors or reasoning-effort controls.
+- Use the first available model from the refreshed catalog when switching to
+  DeepSeek because model choice is internal to the provider action.
+
 ## Brand assets
 
 Source: user-supplied logo and explicit instructions, 2026-11-07.
@@ -49,7 +72,10 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
 - Preserve the existing API key, ChatGPT sign-in and user configuration during
   migration. Credentials and local configuration backups remain outside Git.
 - Keep DeepSeek credentials encrypted for the Windows user. Never put a key in
-  the webview, settings, process arguments, logs, source or VSIX artifacts.
+  settings, process arguments, logs, source or VSIX artifacts.
+- The DeepSeek API key is entered through the sidebar's masked input as requested
+  on 2026-11-08. Send it once from the webview to the extension process to save
+  it; never return, prefill or retain that value in webview state.
 - Never force `forced_login_method = "api"` to switch providers: this was
   observed to sign out an existing ChatGPT account during initial setup.
 - Verify backend/configuration behavior and the extension tests when their code

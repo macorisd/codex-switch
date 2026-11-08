@@ -3,8 +3,8 @@
 </p>
 
 A minimal VS Code sidebar extension for switching the model provider used by
-Codex. Choose a provider, model and reasoning effort, then apply and reload
-VS Code. API keys stay encrypted locally; API usage is billed separately.
+Codex. The sidebar shows the current provider and the actions for ChatGPT and
+DeepSeek. API keys stay encrypted locally; API usage is billed separately.
 
 | Provider | Access | Integrated models |
 | --- | --- | --- |
@@ -12,11 +12,12 @@ VS Code. API keys stay encrypted locally; API usage is billed separately.
 | DeepSeek | DeepSeek API key | `deepseek-flash`, `deepseek-v4-pro` |
 
 Open **Codex Switch** from the rosette-and-gear icon in the Activity Bar. Use
-**Actualizar** to refresh DeepSeek's model catalog. History and tools may vary
+**Update model catalog** to refresh DeepSeek's model list. History and tools may vary
 between providers. Requires Windows and Python 3.11+ on `PATH`.
 
 | Version | Changes |
 | --- | --- |
+| 0.1.4 | Simplify the English sidebar to the current provider, ChatGPT and DeepSeek actions, a fixed DeepSeek model list, and a masked API key field. |
 | 0.1.3 | Require installation and verification in the current VS Code window before submitting changes for review. |
 | [0.1.2](https://github.com/macorisd/codex-switch/releases/tag/v0.1.2) | Add the supplied logo, README banner and sidebar icon; publish VSIX release assets and link release history automatically. |
 | [0.1.1](https://github.com/macorisd/codex-switch/releases/tag/v0.1.1) | Move source into this repository, bundle the local connector with the extension, and document project conventions. |

@@ -36,9 +36,14 @@ def handle(request):
             s.switch()
         elif request.get('provider') == 'deepseek':
             models = json.loads(s.CATALOG.read_text('utf-8'))['models']
-            if request.get('model') not in [model['slug'] for model in models]:
-                raise ValueError('Unsupported model')
-            s.switch(request.get('model'), request.get('effort', 'high'))
+            if not models:
+                raise ValueError('No DeepSeek models are available.')
+            model = models[0]
+            supported = [level['effort'] for level in model['supported_reasoning_levels']]
+            effort = model.get('default_reasoning_level', 'high')
+            if effort not in supported:
+                effort = supported[0]
+            s.switch(model['slug'], effort)
         else:
             raise ValueError('Unsupported provider')
     else:
@@ -54,5 +59,5 @@ if __name__ == '__main__':
         print(json.dumps({'ok': True, 'data': result}, ensure_ascii=True))
     except Exception:
         # Do not expose exception text, request bodies, or upstream responses.
-        print(json.dumps({'ok': False, 'error': 'No se pudo completar la operacion. Comprueba la clave, la conexion y la configuracion local de Codex.'}))
+        print(json.dumps({'ok': False, 'error': 'The operation could not be completed. Check the API key, connection and local Codex configuration.'}))
         sys.exit(1)
