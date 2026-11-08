@@ -99,6 +99,7 @@
     const visible = ({ entry }) => entry.visible || isActive(entry.id);
     for (const { entry, card } of orderedCards) card.hidden = !visible({ entry });
     $('provider-list').replaceChildren(...orderedCards.filter(visible).map(({ card }) => card));
+    $('provider-list').hidden = false;
   }
 
   function showFeedback(ok, message) {

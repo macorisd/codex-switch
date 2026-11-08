@@ -74,6 +74,7 @@ function webviewHarness(state) {
     'set-key', 'openai', 'deepseek-switch', 'current', 'key-dot', 'key-status',
     'models', 'refresh', 'verify', 'action-feedback', 'feedback-text',
   ]) add(id);
+  elements.get('provider-list').hidden = true;
 
   const openaiCard = add('openai-card', 'article');
   openaiCard.dataset.provider = 'openai';
@@ -112,16 +113,16 @@ function webviewHarness(state) {
     sandbox,
   );
   const receive = data => windowListeners.get('message')({ data });
-  receive({ type: 'state', state, busy: false });
+  if (state) receive({ type: 'state', state, busy: false });
   return { elements, cards, messages, timers, receive };
 }
 
 function initialState(providerLayout = [
   { id: 'openai', visible: true },
   { id: 'deepseek', visible: true },
-]) {
+], provider = 'openai') {
   return {
-    provider: 'openai',
+    provider,
     hasKey: true,
     models: [{ id: 'deepseek-flash', name: 'DeepSeek-Flash' }],
     providers: [
@@ -136,6 +137,21 @@ function initialState(providerLayout = [
 function manageItem(element, provider) {
   return element.children.find(item => item.dataset.provider === provider);
 }
+
+test('webview applies provider filtering before revealing the section', () => {
+  const h = webviewHarness(null);
+  assert.equal(h.elements.get('provider-list').hidden, true);
+  h.receive({
+    type: 'state',
+    busy: false,
+    state: initialState([
+      { id: 'deepseek', visible: true },
+      { id: 'openai', visible: false },
+    ], 'deepseek'),
+  });
+  assert.equal(h.elements.get('provider-list').hidden, false);
+  assert.deepEqual(h.elements.get('provider-list').children, [h.cards[1]]);
+});
 
 test('webview keeps the active card visible and formats provider labels', () => {
   const h = webviewHarness(initialState([

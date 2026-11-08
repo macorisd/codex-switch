@@ -61,7 +61,8 @@ Source: explicit user instructions, 2026-11-08.
   in the managed order. Persist that selection and order across reloads. The
   active provider cannot be unchecked and must remain visible in Current
   Configuration and the Provider section; repair any persisted layout that hides
-  it.
+  it. Keep the provider section hidden until the persisted filter and order have
+  been applied so a window reload never flashes the complete provider list.
 - Do not add introductory, explanatory, footer or other informational copy to
   the sidebar. Do not add model selectors or reasoning-effort controls.
 - Use the first available model from the refreshed catalog when switching to
