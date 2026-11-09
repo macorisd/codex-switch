@@ -10,7 +10,7 @@
   let pendingAction = null;
   let providerLayout = [];
   let layoutRevision = 0;
-  let feedbackTimer;
+  const feedbackTimers = new Map();
   let balance = null;
   let balanceLoading = false;
   const send = message => vscode.postMessage(message);
@@ -104,26 +104,27 @@
     $('provider-list').hidden = false;
   }
 
-  function showFeedback(ok, message) {
-    clearTimeout(feedbackTimer);
-    $('action-feedback').hidden = false;
-    $('action-feedback').classList.toggle('success', ok);
-    $('action-feedback').classList.toggle('error', !ok);
-    $('feedback-text').textContent = message;
-    feedbackTimer = setTimeout(() => {
-      $('action-feedback').hidden = true;
-      $('feedback-text').textContent = '';
-    }, 3000);
+  function showFeedback(containerId, textId, ok, message) {
+    clearTimeout(feedbackTimers.get(containerId));
+    const container = $(containerId);
+    container.hidden = false;
+    container.classList.toggle('success', ok);
+    container.classList.toggle('error', !ok);
+    $(textId).textContent = message;
+    feedbackTimers.set(containerId, setTimeout(() => {
+      container.hidden = true;
+      $(textId).textContent = '';
+    }, 5000));
   }
 
-  function clearFeedback() {
-    clearTimeout(feedbackTimer);
-    $('action-feedback').hidden = true;
-    $('feedback-text').textContent = '';
+  function clearFeedback(containerId, textId) {
+    clearTimeout(feedbackTimers.get(containerId));
+    $(containerId).hidden = true;
+    $(textId).textContent = '';
   }
 
   function renderBalance() {
-    const threshold = state?.balanceAlert?.threshold ?? null;
+    const threshold = state?.balanceAlert?.threshold ?? 5;
     const level = state?.balanceAlert?.level || 'ok';
     const total = Number.isFinite(balance?.total) ? balance.total : null;
     $('balance-value').classList.toggle('low', level === 'low');
@@ -137,8 +138,12 @@
 
     const input = $('balance-threshold');
     if (document.activeElement !== input) {
-      input.value = threshold === null ? '' : String(threshold);
+      input.value = String(threshold);
     }
+    $('balance-threshold-copy').textContent = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(threshold);
   }
 
   function render() {
@@ -166,7 +171,6 @@
     }));
     $('refresh').textContent = pendingAction === 'refresh' && busy ? 'Updating...' : 'Update model catalog';
     $('refresh').disabled = busy;
-    $('verify').textContent = pendingAction === 'verify' && busy ? 'Checking...' : 'Check connection';
     $('verify').disabled = busy || !hasDeepSeekKey();
     renderBalance();
 
@@ -183,24 +187,30 @@
   $('manage-providers').addEventListener('click', () => setManageOpen($('manage-panel').hidden));
   $('close-manage').addEventListener('click', () => setManageOpen(false));
   document.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && !$('manage-panel').hidden) setManageOpen(false);
+    if (event.key !== 'Escape') return;
+    if (!$('manage-panel').hidden) setManageOpen(false);
+    if (!$('balance-alert-editor').hidden) {
+      $('balance-alert-editor').hidden = true;
+      $('balance-alert-toggle').setAttribute('aria-expanded', 'false');
+    }
   });
   $('set-key').addEventListener('click', () => send({ action: 'saveKey' }));
   $('openai').addEventListener('click', () => send({ action: 'apply', provider: 'openai' }));
   $('deepseek-switch').addEventListener('click', () => send({ action: 'apply', provider: 'deepseek' }));
   $('refresh').addEventListener('click', () => {
     pendingAction = 'refresh';
-    clearFeedback();
+    clearFeedback('catalog-feedback', 'catalog-feedback-text');
     send({ action: 'refresh' });
   });
   $('verify').addEventListener('click', () => {
     pendingAction = 'verify';
-    clearFeedback();
+    clearFeedback('connection-feedback', 'connection-feedback-text');
     send({ action: 'verify' });
   });
   $('balance-update').addEventListener('click', () => {
     if (balanceLoading) return;
     balanceLoading = true;
+    clearFeedback('balance-feedback', 'balance-feedback-text');
     renderBalance();
     send({ action: 'syncBalance' });
   });
@@ -210,12 +220,16 @@
     $('balance-alert-toggle').setAttribute('aria-expanded', String(!editor.hidden));
     if (!editor.hidden) $('balance-threshold').focus();
   });
+  $('balance-alert-close').addEventListener('click', () => {
+    $('balance-alert-editor').hidden = true;
+    $('balance-alert-toggle').setAttribute('aria-expanded', 'false');
+  });
   $('balance-threshold').addEventListener('keydown', event => {
     if (event.key === 'Enter') $('balance-threshold').blur();
   });
   $('balance-threshold').addEventListener('change', event => {
     const value = event.target.value.trim();
-    send({ action: 'saveBalanceAlert', threshold: value === '' ? null : Number(value) });
+    send({ action: 'saveBalanceAlert', threshold: value === '' ? 0 : Number(value) });
   });
 
   window.addEventListener('message', ({ data }) => {
@@ -231,8 +245,13 @@
       if (!busy) pendingAction = null;
       render();
     } else if (data.type === 'actionResult') {
+      const action = data.action || pendingAction;
       pendingAction = null;
-      showFeedback(data.ok, data.message);
+      if (action === 'verify') {
+        showFeedback('connection-feedback', 'connection-feedback-text', data.ok, data.message);
+      } else if (action === 'refresh') {
+        showFeedback('catalog-feedback', 'catalog-feedback-text', data.ok, data.message);
+      }
       render();
     } else if (data.type === 'balance') {
       balance = data.balance;
@@ -248,7 +267,7 @@
     } else if (data.type === 'balanceError') {
       balanceLoading = false;
       balance = null;
-      showFeedback(false, data.message);
+      showFeedback('balance-feedback', 'balance-feedback-text', false, data.message);
       renderBalance();
     } else if (data.type === 'providerLayout') {
       adoptProviderLayout(data.layout, data.revision);

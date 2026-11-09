@@ -182,7 +182,6 @@ test('sidebar boots with the requested English provider interface', async () => 
     'Model catalog',
     'Update model catalog',
     'Check connection',
-    'Usage',
     'Available balance',
     'Balance alert',
     'Switch to ChatGPT',
@@ -191,7 +190,7 @@ test('sidebar boots with the requested English provider interface', async () => 
     assert.equal(h.view.webview.html.includes(text), true, text);
   }
   assert.equal(h.view.webview.html.includes('id="close-manage"'), true);
-  assert.doesNotMatch(h.view.webview.html, /<footer|<select|reasoning|type="password"|notice|intro|feedback-icon|Usage dashboard/i);
+  assert.doesNotMatch(h.view.webview.html, /<footer|<select|reasoning|type="password"|notice|intro|feedback-icon|Usage dashboard|>Usage</i);
   const detailsStart = h.view.webview.html.indexOf('<details class="model-catalog"');
   const detailsEnd = h.view.webview.html.indexOf('</details>', detailsStart);
   const detailsTag = h.view.webview.html.slice(detailsStart, h.view.webview.html.indexOf('>', detailsStart) + 1);
@@ -203,11 +202,12 @@ test('sidebar boots with the requested English provider interface', async () => 
   const viewSource = fs.readFileSync(path.join(extensionRoot, 'media', 'view.js'), 'utf8');
   assert.equal(viewSource.includes('${info.name} (${info.subtitle})'), true);
   assert.equal(viewSource.includes('checkbox.disabled = locked'), true);
-  assert.match(viewSource, /}, 3000\);/);
+  assert.match(viewSource, /}, 5000\)\);/);
   await h.receive({ action: 'ready' });
   const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
   assert.equal(latest.hasKey, true);
   assert.equal(latest.key, undefined);
+  assert.equal(latest.balanceAlert.threshold, 5);
   assert.deepEqual(plain(latest.providerLayout), [
     { id: 'openai', visible: true },
     { id: 'deepseek', visible: true },
@@ -351,12 +351,14 @@ test('catalog and connection actions emit colored feedback results', async () =>
   await h.receive({ action: 'refresh' });
   assert.deepEqual(plain(h.messages.find(message => message.type === 'actionResult')), {
     type: 'actionResult',
+    action: 'refresh',
     ok: true,
     message: 'Model catalog updated.',
   });
   await h.receive({ action: 'verify' });
   assert.deepEqual(plain(h.messages.filter(message => message.type === 'actionResult').at(-1)), {
     type: 'actionResult',
+    action: 'verify',
     ok: true,
     message: 'Connection successful.',
   });
@@ -367,6 +369,7 @@ test('failed connection checks return red feedback instead of a webview notice',
   await h.receive({ action: 'verify' });
   assert.deepEqual(plain(h.messages.find(message => message.type === 'actionResult')), {
     type: 'actionResult',
+    action: 'verify',
     ok: false,
     message: 'Connection failed safely.',
   });

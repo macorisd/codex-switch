@@ -67,7 +67,7 @@ class Selector {
     const savedAlert = context.globalState.get(BALANCE_ALERT_KEY, {});
     this.balanceAlert = {
       threshold: typeof savedAlert.threshold === 'number' && Number.isFinite(savedAlert.threshold)
-        && savedAlert.threshold >= 0 ? savedAlert.threshold : null,
+        && savedAlert.threshold >= 0 ? savedAlert.threshold : 5,
       level: ['ok', 'low', 'zero'].includes(savedAlert.level) ? savedAlert.level : 'ok',
     };
   }
@@ -195,12 +195,9 @@ class Selector {
   }
 
   async setBalanceAlert(value) {
-    let threshold = null;
-    if (value !== null && value !== undefined && value !== '') {
-      threshold = Number(value);
-      if (!Number.isFinite(threshold) || threshold < 0) {
-        throw new Error('Balance alert must be a non-negative dollar amount.');
-      }
+    const threshold = value === null || value === undefined || value === '' ? 0 : Number(value);
+    if (!Number.isFinite(threshold) || threshold < 0) {
+      throw new Error('Balance alert must be a non-negative dollar amount.');
     }
     this.balanceAlert = { threshold, level: 'ok' };
     await this.context.globalState.update(BALANCE_ALERT_KEY, this.balanceAlert);
@@ -301,6 +298,7 @@ class Selector {
         await backend({ action: 'verify' });
         await this.view?.webview.postMessage({
           type: 'actionResult',
+          action: message.action,
           ok: true,
           message: 'Connection successful.',
         });
@@ -308,6 +306,7 @@ class Selector {
         await backend({ action: 'refresh' });
         await this.view?.webview.postMessage({
           type: 'actionResult',
+          action: message.action,
           ok: true,
           message: 'Model catalog updated.',
         });
@@ -320,6 +319,7 @@ class Selector {
       if (['verify', 'refresh'].includes(message.action)) {
         await this.view?.webview.postMessage({
           type: 'actionResult',
+          action: message.action,
           ok: false,
           message: error.message,
         });

@@ -75,9 +75,11 @@ function webviewHarness(state) {
   for (const id of [
     'manage-providers', 'manage-panel', 'manage-list', 'provider-list', 'close-manage',
     'set-key', 'openai', 'deepseek-switch', 'current', 'key-dot', 'key-status',
-    'models', 'refresh', 'verify', 'action-feedback', 'feedback-text',
+    'models', 'refresh', 'verify', 'connection-feedback', 'connection-feedback-text',
+    'catalog-feedback', 'catalog-feedback-text',
+    'balance-feedback', 'balance-feedback-text',
     'balance-value', 'balance-update', 'balance-alert-toggle', 'balance-alert-editor',
-    'balance-threshold',
+    'balance-alert-close', 'balance-threshold', 'balance-threshold-copy',
   ]) add(id);
   elements.get('provider-list').hidden = true;
   elements.get('balance-alert-editor').hidden = true;
@@ -137,7 +139,7 @@ function initialState(providerLayout = [
     ],
     providerLayout,
     providerLayoutRevision: 0,
-    balanceAlert: { threshold: null, level: 'ok' },
+    balanceAlert: { threshold: 5, level: 'ok' },
   };
 }
 
@@ -205,18 +207,19 @@ test('webview ignores attempts to hide the active provider and closes with X', (
   assert.equal(h.elements.get('manage-panel').hidden, true);
 });
 
-test('webview hides colored action feedback after 3000 ms without an icon', () => {
+test('webview hides action feedback after 5000 ms without an icon', () => {
   const h = webviewHarness(initialState());
   h.receive({
     type: 'actionResult',
+    action: 'verify',
     ok: true,
     message: 'Connection successful.',
   });
-  assert.equal(h.elements.get('action-feedback').hidden, false);
-  assert.equal(h.elements.get('feedback-text').textContent, 'Connection successful.');
-  assert.equal(h.timers.at(-1).delay, 3000);
+  assert.equal(h.elements.get('connection-feedback').hidden, false);
+  assert.equal(h.elements.get('connection-feedback-text').textContent, 'Connection successful.');
+  assert.equal(h.timers.at(-1).delay, 5000);
   h.timers.at(-1).listener();
-  assert.equal(h.elements.get('action-feedback').hidden, true);
+  assert.equal(h.elements.get('connection-feedback').hidden, true);
 });
 
 test('webview renders balance states and saves the alert threshold', () => {
@@ -233,9 +236,12 @@ test('webview renders balance states and saves the alert threshold', () => {
   h.elements.get('balance-alert-toggle').dispatch('click');
   assert.equal(h.elements.get('balance-alert-editor').hidden, false);
   assert.equal(h.elements.get('balance-threshold').value, '5');
+  assert.equal(h.elements.get('balance-threshold-copy').textContent, '$5.00');
   h.elements.get('balance-threshold').value = '2.50';
   h.elements.get('balance-threshold').dispatch('change');
   assert.deepEqual(h.messages.at(-1), { action: 'saveBalanceAlert', threshold: 2.5 });
+  h.elements.get('balance-alert-close').dispatch('click');
+  assert.equal(h.elements.get('balance-alert-editor').hidden, true);
 
   h.receive({
     type: 'balance',

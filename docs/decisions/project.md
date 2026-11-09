@@ -58,11 +58,13 @@ Source: explicit user instructions, 2026-11-08.
   non-interactive fixed list, **Update model catalog**, **Check connection**, and
   **Switch to DeepSeek**, or a disabled **Current Setting** button when it is
   active.
+- **Check connection** is a discreet blue text link aligned to the right of the
+  **API key** subtitle rather than a full-width button.
 - **Set API key** opens VS Code's native password dialog. The key is not entered,
   displayed or retained in the sidebar GUI.
-- **Update model catalog** and **Check connection** show a prominent green
-  success feedback or red error feedback in the DeepSeek card. The feedback has
-  no icon or emoji, remains visible for exactly 3 seconds, then disappears.
+- **Update model catalog** and **Check connection** show green success or red
+  error feedback next to the action that produced it. The feedback has no icon
+  or emoji, remains visible for exactly 5 seconds, then disappears.
 - A **Manage Providers** action next to the Provider heading opens the complete
   provider list, with an X control that closes the panel. Each provider is labeled
   as **Provider (subtitle)**, has a checkbox and controls to move it up or down;
@@ -85,9 +87,9 @@ Source: explicit user instructions, 2026-11-08.
 
 Source: approved PLAN for version 0.2.0, 2026-11-09.
 
-- Providers with API-key credentials may show a minimal **Usage** section.
-  DeepSeek is the only provider in version 0.2.0.
-- Usage shows **Available balance** only. The historical usage dashboard,
+- Providers with API-key credentials may show a minimal **Available balance**
+  section. DeepSeek is the only provider in version 0.2.0.
+- The section has no subtitle or secondary heading. The historical usage dashboard,
   period selector and spending chart are deferred until DeepSeek publishes an
   official usage API; the documented balance endpoint provides current balance
   only.
@@ -96,10 +98,15 @@ Source: approved PLAN for version 0.2.0, 2026-11-09.
 - Sync balance when the panel opens, when **Update** is pressed, and every 60
   seconds while the panel remains visible. Cancel polling when hidden or
   disposed and prevent overlapping requests.
-- **Balance alert** accepts a persisted USD threshold. Low balance is yellow and
-  zero balance is red.
+- **Balance alert** opens a bordered panel with an X close control and defaults
+  to a persisted USD threshold of 5.00. The panel explains that the user is
+  notified below that credit amount and that setting it to 0 disables low-balance
+  alerts. Its bottom edge touches the provider switch button with no extra gap.
+- Low balance is yellow and zero balance is red.
 - Notify only when crossing below the threshold or reaching zero, not on every
   sync while the state remains unchanged. Rearm alerts when the balance recovers.
+- Hide the webview scrollbar visually while preserving wheel, touch and keyboard
+  scrolling.
 
 ## Brand assets
 

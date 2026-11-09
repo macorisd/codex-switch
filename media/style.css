@@ -5,7 +5,10 @@ body {
   color: var(--vscode-foreground);
   font: var(--vscode-font-size, 13px)/1.45 var(--vscode-font-family, sans-serif);
   background: var(--vscode-sideBar-background);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+body::-webkit-scrollbar { width: 0; height: 0; }
 main { max-width: 460px; margin: 0 auto; padding: 20px 16px; }
 [hidden] { display: none !important; }
 h1, h2, h3, p { margin: 0; }
@@ -99,6 +102,13 @@ h2 { font-size: 12px; font-weight: 600; }
   box-shadow: 0 0 0 1px var(--vscode-focusBorder);
 }
 .provider-card header { margin-bottom: 12px; }
+.deepseek-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.connection-link { flex: 0 0 auto; }
 h3 { font-size: 13px; line-height: 1.25; font-weight: 600; }
 .provider-card header p {
   margin-top: 2px;
@@ -162,6 +172,7 @@ button:disabled { cursor: default; opacity: .55; }
 }
 .model-catalog-content { padding: 1px 0 9px 16px; }
 .secondary-button {
+  display: block;
   color: var(--vscode-button-secondaryForeground);
   background: var(--vscode-button-secondaryBackground);
   border-color: var(--vscode-button-secondaryBorder, transparent);
@@ -169,10 +180,6 @@ button:disabled { cursor: default; opacity: .55; }
 }
 .secondary-button:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
 .model-catalog-content .secondary-button { width: 100%; }
-.secondary-button.wide {
-  width: 100%;
-  margin: 9px 0;
-}
 button {
   min-height: 30px;
   padding: 5px 8px;
@@ -188,6 +195,12 @@ button {
   background: color-mix(in srgb, var(--vscode-errorForeground, #e05252) 9%, transparent);
   font-size: 11px;
   animation: feedback-in 140ms ease-out;
+}
+.deepseek-header + .action-feedback {
+  margin: -5px 0 8px;
+}
+.model-catalog-content .action-feedback {
+  margin: 7px 0 0;
 }
 .action-feedback.success {
   color: var(--vscode-testing-iconPassed, #69b58e);
@@ -208,11 +221,6 @@ h4 { margin: 0; font-size: 12px; font-weight: 600; }
   margin-top: 9px;
 }
 .usage-balance-copy { min-width: 0; }
-.usage-label {
-  display: block;
-  color: var(--vscode-descriptionForeground);
-  font-size: 10px;
-}
 #balance-value {
   display: block;
   margin-top: 1px;
@@ -237,12 +245,43 @@ h4 { margin: 0; font-size: 12px; font-weight: 600; }
 .icon-button.loading svg { animation: spin .8s linear infinite; }
 .alert-toggle { margin-top: 7px; }
 .balance-alert-editor {
+  position: relative;
+  margin-top: 5px;
+  padding: 8px 30px 8px 9px;
+  color: var(--vscode-foreground);
+  background: var(--vscode-sideBar-background);
+  border: 1px solid var(--vscode-widget-border, #8885);
+  border-radius: 5px;
+  font-size: 11px;
+}
+.balance-alert-editor p {
+  margin: 0 0 8px;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.45;
+}
+.balance-alert-editor p strong {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+.balance-alert-close {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 24px;
+  min-height: 24px;
+  padding: 0;
+  color: var(--vscode-descriptionForeground);
+  background: transparent;
+  border: 0;
+  font-size: 17px;
+  line-height: 1;
+}
+.balance-alert-close:hover { color: var(--vscode-foreground); }
+.balance-alert-input-row {
   display: flex;
   align-items: center;
   gap: 5px;
-  margin-top: 5px;
   color: var(--vscode-descriptionForeground);
-  font-size: 11px;
 }
 .balance-alert-editor input {
   width: 92px;
@@ -253,7 +292,9 @@ h4 { margin: 0; font-size: 12px; font-weight: 600; }
   border: 1px solid var(--vscode-input-border, #8885);
   border-radius: 4px;
 }
+.provider-card > .primary { margin-top: 0; }
 .primary {
+  display: block;
   width: 100%;
   color: var(--vscode-button-foreground);
   background: var(--vscode-button-background);
