@@ -101,7 +101,8 @@ Source: approved PLAN for version 0.2.0, 2026-11-09.
   seconds while the panel remains visible. Cancel polling when hidden or
   disposed and prevent overlapping requests.
 - The balance sync spinner rotates counter-clockwise while a balance request is
-  active.
+  active. It stops whenever the request settles, independently of how long a
+  native balance notification remains open.
 - **Balance alert** opens a bordered panel with an X close control and defaults
   to a persisted USD threshold of 5.00. The panel explains that the user is
   notified below that credit amount and that setting it to 0 disables low-balance
@@ -110,6 +111,9 @@ Source: approved PLAN for version 0.2.0, 2026-11-09.
 - Low balance is yellow and zero balance is red.
 - Notify only when crossing below the threshold or reaching zero, not on every
   sync while the state remains unchanged. Rearm alerts when the balance recovers.
+- Balance notifications must not block completion of a balance sync. Showing a
+  warning is fire-and-forget, and the manual update always clears its loading
+  state in a cleanup path even if synchronization throws.
 - Hide every webview scrollbar visually while preserving wheel, touch and
   keyboard scrolling. Put vertical scrolling on the `main` element, hide its
   native bar and prevent the root `html`/`body` from creating a second bar.

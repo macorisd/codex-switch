@@ -252,3 +252,14 @@ test('webview renders balance states and saves the alert threshold', () => {
   assert.equal(h.elements.get('balance-value').classList.contains('zero'), true);
   assert.equal(h.elements.get('balance-value').classList.contains('low'), false);
 });
+
+test('webview stops and re-enables the balance spinner when loading ends', () => {
+  const h = webviewHarness(initialState());
+  h.receive({ type: 'balanceLoading', loading: true });
+  assert.equal(h.elements.get('balance-update').classList.contains('loading'), true);
+  assert.equal(h.elements.get('balance-update').disabled, false);
+
+  h.receive({ type: 'balanceLoading', loading: false });
+  assert.equal(h.elements.get('balance-update').classList.contains('loading'), false);
+  assert.equal(h.elements.get('balance-update').disabled, false);
+});

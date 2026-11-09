@@ -54,8 +54,9 @@ function harness(options = {}) {
       showInformationMessage: async (...args) => {
         infos.push(args);
       },
-      showWarningMessage: async message => {
+      showWarningMessage: message => {
         warnings.push(message);
+        return options.hangWarnings ? new Promise(() => {}) : Promise.resolve();
       },
       showInputBox: async values => {
         inputBoxes.push(values);
@@ -292,6 +293,32 @@ test('balance alerts notify only when crossing low and zero states', async () =>
   assert.match(h.warnings[0], /low: \$4\.00/);
   assert.match(h.warnings[1], /exhausted/);
   assert.equal(h.globalValues.get('deepseekBalanceAlert').level, 'zero');
+});
+
+test('a pending balance notification does not keep the manual sync loading', async () => {
+  const h = harness({
+    hangWarnings: true,
+    balances: [
+      { available: true, currency: 'USD', total: 10, totalText: '10.00' },
+      { available: true, currency: 'USD', total: 4, totalText: '4.00' },
+    ],
+  });
+  await h.receive({ action: 'ready' });
+  await Promise.race([
+    h.receive({ action: 'syncBalance' }),
+    new Promise((_, reject) => setTimeout(
+      () => reject(new Error('Balance sync waited for the native notification.')),
+      500,
+    )),
+  ]);
+  assert.equal(h.warnings.length, 1);
+  assert.deepEqual(
+    plain(h.messages.filter(message => message.type === 'balanceLoading')),
+    [
+      { type: 'balanceLoading', loading: true },
+      { type: 'balanceLoading', loading: false },
+    ],
+  );
 });
 
 test('saving a balance alert persists it and evaluates the next balance sync', async () => {

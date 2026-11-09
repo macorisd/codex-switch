@@ -228,9 +228,9 @@ class Selector {
           balanceAlert: { ...this.balanceAlert },
         });
         if (this.viewVisible && level === 'zero' && previous !== 'zero') {
-          await vscode.window.showWarningMessage('DeepSeek credits are exhausted.');
+          void vscode.window.showWarningMessage('DeepSeek credits are exhausted.');
         } else if (this.viewVisible && level === 'low' && previous !== 'low') {
-          await vscode.window.showWarningMessage(`DeepSeek balance is low: $${total.toFixed(2)} remaining.`);
+          void vscode.window.showWarningMessage(`DeepSeek balance is low: $${total.toFixed(2)} remaining.`);
         }
       })
       .catch(async error => {
@@ -275,8 +275,11 @@ class Selector {
     if (message.action === 'saveProviderLayout') return this.saveProviderLayout(message.layout, message.revision);
     if (message.action === 'syncBalance') {
       await this.view?.webview.postMessage({ type: 'balanceLoading', loading: true });
-      await this.syncBalance(true);
-      await this.view?.webview.postMessage({ type: 'balanceLoading', loading: false });
+      try {
+        await this.syncBalance(true);
+      } finally {
+        await this.view?.webview.postMessage({ type: 'balanceLoading', loading: false });
+      }
       return;
     }
     if (message.action === 'saveBalanceAlert') {
