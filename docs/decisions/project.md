@@ -27,6 +27,10 @@ Source: explicit user instructions and initialization answers, 2026-11-07.
   requires the appropriate Codex client reload and a new conversation. After a
   successful **Switch to ChatGPT** or **Switch to DeepSeek** action, reload VS
   Code automatically without an additional confirmation prompt.
+- **Switch to ChatGPT** must always select the official `openai` provider. If a
+  saved snapshot contains another provider such as CC Switch's `custom`, or a
+  DeepSeek model, recover the most recent valid ChatGPT values from Codex Switch
+  configuration backups instead of restoring the incompatible snapshot.
 - Follow microplanner's README structure: an SVG banner, a three-line product
   explanation, the available-provider and model table, **Install**, **Version
   History**, and a **Developer setup** disclosure. Use **Codex Switch** as the
@@ -54,11 +58,13 @@ Source: explicit user instructions, 2026-11-08.
   non-interactive fixed list, **Update model catalog**, **Check connection**, and
   **Switch to DeepSeek**, or a disabled **Current Setting** button when it is
   active.
+- **Check connection** is a discreet blue text link aligned to the right of the
+  **API key** subtitle rather than a full-width button.
 - **Set API key** opens VS Code's native password dialog. The key is not entered,
   displayed or retained in the sidebar GUI.
-- **Update model catalog** and **Check connection** show a prominent green
-  success feedback or red error feedback in the DeepSeek card. The feedback has
-  no icon or emoji, remains visible for exactly 3 seconds, then disappears.
+- **Update model catalog** and **Check connection** show green success or red
+  error feedback next to the action that produced it. The feedback has no icon
+  or emoji, remains visible for exactly 5 seconds, then disappears.
 - A **Manage Providers** action next to the Provider heading opens the complete
   provider list, with an X control that closes the panel. Each provider is labeled
   as **Provider (subtitle)**, has a checkbox and controls to move it up or down;
@@ -73,6 +79,44 @@ Source: explicit user instructions, 2026-11-08.
   the sidebar. Do not add model selectors or reasoning-effort controls.
 - Use the first available model from the refreshed catalog when switching to
   DeepSeek because model choice is internal to the provider action.
+- Providers with API-key credentials show the model catalog in a disclosure that
+  is collapsed by default. Expanding it shows both the fixed model list and
+  **Update model catalog**. The collapsed disclosure has a single bottom divider,
+  never both top and bottom borders. The following Available balance section
+  must not add a second top divider.
+
+## DeepSeek Usage
+
+Source: approved PLAN for version 0.2.0, 2026-11-09.
+
+- Providers with API-key credentials may show a minimal **Available balance**
+  section. DeepSeek is the only provider in version 0.2.0.
+- The section has no subtitle or secondary heading. The historical usage dashboard,
+  period selector and spending chart are deferred until DeepSeek publishes an
+  official usage API; the documented balance endpoint provides current balance
+  only.
+- Display DeepSeek's USD `total_balance` as dollars. Never present another
+  currency as USD.
+- Sync balance when the panel opens, when **Update** is pressed, and every 60
+  seconds while the panel remains visible. Cancel polling when hidden or
+  disposed and prevent overlapping requests.
+- The balance sync spinner rotates counter-clockwise while a balance request is
+  active. It stops whenever the request settles, independently of how long a
+  native balance notification remains open.
+- **Balance alert** opens a bordered panel with an X close control and defaults
+  to a persisted USD threshold of 5.00. The panel explains that the user is
+  notified below that credit amount and that setting it to 0 disables low-balance
+  alerts. Leave a clear 10 px gap between the panel and the provider switch
+  button; they must not touch.
+- Low balance is yellow and zero balance is red.
+- Notify only when crossing below the threshold or reaching zero, not on every
+  sync while the state remains unchanged. Rearm alerts when the balance recovers.
+- Balance notifications must not block completion of a balance sync. Showing a
+  warning is fire-and-forget, and the manual update always clears its loading
+  state in a cleanup path even if synchronization throws.
+- Hide every webview scrollbar visually while preserving wheel, touch and
+  keyboard scrolling. Put vertical scrolling on the `main` element, hide its
+  native bar and prevent the root `html`/`body` from creating a second bar.
 
 ## Brand assets
 

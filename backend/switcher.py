@@ -20,6 +20,7 @@ CATALOG = ROOT / 'deepseek-models.json'
 STATE = ROOT / 'previous-settings.json'
 PYTHON = Path(sys.executable).with_name('python.exe')
 SETUP_URL = 'https://cdn.deepseek.com/api-docs/codex-deepseek-setup-en.ps1'
+BALANCE_URL = 'https://api.deepseek.com/user/balance'
 MANAGED = ('model', 'model_provider', 'preferred_auth_method', 'forced_login_method',
            'model_reasoning_effort', 'model_catalog_json', 'web_search',
            'show_raw_agent_reasoning', 'service_tier', 'model_context_window',
@@ -146,6 +147,40 @@ def captured_values(text):
     return values
 
 
+def scalar_value(values, key):
+    raw = values.get(key)
+    return tomllib.loads(key + ' = ' + raw)[key] if raw is not None else None
+
+
+def latest_chatgpt_values():
+    # CC Switch can leave a custom provider/model snapshot. Recover the newest
+    # compatible ChatGPT configuration without reading or exposing credentials.
+    backups = sorted(ROOT.glob('config-*.toml.bak'), key=lambda path: path.stat().st_mtime, reverse=True)
+    for backup in backups:
+        try:
+            text = backup.read_text('utf-8-sig')
+            config = tomllib.loads(text)
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        model = config.get('model')
+        if config.get('model_provider', 'openai') == 'openai' and not (
+                isinstance(model, str) and model.startswith('deepseek-')):
+            return captured_values(text)
+    return None
+
+
+def normalized_chatgpt_values(values):
+    result = dict(values)
+    provider = scalar_value(result, 'model_provider')
+    model = scalar_value(result, 'model')
+    incompatible = provider not in (None, 'openai') or (
+        isinstance(model, str) and model.startswith('deepseek-'))
+    if incompatible:
+        result = latest_chatgpt_values() or {}
+    result['model_provider'] = json.dumps('openai')
+    return result
+
+
 def switch(model=None, effort='high'):
     original = CONFIG.read_text('utf-8-sig')
     current = tomllib.loads(original)
@@ -158,7 +193,7 @@ def switch(model=None, effort='high'):
         if effort not in [x['effort'] for x in selected['supported_reasoning_levels']]:
             raise ValueError('Unsupported reasoning effort for this model.')
         if current.get('model_provider', 'openai') != 'deepseek':
-            atomic(STATE, json.dumps(captured_values(original), indent=2))
+            atomic(STATE, json.dumps(normalized_chatgpt_values(captured_values(original)), indent=2))
         elif not STATE.exists():
             raise RuntimeError('The saved ChatGPT settings are missing; no changes made.')
         values = {k: json.dumps(v) for k, v in dict(model=model, model_provider='deepseek',
@@ -166,11 +201,13 @@ def switch(model=None, effort='high'):
                   web_search='disabled').items()}
         updated = rewrite(original, values, True)
     else:
-        if current.get('model_provider', 'openai') != 'deepseek':
-            return 'ChatGPT is already selected.'
-        if not STATE.exists():
-            raise RuntimeError('The saved ChatGPT settings are missing; no changes made.')
-        updated = rewrite(original, json.loads(STATE.read_text('utf-8')), False)
+        if current.get('model_provider', 'openai') == 'deepseek':
+            if not STATE.exists():
+                raise RuntimeError('The saved ChatGPT settings are missing; no changes made.')
+            values = json.loads(STATE.read_text('utf-8'))
+        else:
+            values = captured_values(original)
+        updated = rewrite(original, normalized_chatgpt_values(values), False)
     # Backups contain configuration only; the API key never enters the TOML.
     backup = ROOT / ('config-' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '.toml.bak')
     atomic(backup, original)
@@ -189,6 +226,29 @@ def verify_api():
         return [m['id'] for m in data['data']]
     except Exception:
         raise RuntimeError('DeepSeek verification failed. Check the key, account balance and network. No key was logged.') from None
+
+
+def balance():
+    request = urllib.request.Request(BALANCE_URL, headers={'Authorization': 'Bearer ' + token()})
+    try:
+        with urllib.request.urlopen(request, timeout=25) as response:
+            data = json.load(response)
+    except Exception:
+        raise RuntimeError('DeepSeek balance could not be retrieved. Check the key and network. No key was logged.') from None
+    infos = data.get('balance_infos') if isinstance(data, dict) else None
+    infos = infos if isinstance(infos, list) else []
+    usd = next((item for item in infos if item.get('currency') == 'USD'), None)
+    try:
+        total = float(usd['total_balance']) if usd else None
+    except (KeyError, TypeError, ValueError):
+        total = None
+    return {
+        'available': data.get('is_available') is True,
+        'currency': 'USD',
+        'total': total,
+        'totalText': usd.get('total_balance') if usd else None,
+        'availableCurrencies': [item.get('currency') for item in infos if item.get('currency')],
+    }
 
 
 if __name__ == '__main__':

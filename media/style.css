@@ -1,12 +1,27 @@
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
-body {
+html, body {
+  height: 100%;
   margin: 0;
+  overflow: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+body {
   color: var(--vscode-foreground);
   font: var(--vscode-font-size, 13px)/1.45 var(--vscode-font-family, sans-serif);
   background: var(--vscode-sideBar-background);
 }
-main { max-width: 460px; margin: 0 auto; padding: 20px 16px; }
+html::-webkit-scrollbar, body::-webkit-scrollbar, main::-webkit-scrollbar { width: 0; height: 0; }
+main {
+  height: 100%;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 20px 16px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 [hidden] { display: none !important; }
 h1, h2, h3, p { margin: 0; }
 .current { padding-bottom: 18px; border-bottom: 1px solid var(--vscode-widget-border, #8884); }
@@ -99,6 +114,13 @@ h2 { font-size: 12px; font-weight: 600; }
   box-shadow: 0 0 0 1px var(--vscode-focusBorder);
 }
 .provider-card header { margin-bottom: 12px; }
+.deepseek-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.connection-link { flex: 0 0 auto; }
 h3 { font-size: 13px; line-height: 1.25; font-weight: 600; }
 .provider-card header p {
   margin-top: 2px;
@@ -138,32 +160,43 @@ button:disabled { cursor: default; opacity: .55; }
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-testing-iconPassed, #69b58e) 22%, transparent);
 }
 .model-list {
-  margin: 8px 0;
+  margin: 4px 0 9px;
   padding: 0;
   list-style: none;
   color: var(--vscode-descriptionForeground);
   font-size: 11px;
 }
 .model-list li { padding: 3px 0; overflow-wrap: anywhere; }
-.secondary-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin-bottom: 8px;
+.model-catalog {
+  margin-top: 9px;
+  border-bottom: 1px solid var(--vscode-widget-border, #8883);
 }
+.model-catalog summary {
+  padding: 8px 1px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+}
+.model-catalog summary:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder);
+  outline-offset: 2px;
+}
+.model-catalog-content { padding: 1px 0 9px 16px; }
+.secondary-button {
+  display: block;
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  border-color: var(--vscode-button-secondaryBorder, transparent);
+  font-size: 11px;
+}
+.secondary-button:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
+.model-catalog-content .secondary-button { width: 100%; }
 button {
   min-height: 30px;
   padding: 5px 8px;
   border: 1px solid var(--vscode-button-border, transparent);
   border-radius: 4px;
 }
-.secondary-actions button {
-  color: var(--vscode-button-secondaryForeground);
-  background: var(--vscode-button-secondaryBackground);
-  border-color: var(--vscode-button-secondaryBorder, transparent);
-  font-size: 11px;
-}
-.secondary-actions button:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
 .action-feedback {
   margin: 2px 0 10px;
   padding: 8px 9px;
@@ -174,12 +207,104 @@ button {
   font-size: 11px;
   animation: feedback-in 140ms ease-out;
 }
+.deepseek-header + .action-feedback {
+  margin: -5px 0 8px;
+}
+.model-catalog-content .action-feedback {
+  margin: 7px 0 0;
+}
 .action-feedback.success {
   color: var(--vscode-testing-iconPassed, #69b58e);
   border-color: var(--vscode-testing-iconPassed, #69b58e);
   background: color-mix(in srgb, var(--vscode-testing-iconPassed, #69b58e) 9%, transparent);
 }
+.usage {
+  margin-top: 10px;
+  padding-top: 11px;
+}
+h4 { margin: 0; font-size: 12px; font-weight: 600; }
+.usage-balance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 9px;
+}
+.usage-balance-copy { min-width: 0; }
+#balance-value {
+  display: block;
+  margin-top: 1px;
+  font-size: 20px;
+  line-height: 1.2;
+  font-weight: 600;
+}
+#balance-value.low { color: var(--vscode-editorWarning-foreground, #d6a000); }
+#balance-value.zero { color: var(--vscode-errorForeground, #e05252); }
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: var(--vscode-icon-foreground, var(--vscode-foreground));
+  background: transparent;
+  border: 1px solid var(--vscode-widget-border, #8885);
+}
+.icon-button:hover:not(:disabled) { background: var(--vscode-toolbar-hoverBackground); }
+.icon-button svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
+.icon-button.loading svg { animation: spin .8s linear infinite; }
+.alert-toggle { margin-top: 7px; }
+.balance-alert-editor {
+  position: relative;
+  margin-top: 5px;
+  padding: 8px 30px 8px 9px;
+  color: var(--vscode-foreground);
+  background: var(--vscode-sideBar-background);
+  border: 1px solid var(--vscode-widget-border, #8885);
+  border-radius: 5px;
+  font-size: 11px;
+}
+.balance-alert-editor p {
+  margin: 0 0 8px;
+  color: var(--vscode-descriptionForeground);
+  line-height: 1.45;
+}
+.balance-alert-editor p strong {
+  color: var(--vscode-foreground);
+  font-weight: 600;
+}
+.balance-alert-close {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 24px;
+  min-height: 24px;
+  padding: 0;
+  color: var(--vscode-descriptionForeground);
+  background: transparent;
+  border: 0;
+  font-size: 17px;
+  line-height: 1;
+}
+.balance-alert-close:hover { color: var(--vscode-foreground); }
+.balance-alert-input-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--vscode-descriptionForeground);
+}
+.balance-alert-editor input {
+  width: 92px;
+  height: 27px;
+  padding: 0 7px;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, #8885);
+  border-radius: 4px;
+}
+.usage > .primary { margin-top: 10px; }
 .primary {
+  display: block;
   width: 100%;
   color: var(--vscode-button-foreground);
   background: var(--vscode-button-background);
@@ -193,8 +318,10 @@ button.current-setting {
   from { opacity: 0; transform: translateY(-2px); }
   to { opacity: 1; transform: translateY(0); }
 }
+@keyframes spin { to { transform: rotate(-360deg); } }
 @media (max-width: 260px) {
   main { padding: 16px 10px; }
   .provider-card { padding: 12px 10px; }
-  .secondary-actions { grid-template-columns: 1fr; }
+  .usage-balance-row { align-items: flex-start; }
+  #balance-value { font-size: 18px; }
 }
