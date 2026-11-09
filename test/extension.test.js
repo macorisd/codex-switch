@@ -200,9 +200,16 @@ test('sidebar boots with the requested English provider interface', async () => 
   assert(h.view.webview.html.indexOf('id="refresh"') > detailsStart);
   assert(h.view.webview.html.indexOf('id="refresh"') < detailsEnd);
   const viewSource = fs.readFileSync(path.join(extensionRoot, 'media', 'view.js'), 'utf8');
+  const styleSource = fs.readFileSync(path.join(extensionRoot, 'media', 'style.css'), 'utf8');
   assert.equal(viewSource.includes('${info.name} (${info.subtitle})'), true);
   assert.equal(viewSource.includes('checkbox.disabled = locked'), true);
   assert.match(viewSource, /}, 5000\)\);/);
+  const catalogStyle = styleSource.match(/\.model-catalog\s*\{([^}]+)\}/)?.[1] || '';
+  assert.match(catalogStyle, /border-bottom/);
+  assert.doesNotMatch(catalogStyle, /border-top/);
+  assert.match(styleSource, /html, body\s*\{[^}]*overflow: hidden/s);
+  assert.match(styleSource, /main\s*\{[^}]*overflow-y: auto/s);
+  assert.match(styleSource, /\.balance-alert-editor:not\(\[hidden\]\) \+ \.primary\s*\{[^}]*margin-top: 0/s);
   await h.receive({ action: 'ready' });
   const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
   assert.equal(latest.hasKey, true);

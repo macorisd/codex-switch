@@ -1,15 +1,27 @@
 :root { color-scheme: light dark; }
 * { box-sizing: border-box; }
-body {
+html, body {
+  height: 100%;
   margin: 0;
-  color: var(--vscode-foreground);
-  font: var(--vscode-font-size, 13px)/1.45 var(--vscode-font-family, sans-serif);
-  background: var(--vscode-sideBar-background);
+  overflow: hidden;
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
-body::-webkit-scrollbar { width: 0; height: 0; }
-main { max-width: 460px; margin: 0 auto; padding: 20px 16px; }
+body {
+  color: var(--vscode-foreground);
+  font: var(--vscode-font-size, 13px)/1.45 var(--vscode-font-family, sans-serif);
+  background: var(--vscode-sideBar-background);
+}
+html::-webkit-scrollbar, body::-webkit-scrollbar, main::-webkit-scrollbar { width: 0; height: 0; }
+main {
+  height: 100%;
+  max-width: 460px;
+  margin: 0 auto;
+  padding: 20px 16px;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 [hidden] { display: none !important; }
 h1, h2, h3, p { margin: 0; }
 .current { padding-bottom: 18px; border-bottom: 1px solid var(--vscode-widget-border, #8884); }
@@ -157,7 +169,6 @@ button:disabled { cursor: default; opacity: .55; }
 .model-list li { padding: 3px 0; overflow-wrap: anywhere; }
 .model-catalog {
   margin-top: 9px;
-  border-top: 1px solid var(--vscode-widget-border, #8883);
   border-bottom: 1px solid var(--vscode-widget-border, #8883);
 }
 .model-catalog summary {
@@ -292,7 +303,12 @@ h4 { margin: 0; font-size: 12px; font-weight: 600; }
   border: 1px solid var(--vscode-input-border, #8885);
   border-radius: 4px;
 }
-.provider-card > .primary { margin-top: 0; }
+.usage > .primary { margin-top: 10px; }
+.balance-alert-editor:not([hidden]) + .primary {
+  margin-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
 .primary {
   display: block;
   width: 100%;

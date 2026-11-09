@@ -81,7 +81,8 @@ Source: explicit user instructions, 2026-11-08.
   DeepSeek because model choice is internal to the provider action.
 - Providers with API-key credentials show the model catalog in a disclosure that
   is collapsed by default. Expanding it shows both the fixed model list and
-  **Update model catalog**.
+  **Update model catalog**. The collapsed disclosure has a single bottom divider,
+  never both top and bottom borders.
 
 ## DeepSeek Usage
 
@@ -101,12 +102,14 @@ Source: approved PLAN for version 0.2.0, 2026-11-09.
 - **Balance alert** opens a bordered panel with an X close control and defaults
   to a persisted USD threshold of 5.00. The panel explains that the user is
   notified below that credit amount and that setting it to 0 disables low-balance
-  alerts. Its bottom edge touches the provider switch button with no extra gap.
+  alerts. Its outer container and the provider switch button share a direct edge
+  with no extra rhythm, line box or gap between them.
 - Low balance is yellow and zero balance is red.
 - Notify only when crossing below the threshold or reaching zero, not on every
   sync while the state remains unchanged. Rearm alerts when the balance recovers.
-- Hide the webview scrollbar visually while preserving wheel, touch and keyboard
-  scrolling.
+- Hide every webview scrollbar visually while preserving wheel, touch and
+  keyboard scrolling. Put vertical scrolling on the `main` element, hide its
+  native bar and prevent the root `html`/`body` from creating a second bar.
 
 ## Brand assets
 
