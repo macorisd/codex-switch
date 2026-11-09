@@ -46,7 +46,33 @@ with tempfile.TemporaryDirectory() as directory:
     s.switch()
     final = tomllib.loads(s.CONFIG.read_text())
     expected = tomllib.loads(original)
+    expected['model_provider'] = 'openai'
     expected['desktop']['followUpQueueMode'] = 'queue'
     assert final == expected
     assert fake not in ''.join(p.read_text() for p in s.ROOT.glob('*.bak'))
-    print('PASS: DPAPI round trip, missing-key protection, model switching, ChatGPT restoration, unrelated-setting preservation, secret-free backups.')
+    # A legacy snapshot from CC Switch must not restore its custom provider or
+    # DeepSeek model when ChatGPT is selected.
+    s.switch('deepseek-flash')
+    s.STATE.write_text(json.dumps({
+        'model_provider': json.dumps('custom'),
+        'model': json.dumps('deepseek-flash'),
+        'model_reasoning_effort': json.dumps('high'),
+    }), encoding='utf-8')
+    s.switch()
+    repaired = tomllib.loads(s.CONFIG.read_text())
+    assert repaired['model_provider'] == 'openai'
+    assert repaired['model'] == 'gpt-6.1-sol'
+    assert repaired['model_reasoning_effort'] == 'medium'
+    # A current custom provider with no state must be repaired as well.
+    s.CONFIG.write_text(
+        'model = "deepseek-flash"\nmodel_provider = "custom"\nmodel_reasoning_effort = "high"\n\n'
+        '[model_providers.custom]\nname = "Custom"\nbase_url = "https://example.invalid/v1"\nwire_api = "responses"\n',
+        encoding='utf-8',
+    )
+    s.STATE.unlink(missing_ok=True)
+    s.switch()
+    repaired_current = tomllib.loads(s.CONFIG.read_text())
+    assert repaired_current['model_provider'] == 'openai'
+    assert repaired_current['model'] == 'gpt-6.1-sol'
+    assert 'custom' in repaired_current['model_providers']
+    print('PASS: DPAPI round trip, missing-key protection, model switching, CC Switch repair, ChatGPT restoration, unrelated-setting preservation, secret-free backups.')

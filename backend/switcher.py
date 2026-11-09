@@ -146,6 +146,40 @@ def captured_values(text):
     return values
 
 
+def scalar_value(values, key):
+    raw = values.get(key)
+    return tomllib.loads(key + ' = ' + raw)[key] if raw is not None else None
+
+
+def latest_chatgpt_values():
+    # CC Switch can leave a custom provider/model snapshot. Recover the newest
+    # compatible ChatGPT configuration without reading or exposing credentials.
+    backups = sorted(ROOT.glob('config-*.toml.bak'), key=lambda path: path.stat().st_mtime, reverse=True)
+    for backup in backups:
+        try:
+            text = backup.read_text('utf-8-sig')
+            config = tomllib.loads(text)
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        model = config.get('model')
+        if config.get('model_provider', 'openai') == 'openai' and not (
+                isinstance(model, str) and model.startswith('deepseek-')):
+            return captured_values(text)
+    return None
+
+
+def normalized_chatgpt_values(values):
+    result = dict(values)
+    provider = scalar_value(result, 'model_provider')
+    model = scalar_value(result, 'model')
+    incompatible = provider not in (None, 'openai') or (
+        isinstance(model, str) and model.startswith('deepseek-'))
+    if incompatible:
+        result = latest_chatgpt_values() or {}
+    result['model_provider'] = json.dumps('openai')
+    return result
+
+
 def switch(model=None, effort='high'):
     original = CONFIG.read_text('utf-8-sig')
     current = tomllib.loads(original)
@@ -158,7 +192,7 @@ def switch(model=None, effort='high'):
         if effort not in [x['effort'] for x in selected['supported_reasoning_levels']]:
             raise ValueError('Unsupported reasoning effort for this model.')
         if current.get('model_provider', 'openai') != 'deepseek':
-            atomic(STATE, json.dumps(captured_values(original), indent=2))
+            atomic(STATE, json.dumps(normalized_chatgpt_values(captured_values(original)), indent=2))
         elif not STATE.exists():
             raise RuntimeError('The saved ChatGPT settings are missing; no changes made.')
         values = {k: json.dumps(v) for k, v in dict(model=model, model_provider='deepseek',
@@ -166,11 +200,13 @@ def switch(model=None, effort='high'):
                   web_search='disabled').items()}
         updated = rewrite(original, values, True)
     else:
-        if current.get('model_provider', 'openai') != 'deepseek':
-            return 'ChatGPT is already selected.'
-        if not STATE.exists():
-            raise RuntimeError('The saved ChatGPT settings are missing; no changes made.')
-        updated = rewrite(original, json.loads(STATE.read_text('utf-8')), False)
+        if current.get('model_provider', 'openai') == 'deepseek':
+            if not STATE.exists():
+                raise RuntimeError('The saved ChatGPT settings are missing; no changes made.')
+            values = json.loads(STATE.read_text('utf-8'))
+        else:
+            values = captured_values(original)
+        updated = rewrite(original, normalized_chatgpt_values(values), False)
     # Backups contain configuration only; the API key never enters the TOML.
     backup = ROOT / ('config-' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S-%f') + '.toml.bak')
     atomic(backup, original)

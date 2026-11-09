@@ -27,6 +27,10 @@ Source: explicit user instructions and initialization answers, 2026-11-07.
   requires the appropriate Codex client reload and a new conversation. After a
   successful **Switch to ChatGPT** or **Switch to DeepSeek** action, reload VS
   Code automatically without an additional confirmation prompt.
+- **Switch to ChatGPT** must always select the official `openai` provider. If a
+  saved snapshot contains another provider such as CC Switch's `custom`, or a
+  DeepSeek model, recover the most recent valid ChatGPT values from Codex Switch
+  configuration backups instead of restoring the incompatible snapshot.
 - Follow microplanner's README structure: an SVG banner, a three-line product
   explanation, the available-provider and model table, **Install**, **Version
   History**, and a **Developer setup** disclosure. Use **Codex Switch** as the
