@@ -100,6 +100,8 @@ Source: approved PLAN for version 0.2.0, 2026-11-09.
 - Sync balance when the panel opens, when **Update** is pressed, and every 60
   seconds while the panel remains visible. Cancel polling when hidden or
   disposed and prevent overlapping requests.
+- The balance sync spinner rotates counter-clockwise while a balance request is
+  active.
 - **Balance alert** opens a bordered panel with an X close control and defaults
   to a persisted USD threshold of 5.00. The panel explains that the user is
   notified below that credit amount and that setting it to 0 disables low-balance

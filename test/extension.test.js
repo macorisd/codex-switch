@@ -212,6 +212,7 @@ test('sidebar boots with the requested English provider interface', async () => 
   assert.match(styleSource, /html, body\s*\{[^}]*overflow: hidden/s);
   assert.match(styleSource, /main\s*\{[^}]*overflow-y: auto/s);
   assert.match(styleSource, /\.usage > \.primary\s*\{[^}]*margin-top: 10px/s);
+  assert.match(styleSource, /@keyframes spin\s*\{\s*to\s*\{\s*transform:\s*rotate\(-360deg\)/s);
   await h.receive({ action: 'ready' });
   const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
   assert.equal(latest.hasKey, true);
