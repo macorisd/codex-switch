@@ -32,7 +32,7 @@ the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
-| 0.2.0 | Collapse API-key model catalogs by default, add DeepSeek USD balance with one-minute polling and configurable low or zero balance alerts, and recover ChatGPT settings after CC Switch leaves a custom provider. |
+| [0.2.0](https://github.com/macorisd/codex-switch/releases/tag/v0.2.0) | Collapse API-key model catalogs by default, add DeepSeek USD balance with one-minute polling and configurable low or zero balance alerts, and recover ChatGPT settings after CC Switch leaves a custom provider. |
 | [0.1.3](https://github.com/macorisd/codex-switch/releases/tag/v0.1.3) | Simplify the English sidebar, add persistent provider visibility and ordering, restore native API key entry and configuration status, improve active and action feedback states, and reload automatically after a successful provider switch. |
 | [0.1.2](https://github.com/macorisd/codex-switch/releases/tag/v0.1.2) | Add the supplied logo, README banner and sidebar icon; publish VSIX release assets and link release history automatically. |
 | [0.1.1](https://github.com/macorisd/codex-switch/releases/tag/v0.1.1) | Move source into this repository, bundle the local connector with the extension, and document project conventions. |
