@@ -20,6 +20,7 @@ CATALOG = ROOT / 'deepseek-models.json'
 STATE = ROOT / 'previous-settings.json'
 PYTHON = Path(sys.executable).with_name('python.exe')
 SETUP_URL = 'https://cdn.deepseek.com/api-docs/codex-deepseek-setup-en.ps1'
+BALANCE_URL = 'https://api.deepseek.com/user/balance'
 MANAGED = ('model', 'model_provider', 'preferred_auth_method', 'forced_login_method',
            'model_reasoning_effort', 'model_catalog_json', 'web_search',
            'show_raw_agent_reasoning', 'service_tier', 'model_context_window',
@@ -225,6 +226,29 @@ def verify_api():
         return [m['id'] for m in data['data']]
     except Exception:
         raise RuntimeError('DeepSeek verification failed. Check the key, account balance and network. No key was logged.') from None
+
+
+def balance():
+    request = urllib.request.Request(BALANCE_URL, headers={'Authorization': 'Bearer ' + token()})
+    try:
+        with urllib.request.urlopen(request, timeout=25) as response:
+            data = json.load(response)
+    except Exception:
+        raise RuntimeError('DeepSeek balance could not be retrieved. Check the key and network. No key was logged.') from None
+    infos = data.get('balance_infos') if isinstance(data, dict) else None
+    infos = infos if isinstance(infos, list) else []
+    usd = next((item for item in infos if item.get('currency') == 'USD'), None)
+    try:
+        total = float(usd['total_balance']) if usd else None
+    except (KeyError, TypeError, ValueError):
+        total = None
+    return {
+        'available': data.get('is_available') is True,
+        'currency': 'USD',
+        'total': total,
+        'totalText': usd.get('total_balance') if usd else None,
+        'availableCurrencies': [item.get('currency') for item in infos if item.get('currency')],
+    }
 
 
 if __name__ == '__main__':

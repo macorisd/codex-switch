@@ -14,7 +14,10 @@ function harness(options = {}) {
   const commands = new Map();
   const errors = [];
   const infos = [];
+  const warnings = [];
   const inputBoxes = [];
+  const intervals = [];
+  const clearedIntervals = [];
   const globalValues = new Map(Object.entries(options.globalValues || {}));
   const context = {
     extensionPath: extensionRoot,
@@ -51,6 +54,9 @@ function harness(options = {}) {
       showInformationMessage: async (...args) => {
         infos.push(args);
       },
+      showWarningMessage: async message => {
+        warnings.push(message);
+      },
       showInputBox: async values => {
         inputBoxes.push(values);
         return options.inputKey;
@@ -84,7 +90,13 @@ function harness(options = {}) {
           if ((options.failActions || []).includes(request.action)) {
             child.stdout.emit('data', JSON.stringify({ ok: false, error: 'Connection failed safely.' }));
           } else {
-            child.stdout.emit('data', JSON.stringify({ ok: true, data: state }));
+            let result = state;
+            if (request.action === 'balance') {
+              const balances = options.balances || [{ available: true, currency: 'USD', total: 12.34, totalText: '12.34' }];
+              const index = calls.filter(call => call.action === 'balance').length - 1;
+              result = balances[Math.min(index, balances.length - 1)];
+            }
+            child.stdout.emit('data', JSON.stringify({ ok: true, data: result }));
           }
           child.emit('close', 0);
         });
@@ -98,6 +110,12 @@ function harness(options = {}) {
     __dirname: extensionRoot,
     setTimeout,
     clearTimeout,
+    setInterval: (listener, delay) => {
+      const timer = { listener, delay };
+      intervals.push(timer);
+      return timer;
+    },
+    clearInterval: timer => clearedIntervals.push(timer),
     require: name => {
       if (name === 'vscode') return vscode;
       if (name === 'node:child_process') return { spawn };
@@ -106,9 +124,14 @@ function harness(options = {}) {
   };
   vm.runInNewContext(fs.readFileSync(path.join(extensionRoot, 'extension.js'), 'utf8'), sandbox);
   sandbox.module.exports.activate(context);
+  let visibilityListener;
   const view = {
     visible: true,
-    onDidChangeVisibility: () => disposable,
+    onDidChangeVisibility: listener => {
+      visibilityListener = listener;
+      return disposable;
+    },
+    onDidDispose: () => disposable,
     webview: {
       cspSource: 'vscode-webview:',
       asWebviewUri: value => value,
@@ -126,9 +149,16 @@ function harness(options = {}) {
     commands,
     errors,
     infos,
+    warnings,
     inputBoxes,
     globalValues,
+    intervals,
+    clearedIntervals,
     view,
+    setVisible: visible => {
+      view.visible = visible;
+      visibilityListener?.();
+    },
     receive: message => receive(message),
   };
 }
@@ -149,21 +179,33 @@ test('sidebar boots with the requested English provider interface', async () => 
     'API key',
     'Set API key',
     'Not configured',
+    'Model catalog',
     'Update model catalog',
     'Check connection',
+    'Usage',
+    'Available balance',
+    'Balance alert',
     'Switch to ChatGPT',
     'Switch to DeepSeek',
   ]) {
     assert.equal(h.view.webview.html.includes(text), true, text);
   }
   assert.equal(h.view.webview.html.includes('id="close-manage"'), true);
-  assert.doesNotMatch(h.view.webview.html, /<footer|<select|reasoning|type="password"|notice|intro|feedback-icon/i);
+  assert.doesNotMatch(h.view.webview.html, /<footer|<select|reasoning|type="password"|notice|intro|feedback-icon|Usage dashboard/i);
+  const detailsStart = h.view.webview.html.indexOf('<details class="model-catalog"');
+  const detailsEnd = h.view.webview.html.indexOf('</details>', detailsStart);
+  const detailsTag = h.view.webview.html.slice(detailsStart, h.view.webview.html.indexOf('>', detailsStart) + 1);
+  assert(detailsStart >= 0 && detailsEnd > detailsStart);
+  assert.doesNotMatch(detailsTag, /\sopen(?:\s|=|>)/);
+  assert(h.view.webview.html.indexOf('id="models"') > detailsStart);
+  assert(h.view.webview.html.indexOf('id="refresh"') > detailsStart);
+  assert(h.view.webview.html.indexOf('id="refresh"') < detailsEnd);
   const viewSource = fs.readFileSync(path.join(extensionRoot, 'media', 'view.js'), 'utf8');
   assert.equal(viewSource.includes('${info.name} (${info.subtitle})'), true);
   assert.equal(viewSource.includes('checkbox.disabled = locked'), true);
   assert.match(viewSource, /}, 3000\);/);
   await h.receive({ action: 'ready' });
-  const latest = h.messages.at(-1).state;
+  const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
   assert.equal(latest.hasKey, true);
   assert.equal(latest.key, undefined);
   assert.deepEqual(plain(latest.providerLayout), [
@@ -179,7 +221,7 @@ test('Set API key uses the native password dialog and never returns the key', as
   assert.equal(h.inputBoxes.length, 1);
   assert.equal(h.inputBoxes[0].password, true);
   assert(h.calls.some(call => call.action === 'saveKey' && call.key === key));
-  assert.equal(h.messages.at(-1).state.key, undefined);
+  assert.equal(h.messages.filter(message => message.type === 'state').at(-1).state.key, undefined);
 });
 
 test('canceling the native API key dialog preserves the stored key', async () => {
@@ -209,6 +251,53 @@ test('provider visibility and order are validated and persisted', async () => {
   const acknowledgement = h.messages.find(message => message.type === 'providerLayout');
   assert.deepEqual(plain(acknowledgement.layout), expected);
   assert.equal(acknowledgement.revision, 2);
+});
+
+test('ready syncs balance once and polls every minute only while visible', async () => {
+  const h = harness();
+  await h.receive({ action: 'ready' });
+  assert.equal(h.calls.filter(call => call.action === 'balance').length, 1);
+  assert.equal(h.intervals.length, 1);
+  assert.equal(h.intervals[0].delay, 60000);
+  h.setVisible(false);
+  assert(h.clearedIntervals.includes(h.intervals[0]));
+  h.setVisible(true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.calls.filter(call => call.action === 'balance').length, 2);
+});
+
+test('balance alerts notify only when crossing low and zero states', async () => {
+  const h = harness({
+    globalValues: { deepseekBalanceAlert: { threshold: 5, level: 'ok' } },
+    balances: [
+      { available: true, currency: 'USD', total: 4, totalText: '4.00' },
+      { available: true, currency: 'USD', total: 3, totalText: '3.00' },
+      { available: true, currency: 'USD', total: 0, totalText: '0.00' },
+      { available: true, currency: 'USD', total: 0, totalText: '0.00' },
+    ],
+  });
+  await h.receive({ action: 'ready' });
+  for (let i = 0; i < 3; i += 1) await h.receive({ action: 'syncBalance' });
+  assert.equal(h.warnings.length, 2);
+  assert.match(h.warnings[0], /low: \$4\.00/);
+  assert.match(h.warnings[1], /exhausted/);
+  assert.equal(h.globalValues.get('deepseekBalanceAlert').level, 'zero');
+});
+
+test('saving a balance alert persists it and evaluates the next balance sync', async () => {
+  const h = harness({
+    balances: [
+      { available: true, currency: 'USD', total: 10, totalText: '10.00' },
+      { available: true, currency: 'USD', total: 2.5, totalText: '2.50' },
+    ],
+  });
+  await h.receive({ action: 'ready' });
+  await h.receive({ action: 'saveBalanceAlert', threshold: 3 });
+  assert.deepEqual(plain(h.globalValues.get('deepseekBalanceAlert')), {
+    threshold: 3,
+    level: 'low',
+  });
+  assert.match(h.warnings.at(-1), /low: \$2\.50/);
 });
 
 test('queued provider changes keep the latest checkbox and order state', async () => {
@@ -250,7 +339,8 @@ test('the provider section always keeps the active provider visible', async () =
     },
   });
   await h.receive({ action: 'ready' });
-  assert.deepEqual(plain(h.messages.at(-1).state.providerLayout), [
+  const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
+  assert.deepEqual(plain(latest.providerLayout), [
     { id: 'deepseek', visible: true },
     { id: 'openai', visible: true },
   ]);

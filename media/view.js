@@ -11,6 +11,8 @@
   let providerLayout = [];
   let layoutRevision = 0;
   let feedbackTimer;
+  let balance = null;
+  let balanceLoading = false;
   const send = message => vscode.postMessage(message);
   const isActive = provider => state?.provider === provider;
   const providerInfo = id => state?.providers.find(provider => provider.id === id);
@@ -120,6 +122,25 @@
     $('feedback-text').textContent = '';
   }
 
+  function renderBalance() {
+    const threshold = state?.balanceAlert?.threshold ?? null;
+    const level = state?.balanceAlert?.level || 'ok';
+    const total = Number.isFinite(balance?.total) ? balance.total : null;
+    $('balance-value').classList.toggle('low', level === 'low');
+    $('balance-value').classList.toggle('zero', level === 'zero');
+    $('balance-value').textContent = total === null
+      ? (balance ? 'Unavailable' : '--')
+      : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(total);
+    $('balance-update').classList.toggle('loading', balanceLoading);
+    $('balance-update').disabled = busy || !hasDeepSeekKey();
+    $('balance-alert-toggle').disabled = busy || !hasDeepSeekKey();
+
+    const input = $('balance-threshold');
+    if (document.activeElement !== input) {
+      input.value = threshold === null ? '' : String(threshold);
+    }
+  }
+
   function render() {
     if (!state) return;
     const active = providerInfo(state.provider);
@@ -147,6 +168,7 @@
     $('refresh').disabled = busy;
     $('verify').textContent = pendingAction === 'verify' && busy ? 'Checking...' : 'Check connection';
     $('verify').disabled = busy || !hasDeepSeekKey();
+    renderBalance();
 
     renderManageList();
     renderProviderOrder();
@@ -176,6 +198,25 @@
     clearFeedback();
     send({ action: 'verify' });
   });
+  $('balance-update').addEventListener('click', () => {
+    if (balanceLoading) return;
+    balanceLoading = true;
+    renderBalance();
+    send({ action: 'syncBalance' });
+  });
+  $('balance-alert-toggle').addEventListener('click', () => {
+    const editor = $('balance-alert-editor');
+    editor.hidden = !editor.hidden;
+    $('balance-alert-toggle').setAttribute('aria-expanded', String(!editor.hidden));
+    if (!editor.hidden) $('balance-threshold').focus();
+  });
+  $('balance-threshold').addEventListener('keydown', event => {
+    if (event.key === 'Enter') $('balance-threshold').blur();
+  });
+  $('balance-threshold').addEventListener('change', event => {
+    const value = event.target.value.trim();
+    send({ action: 'saveBalanceAlert', threshold: value === '' ? null : Number(value) });
+  });
 
   window.addEventListener('message', ({ data }) => {
     if (data.type === 'state') {
@@ -193,6 +234,22 @@
       pendingAction = null;
       showFeedback(data.ok, data.message);
       render();
+    } else if (data.type === 'balance') {
+      balance = data.balance;
+      state.balanceAlert = data.balanceAlert;
+      balanceLoading = false;
+      renderBalance();
+    } else if (data.type === 'balanceAlert') {
+      state.balanceAlert = data.balanceAlert;
+      renderBalance();
+    } else if (data.type === 'balanceLoading') {
+      balanceLoading = data.loading;
+      renderBalance();
+    } else if (data.type === 'balanceError') {
+      balanceLoading = false;
+      balance = null;
+      showFeedback(false, data.message);
+      renderBalance();
     } else if (data.type === 'providerLayout') {
       adoptProviderLayout(data.layout, data.revision);
       renderManageList();

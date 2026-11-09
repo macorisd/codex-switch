@@ -34,6 +34,7 @@ class Element {
     this.hidden = false;
     this.disabled = false;
     this.checked = false;
+    this.value = '';
     this.textContent = '';
   }
 
@@ -60,6 +61,8 @@ class Element {
   getAttribute(name) {
     return this.attributes.get(name);
   }
+
+  focus() {}
 }
 
 function webviewHarness(state) {
@@ -73,8 +76,11 @@ function webviewHarness(state) {
     'manage-providers', 'manage-panel', 'manage-list', 'provider-list', 'close-manage',
     'set-key', 'openai', 'deepseek-switch', 'current', 'key-dot', 'key-status',
     'models', 'refresh', 'verify', 'action-feedback', 'feedback-text',
+    'balance-value', 'balance-update', 'balance-alert-toggle', 'balance-alert-editor',
+    'balance-threshold',
   ]) add(id);
   elements.get('provider-list').hidden = true;
+  elements.get('balance-alert-editor').hidden = true;
 
   const openaiCard = add('openai-card', 'article');
   openaiCard.dataset.provider = 'openai';
@@ -131,6 +137,7 @@ function initialState(providerLayout = [
     ],
     providerLayout,
     providerLayoutRevision: 0,
+    balanceAlert: { threshold: null, level: 'ok' },
   };
 }
 
@@ -210,4 +217,32 @@ test('webview hides colored action feedback after 3000 ms without an icon', () =
   assert.equal(h.timers.at(-1).delay, 3000);
   h.timers.at(-1).listener();
   assert.equal(h.elements.get('action-feedback').hidden, true);
+});
+
+test('webview renders balance states and saves the alert threshold', () => {
+  const h = webviewHarness(initialState());
+  h.receive({
+    type: 'balance',
+    balance: { available: true, currency: 'USD', total: 4.25, totalText: '4.25' },
+    balanceAlert: { threshold: 5, level: 'low' },
+  });
+  assert.equal(h.elements.get('balance-value').textContent, '$4.25');
+  assert.equal(h.elements.get('balance-value').classList.contains('low'), true);
+  assert.equal(h.elements.get('balance-value').classList.contains('zero'), false);
+
+  h.elements.get('balance-alert-toggle').dispatch('click');
+  assert.equal(h.elements.get('balance-alert-editor').hidden, false);
+  assert.equal(h.elements.get('balance-threshold').value, '5');
+  h.elements.get('balance-threshold').value = '2.50';
+  h.elements.get('balance-threshold').dispatch('change');
+  assert.deepEqual(h.messages.at(-1), { action: 'saveBalanceAlert', threshold: 2.5 });
+
+  h.receive({
+    type: 'balance',
+    balance: { available: true, currency: 'USD', total: 0, totalText: '0.00' },
+    balanceAlert: { threshold: 5, level: 'zero' },
+  });
+  assert.equal(h.elements.get('balance-value').textContent, '$0.00');
+  assert.equal(h.elements.get('balance-value').classList.contains('zero'), true);
+  assert.equal(h.elements.get('balance-value').classList.contains('low'), false);
 });

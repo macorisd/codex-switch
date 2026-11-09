@@ -75,4 +75,59 @@ with tempfile.TemporaryDirectory() as directory:
     assert repaired_current['model_provider'] == 'openai'
     assert repaired_current['model'] == 'gpt-6.1-sol'
     assert 'custom' in repaired_current['model_providers']
-    print('PASS: DPAPI round trip, missing-key protection, model switching, CC Switch repair, ChatGPT restoration, unrelated-setting preservation, secret-free backups.')
+    # Balance parsing selects USD only and keeps the credential in the header.
+    original_urlopen = s.urllib.request.urlopen
+
+    class FakeResponse:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, *args):
+            return json.dumps(self.payload).encode('utf-8')
+
+    def fake_urlopen(request, timeout):
+        assert request.full_url == s.BALANCE_URL
+        assert request.get_header('Authorization') == 'Bearer ' + fake
+        assert timeout == 25
+        return FakeResponse({
+            'is_available': True,
+            'balance_infos': [
+                {'currency': 'CNY', 'total_balance': '9.00'},
+                {
+                    'currency': 'USD',
+                    'total_balance': '12.34',
+                    'granted_balance': '2.00',
+                    'topped_up_balance': '10.34',
+                },
+            ],
+        })
+
+    s.urllib.request.urlopen = fake_urlopen
+    try:
+        usd = s.balance()
+    finally:
+        s.urllib.request.urlopen = original_urlopen
+    assert usd == {
+        'available': True,
+        'currency': 'USD',
+        'total': 12.34,
+        'totalText': '12.34',
+        'availableCurrencies': ['CNY', 'USD'],
+    }
+    s.urllib.request.urlopen = lambda request, timeout: FakeResponse({
+        'is_available': True,
+        'balance_infos': [{'currency': 'CNY', 'total_balance': '100.00'}],
+    })
+    try:
+        cny_only = s.balance()
+    finally:
+        s.urllib.request.urlopen = original_urlopen
+    assert cny_only['total'] is None
+    assert cny_only['availableCurrencies'] == ['CNY']
+    print('PASS: DPAPI round trip, missing-key protection, model switching, CC Switch repair, ChatGPT restoration, balance parsing, unrelated-setting preservation, secret-free backups.')

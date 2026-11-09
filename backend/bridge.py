@@ -31,6 +31,8 @@ def handle(request):
         return {'models': s.verify_api()}
     elif action == 'refresh':
         s.refresh_catalog()
+    elif action == 'balance':
+        return s.balance()
     elif action == 'apply':
         if request.get('provider') == 'openai':
             s.switch()

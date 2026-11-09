@@ -77,6 +77,29 @@ Source: explicit user instructions, 2026-11-08.
   the sidebar. Do not add model selectors or reasoning-effort controls.
 - Use the first available model from the refreshed catalog when switching to
   DeepSeek because model choice is internal to the provider action.
+- Providers with API-key credentials show the model catalog in a disclosure that
+  is collapsed by default. Expanding it shows both the fixed model list and
+  **Update model catalog**.
+
+## DeepSeek Usage
+
+Source: approved PLAN for version 0.2.0, 2026-11-09.
+
+- Providers with API-key credentials may show a minimal **Usage** section.
+  DeepSeek is the only provider in version 0.2.0.
+- Usage shows **Available balance** only. The historical usage dashboard,
+  period selector and spending chart are deferred until DeepSeek publishes an
+  official usage API; the documented balance endpoint provides current balance
+  only.
+- Display DeepSeek's USD `total_balance` as dollars. Never present another
+  currency as USD.
+- Sync balance when the panel opens, when **Update** is pressed, and every 60
+  seconds while the panel remains visible. Cancel polling when hidden or
+  disposed and prevent overlapping requests.
+- **Balance alert** accepts a persisted USD threshold. Low balance is yellow and
+  zero balance is red.
+- Notify only when crossing below the threshold or reaching zero, not on every
+  sync while the state remains unchanged. Rearm alerts when the balance recovers.
 
 ## Brand assets
 

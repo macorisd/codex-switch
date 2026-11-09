@@ -13,6 +13,8 @@ const PROVIDERS = Object.freeze([
   Object.freeze({ id: 'deepseek', name: 'DeepSeek', subtitle: 'API key' }),
 ]);
 const PROVIDER_LAYOUT_KEY = 'providerLayout';
+const BALANCE_ALERT_KEY = 'deepseekBalanceAlert';
+const BALANCE_POLL_MS = 60_000;
 
 function backend(request) {
   return new Promise((resolve, reject) => {
@@ -58,10 +60,21 @@ class Selector {
     this.layoutRevision = 0;
     this.layoutUpdate = Promise.resolve();
     this.activeProvider = null;
+    this.hasKey = false;
+    this.viewVisible = false;
+    this.balanceTimer = null;
+    this.balanceRequest = null;
+    const savedAlert = context.globalState.get(BALANCE_ALERT_KEY, {});
+    this.balanceAlert = {
+      threshold: typeof savedAlert.threshold === 'number' && Number.isFinite(savedAlert.threshold)
+        && savedAlert.threshold >= 0 ? savedAlert.threshold : null,
+      level: ['ok', 'low', 'zero'].includes(savedAlert.level) ? savedAlert.level : 'ok',
+    };
   }
 
   resolveWebviewView(view) {
     this.view = view;
+    this.viewVisible = view.visible !== false;
     const media = vscode.Uri.joinPath(this.context.extensionUri, 'media');
     view.webview.options = { enableScripts: true, localResourceRoots: [media] };
     const nonce = crypto.randomBytes(24).toString('base64');
@@ -76,8 +89,19 @@ class Selector {
     view.webview.html = html;
     this.context.subscriptions.push(view.webview.onDidReceiveMessage(message => this.run(message)));
     this.context.subscriptions.push(view.onDidChangeVisibility(() => {
-      if (view.visible) this.update();
+      this.viewVisible = view.visible;
+      if (view.visible) {
+        this.update();
+        this.syncBalance();
+        this.startBalancePolling();
+      } else {
+        this.stopBalancePolling();
+      }
     }));
+    if (typeof view.onDidDispose === 'function') {
+      this.context.subscriptions.push(view.onDidDispose(() => this.stopBalancePolling()));
+    }
+    this.context.subscriptions.push({ dispose: () => this.stopBalancePolling() });
   }
 
   async update() {
@@ -85,13 +109,17 @@ class Selector {
     try {
       const state = await backend({ action: 'status' });
       this.activeProvider = state.provider;
+      this.hasKey = Boolean(state.hasKey);
       const webviewState = {
         ...state,
         providers: PROVIDERS,
         providerLayout: this.providerLayout(state.provider),
         providerLayoutRevision: this.layoutRevision,
+        balanceAlert: { ...this.balanceAlert },
       };
       await this.view.webview.postMessage({ type: 'state', state: webviewState, busy: this.busy });
+      if (this.viewVisible && this.hasKey) this.startBalancePolling();
+      else this.stopBalancePolling();
     } catch (error) {
       await vscode.window.showErrorMessage(error.message);
     }
@@ -155,6 +183,70 @@ class Selector {
     return this.layoutUpdate;
   }
 
+  startBalancePolling() {
+    if (!this.viewVisible || !this.hasKey || this.balanceTimer) return;
+    this.balanceTimer = setInterval(() => this.syncBalance(), BALANCE_POLL_MS);
+  }
+
+  stopBalancePolling() {
+    if (!this.balanceTimer) return;
+    clearInterval(this.balanceTimer);
+    this.balanceTimer = null;
+  }
+
+  async setBalanceAlert(value) {
+    let threshold = null;
+    if (value !== null && value !== undefined && value !== '') {
+      threshold = Number(value);
+      if (!Number.isFinite(threshold) || threshold < 0) {
+        throw new Error('Balance alert must be a non-negative dollar amount.');
+      }
+    }
+    this.balanceAlert = { threshold, level: 'ok' };
+    await this.context.globalState.update(BALANCE_ALERT_KEY, this.balanceAlert);
+    await this.view?.webview.postMessage({ type: 'balanceAlert', balanceAlert: { ...this.balanceAlert } });
+    await this.syncBalance(true);
+  }
+
+  async syncBalance(manual = false) {
+    if (!this.view || !this.viewVisible || !this.hasKey) {
+      if (manual) await this.view?.webview.postMessage({ type: 'balanceError', message: 'Balance unavailable.' });
+      return;
+    }
+    if (this.balanceRequest) return this.balanceRequest;
+    this.balanceRequest = backend({ action: 'balance' })
+      .then(async balance => {
+        const total = Number.isFinite(balance.total) ? balance.total : null;
+        const level = total !== null && total <= 0
+          ? 'zero'
+          : total !== null && this.balanceAlert.threshold !== null && total < this.balanceAlert.threshold
+            ? 'low'
+            : 'ok';
+        const previous = this.balanceAlert.level;
+        this.balanceAlert.level = level;
+        await this.context.globalState.update(BALANCE_ALERT_KEY, { ...this.balanceAlert });
+        await this.view?.webview.postMessage({
+          type: 'balance',
+          balance,
+          balanceAlert: { ...this.balanceAlert },
+        });
+        if (this.viewVisible && level === 'zero' && previous !== 'zero') {
+          await vscode.window.showWarningMessage('DeepSeek credits are exhausted.');
+        } else if (this.viewVisible && level === 'low' && previous !== 'low') {
+          await vscode.window.showWarningMessage(`DeepSeek balance is low: $${total.toFixed(2)} remaining.`);
+        }
+      })
+      .catch(async error => {
+        if (manual && this.viewVisible) {
+          await this.view?.webview.postMessage({ type: 'balanceError', message: error.message });
+        }
+      })
+      .finally(() => {
+        this.balanceRequest = null;
+      });
+    return this.balanceRequest;
+  }
+
   async promptForApiKey() {
     const key = await vscode.window.showInputBox({
       title: 'DeepSeek API key',
@@ -175,10 +267,29 @@ class Selector {
     return true;
   }
 
+  async ready() {
+    await this.update();
+    if (this.viewVisible && this.hasKey) await this.syncBalance();
+  }
+
   async run(message) {
     if (!message || typeof message.action !== 'string') return;
-    if (message.action === 'ready') return this.update();
+    if (message.action === 'ready') return this.ready();
     if (message.action === 'saveProviderLayout') return this.saveProviderLayout(message.layout, message.revision);
+    if (message.action === 'syncBalance') {
+      await this.view?.webview.postMessage({ type: 'balanceLoading', loading: true });
+      await this.syncBalance(true);
+      await this.view?.webview.postMessage({ type: 'balanceLoading', loading: false });
+      return;
+    }
+    if (message.action === 'saveBalanceAlert') {
+      try {
+        await this.setBalanceAlert(message.threshold);
+      } catch (error) {
+        await this.view?.webview.postMessage({ type: 'balanceError', message: error.message });
+      }
+      return;
+    }
     if (!['saveKey', 'verify', 'refresh', 'apply'].includes(message.action) || this.busy) return;
 
     this.busy = true;
@@ -218,6 +329,7 @@ class Selector {
     } finally {
       this.busy = false;
       await this.update();
+      if (message.action === 'saveKey' && this.hasKey) await this.syncBalance();
     }
   }
 }
