@@ -82,7 +82,8 @@ Source: explicit user instructions, 2026-11-08.
 - Providers with API-key credentials show the model catalog in a disclosure that
   is collapsed by default. Expanding it shows both the fixed model list and
   **Update model catalog**. The collapsed disclosure has a single bottom divider,
-  never both top and bottom borders.
+  never both top and bottom borders. The following Available balance section
+  must not add a second top divider.
 
 ## DeepSeek Usage
 
@@ -102,8 +103,8 @@ Source: approved PLAN for version 0.2.0, 2026-11-09.
 - **Balance alert** opens a bordered panel with an X close control and defaults
   to a persisted USD threshold of 5.00. The panel explains that the user is
   notified below that credit amount and that setting it to 0 disables low-balance
-  alerts. Its outer container and the provider switch button share a direct edge
-  with no extra rhythm, line box or gap between them.
+  alerts. Leave a clear 10 px gap between the panel and the provider switch
+  button; they must not touch.
 - Low balance is yellow and zero balance is red.
 - Notify only when crossing below the threshold or reaching zero, not on every
   sync while the state remains unchanged. Rearm alerts when the balance recovers.

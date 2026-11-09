@@ -221,7 +221,6 @@ button {
 .usage {
   margin-top: 10px;
   padding-top: 11px;
-  border-top: 1px solid var(--vscode-widget-border, #8883);
 }
 h4 { margin: 0; font-size: 12px; font-weight: 600; }
 .usage-balance-row {
@@ -304,11 +303,6 @@ h4 { margin: 0; font-size: 12px; font-weight: 600; }
   border-radius: 4px;
 }
 .usage > .primary { margin-top: 10px; }
-.balance-alert-editor:not([hidden]) + .primary {
-  margin-top: 0;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-}
 .primary {
   display: block;
   width: 100%;

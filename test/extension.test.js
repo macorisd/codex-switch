@@ -207,9 +207,11 @@ test('sidebar boots with the requested English provider interface', async () => 
   const catalogStyle = styleSource.match(/\.model-catalog\s*\{([^}]+)\}/)?.[1] || '';
   assert.match(catalogStyle, /border-bottom/);
   assert.doesNotMatch(catalogStyle, /border-top/);
+  const usageStyle = styleSource.match(/\.usage\s*\{([^}]+)\}/)?.[1] || '';
+  assert.doesNotMatch(usageStyle, /border-top/);
   assert.match(styleSource, /html, body\s*\{[^}]*overflow: hidden/s);
   assert.match(styleSource, /main\s*\{[^}]*overflow-y: auto/s);
-  assert.match(styleSource, /\.balance-alert-editor:not\(\[hidden\]\) \+ \.primary\s*\{[^}]*margin-top: 0/s);
+  assert.match(styleSource, /\.usage > \.primary\s*\{[^}]*margin-top: 10px/s);
   await h.receive({ action: 'ready' });
   const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
   assert.equal(latest.hasKey, true);
