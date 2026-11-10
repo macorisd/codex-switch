@@ -302,7 +302,7 @@ h4 { margin: 0; font-size: 12px; font-weight: 600; }
   border: 1px solid var(--vscode-input-border, #8885);
   border-radius: 4px;
 }
-.usage > .primary { margin-top: 10px; }
+#deepseek-switch { margin-top: 10px; }
 .primary {
   display: block;
   width: 100%;
