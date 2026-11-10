@@ -134,6 +134,7 @@ function initialState(providerLayout = [
     provider,
     hasKey: true,
     hasValidKey: true,
+    keyChecking: false,
     models: [{ id: 'deepseek-flash', name: 'DeepSeek-Flash' }],
     providers: [
       { id: 'openai', name: 'ChatGPT', subtitle: 'Your Plan' },
@@ -194,6 +195,27 @@ test('webview hides API-only sections until the DeepSeek key is valid', () => {
   assert.equal(h.elements.get('usage').hidden, false);
   assert.equal(h.elements.get('deepseek-switch').disabled, false);
   assert.equal(h.elements.get('key-status').textContent, 'Configured');
+});
+
+test('webview shows Loading instead of Not configured during the initial key check', () => {
+  const checkingState = initialState();
+  checkingState.hasValidKey = false;
+  checkingState.keyChecking = true;
+  const h = webviewHarness(checkingState);
+  assert.equal(h.elements.get('key-status').textContent, 'Loading...');
+  assert.equal(h.elements.get('key-dot').classList.contains('loading'), true);
+  assert.equal(h.elements.get('key-dot').classList.contains('configured'), false);
+  assert.equal(h.elements.get('key-dot').classList.contains('not-configured'), false);
+  assert.equal(h.elements.get('set-key').disabled, true);
+  assert.equal(h.elements.get('verify').disabled, true);
+
+  const settledState = initialState();
+  settledState.hasValidKey = false;
+  settledState.keyChecking = false;
+  h.receive({ type: 'state', busy: false, state: settledState });
+  assert.equal(h.elements.get('key-status').textContent, 'Not configured');
+  assert.equal(h.elements.get('key-dot').classList.contains('loading'), false);
+  assert.equal(h.elements.get('set-key').disabled, false);
 });
 
 test('webview re-enables Set API key after a failed validation releases busy', () => {

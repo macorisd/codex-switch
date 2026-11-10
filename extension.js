@@ -62,6 +62,7 @@ class Selector {
     this.activeProvider = null;
     this.hasKey = false;
     this.hasValidKey = false;
+    this.keyChecking = false;
     this.viewVisible = false;
     this.balanceTimer = null;
     this.balanceRequest = null;
@@ -105,16 +106,21 @@ class Selector {
     this.context.subscriptions.push({ dispose: () => this.stopBalancePolling() });
   }
 
-  async update() {
+  async update(keyChecking = this.keyChecking) {
     if (!this.view) return;
     try {
       const state = await backend({ action: 'status' });
       this.activeProvider = state.provider;
       this.hasKey = Boolean(state.hasKey);
-      if (!this.hasKey) this.hasValidKey = false;
+      if (!this.hasKey) {
+        this.hasValidKey = false;
+        keyChecking = false;
+      }
+      this.keyChecking = Boolean(this.hasKey && keyChecking);
       const webviewState = {
         ...state,
         hasValidKey: this.hasKey && this.hasValidKey,
+        keyChecking: this.keyChecking,
         providers: PROVIDERS,
         providerLayout: this.providerLayout(state.provider),
         providerLayoutRevision: this.layoutRevision,
@@ -268,13 +274,19 @@ class Selector {
   }
 
   async validateApiKey() {
-    await backend({ action: 'verify' });
-    this.hasValidKey = true;
-    await this.update();
+    this.keyChecking = true;
+    await this.update(true);
+    try {
+      await backend({ action: 'verify' });
+      this.hasValidKey = true;
+    } finally {
+      this.keyChecking = false;
+      await this.update(false);
+    }
   }
 
   async ready() {
-    await this.update();
+    await this.update(true);
     if (this.viewVisible && this.hasKey && !this.hasValidKey) {
       try {
         await this.validateApiKey();
@@ -315,7 +327,7 @@ class Selector {
         const saved = await this.promptForApiKey();
         if (saved) {
           this.hasValidKey = false;
-          await this.update();
+          await this.update(true);
           await this.validateApiKey();
         }
       } else if (message.action === 'verify') {

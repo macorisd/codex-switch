@@ -159,6 +159,11 @@ button:disabled { cursor: default; opacity: .55; }
   background: var(--vscode-testing-iconPassed, #69b58e);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-testing-iconPassed, #69b58e) 22%, transparent);
 }
+.status-dot.loading {
+  background: var(--vscode-descriptionForeground, #aaa);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--vscode-descriptionForeground, #aaa) 22%, transparent);
+  animation: status-pulse 900ms ease-in-out infinite alternate;
+}
 .model-list {
   margin: 4px 0 9px;
   padding: 0;
@@ -319,6 +324,7 @@ button.current-setting {
   to { opacity: 1; transform: translateY(0); }
 }
 @keyframes spin { to { transform: rotate(-360deg); } }
+@keyframes status-pulse { from { opacity: .35; } to { opacity: 1; } }
 @media (max-width: 260px) {
   main { padding: 16px 10px; }
   .provider-card { padding: 12px 10px; }

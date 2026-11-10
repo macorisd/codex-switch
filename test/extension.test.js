@@ -181,7 +181,7 @@ test('sidebar boots with the requested English provider interface', async () => 
     'DeepSeek',
     'API key',
     'Set API key',
-    'Not configured',
+    'Loading...',
     'Model catalog',
     'Update model catalog',
     'Check connection',
@@ -263,6 +263,9 @@ test('saving an API key validates it before revealing API-only sections', async 
   const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
   assert.equal(latest.hasKey, true);
   assert.equal(latest.hasValidKey, true);
+  const states = h.messages.filter(message => message.type === 'state').map(message => message.state);
+  assert.equal(states.some(state => state.keyChecking === true), true);
+  assert.equal(latest.keyChecking, false);
 });
 
 test('an API key that fails validation stays hidden and cannot switch provider', async () => {
@@ -282,6 +285,7 @@ test('an API key that fails validation stays hidden and cannot switch provider',
   const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
   assert.equal(latest.hasKey, true);
   assert.equal(latest.hasValidKey, false);
+  assert.equal(latest.keyChecking, false);
   assert.equal(h.calls.some(call => call.action === 'balance'), false);
   assert.equal(h.calls.some(call => call.action === 'apply'), false);
   assert.deepEqual(plain(h.messages.filter(message => message.type === 'actionResult').at(-1)), {
@@ -332,6 +336,9 @@ test('provider visibility and order are validated and persisted', async () => {
 test('ready syncs balance once and polls every minute only while visible', async () => {
   const h = harness();
   await h.receive({ action: 'ready' });
+  const states = h.messages.filter(message => message.type === 'state').map(message => message.state);
+  assert.equal(states.some(state => state.keyChecking === true), true);
+  assert.equal(states.at(-1).keyChecking, false);
   assert.equal(h.calls.filter(call => call.action === 'balance').length, 1);
   assert.equal(h.intervals.length, 1);
   assert.equal(h.intervals[0].delay, 60000);

@@ -71,6 +71,10 @@ Source: explicit user instructions, 2026-11-08.
   **Set API key** available for another attempt. Show that validation failure in
   the local connection feedback rather than waiting for a native notification
   to be dismissed.
+- While a stored or newly entered API key is being read and validated, show
+  **Loading...** with a neutral status indicator. Do not show a transient
+  **Not configured** state before that check completes, and disable credential
+  actions until it resolves to **Configured** or **Not configured**.
 - **Update model catalog** and **Check connection** show green success or red
   error feedback next to the action that produced it. The feedback has no icon
   or emoji, remains visible for exactly 5 seconds, then disappears.

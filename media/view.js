@@ -18,6 +18,7 @@
   const providerInfo = id => state?.providers.find(provider => provider.id === id);
   const hasDeepSeekKey = () => Boolean(state?.hasKey);
   const hasValidDeepSeekKey = () => Boolean(state?.hasValidKey);
+  const isCheckingDeepSeekKey = () => Boolean(state?.keyChecking);
 
   function actionButton(id, text, disabled) {
     const button = $(id);
@@ -160,10 +161,15 @@
       busy || isActive('deepseek') || !hasValidDeepSeekKey(),
     );
 
-    $('key-dot').classList.toggle('configured', hasValidDeepSeekKey());
-    $('key-dot').classList.toggle('not-configured', !hasValidDeepSeekKey());
-    $('key-status').textContent = hasValidDeepSeekKey() ? 'Configured' : 'Not configured';
-    $('set-key').disabled = busy;
+    const keyChecking = isCheckingDeepSeekKey();
+    const hasValidKey = hasValidDeepSeekKey();
+    $('key-dot').classList.toggle('configured', hasValidKey && !keyChecking);
+    $('key-dot').classList.toggle('not-configured', !hasValidKey && !keyChecking);
+    $('key-dot').classList.toggle('loading', keyChecking);
+    $('key-status').textContent = keyChecking
+      ? 'Loading...'
+      : hasValidKey ? 'Configured' : 'Not configured';
+    $('set-key').disabled = busy || keyChecking;
     $('model-catalog').hidden = !hasValidDeepSeekKey();
     $('usage').hidden = !hasValidDeepSeekKey();
 
@@ -174,7 +180,7 @@
     }));
     $('refresh').textContent = pendingAction === 'refresh' && busy ? 'Updating...' : 'Update model catalog';
     $('refresh').disabled = busy;
-    $('verify').disabled = busy || !hasDeepSeekKey();
+    $('verify').disabled = busy || keyChecking || !hasDeepSeekKey();
     renderBalance();
 
     renderManageList();
