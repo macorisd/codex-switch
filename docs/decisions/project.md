@@ -67,6 +67,10 @@ Source: explicit user instructions, 2026-11-08.
   successful validation reveals those sections. The provider switch button
   remains visible directly below the credential controls whether or not the key
   is configured, and becomes enabled only after successful validation.
+- A failed API-key validation must release busy controls immediately and keep
+  **Set API key** available for another attempt. Show that validation failure in
+  the local connection feedback rather than waiting for a native notification
+  to be dismissed.
 - **Update model catalog** and **Check connection** show green success or red
   error feedback next to the action that produced it. The feedback has no icon
   or emoji, remains visible for exactly 5 seconds, then disappears.

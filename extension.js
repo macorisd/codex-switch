@@ -343,15 +343,15 @@ class Selector {
         await vscode.commands.executeCommand('workbench.action.reloadWindow');
       }
     } catch (error) {
-      if (['verify', 'refresh'].includes(message.action)) {
+      if (['saveKey', 'verify', 'refresh'].includes(message.action)) {
         await this.view?.webview.postMessage({
           type: 'actionResult',
-          action: message.action,
+          action: message.action === 'saveKey' ? 'verify' : message.action,
           ok: false,
           message: error.message,
         });
       } else {
-        await vscode.window.showErrorMessage(error.message);
+        void vscode.window.showErrorMessage(error.message);
       }
     } finally {
       this.busy = false;

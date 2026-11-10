@@ -196,6 +196,15 @@ test('webview hides API-only sections until the DeepSeek key is valid', () => {
   assert.equal(h.elements.get('key-status').textContent, 'Configured');
 });
 
+test('webview re-enables Set API key after a failed validation releases busy', () => {
+  const h = webviewHarness(initialState());
+  h.receive({ type: 'busy', busy: true });
+  assert.equal(h.elements.get('set-key').disabled, true);
+
+  h.receive({ type: 'busy', busy: false });
+  assert.equal(h.elements.get('set-key').disabled, false);
+});
+
 test('webview can uncheck and then reliably check a provider again', () => {
   const h = webviewHarness(initialState());
   const deepseekItem = manageItem(h.elements.get('manage-list'), 'deepseek');

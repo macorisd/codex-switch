@@ -48,8 +48,9 @@ function harness(options = {}) {
         return disposable;
       },
       registerUriHandler: () => disposable,
-      showErrorMessage: async message => {
+      showErrorMessage: message => {
         errors.push(message);
+        return options.hangErrors ? new Promise(() => {}) : Promise.resolve();
       },
       showInformationMessage: async (...args) => {
         infos.push(args);
@@ -269,13 +270,30 @@ test('an API key that fails validation stays hidden and cannot switch provider',
     hasKey: false,
     inputKey: 'sk-example_1234567890',
     failActions: ['verify'],
+    hangErrors: true,
   });
-  await h.receive({ action: 'saveKey' });
+  await Promise.race([
+    h.receive({ action: 'saveKey' }),
+    new Promise((_, reject) => setTimeout(
+      () => reject(new Error('Saving a key waited for the validation notification.')),
+      500,
+    )),
+  ]);
   const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
   assert.equal(latest.hasKey, true);
   assert.equal(latest.hasValidKey, false);
   assert.equal(h.calls.some(call => call.action === 'balance'), false);
   assert.equal(h.calls.some(call => call.action === 'apply'), false);
+  assert.deepEqual(plain(h.messages.filter(message => message.type === 'actionResult').at(-1)), {
+    type: 'actionResult',
+    action: 'verify',
+    ok: false,
+    message: 'Connection failed safely.',
+  });
+  assert.equal(h.messages.filter(message => message.type === 'state').at(-1).busy, false);
+
+  await h.receive({ action: 'saveKey' });
+  assert.equal(h.inputBoxes.length, 2);
 
   await h.receive({ action: 'apply', provider: 'deepseek' });
   assert.equal(h.calls.some(call => call.action === 'apply'), false);
