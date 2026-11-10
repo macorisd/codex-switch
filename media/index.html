@@ -47,13 +47,13 @@
           </div>
           <div class="credential-row">
             <div class="credential-status">
-              <span class="status-dot not-configured" id="key-dot" aria-hidden="true"></span>
-              <span id="key-status">Not configured</span>
+              <span class="status-dot loading" id="key-dot" aria-hidden="true"></span>
+              <span id="key-status">Loading...</span>
             </div>
             <button class="text-button" id="set-key">Set API key</button>
           </div>
 
-          <details class="model-catalog" id="model-catalog">
+          <details class="model-catalog" id="model-catalog" hidden>
             <summary>Model catalog</summary>
             <div class="model-catalog-content">
               <ul class="model-list" id="models" aria-label="Available DeepSeek models"></ul>
@@ -64,7 +64,7 @@
             </div>
           </details>
 
-          <section class="usage" aria-labelledby="usage-label">
+          <section class="usage" id="usage" aria-labelledby="usage-label" hidden>
             <h4 id="usage-label">Available balance</h4>
             <div class="usage-balance-row">
               <div class="usage-balance-copy">
@@ -88,8 +88,8 @@
                 <input id="balance-threshold" type="number" min="0" step="0.01" inputmode="decimal" aria-label="Low balance alert in US dollars">
               </div>
             </div>
-            <button class="primary" id="deepseek-switch">Switch to DeepSeek</button>
           </section>
+          <button class="primary" id="deepseek-switch">Switch to DeepSeek</button>
         </article>
       </div>
     </section>

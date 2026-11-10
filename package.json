@@ -2,7 +2,7 @@
   "name": "codex-provider-switch",
   "displayName": "Codex Switch",
   "description": "Switch Codex between ChatGPT and DeepSeek from the VS Code sidebar.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "macor-local",
   "license": "GPL-3.0-only",
   "repository": {

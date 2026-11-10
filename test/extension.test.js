@@ -36,7 +36,7 @@ function harness(options = {}) {
   const state = {
     provider: 'openai',
     model: 'gpt-6.1-sol',
-    hasKey: true,
+    hasKey: options.hasKey !== false,
     models: [{ id: 'deepseek-flash', name: 'DeepSeek-Flash' }],
   };
   const vscode = {
@@ -48,8 +48,9 @@ function harness(options = {}) {
         return disposable;
       },
       registerUriHandler: () => disposable,
-      showErrorMessage: async message => {
+      showErrorMessage: message => {
         errors.push(message);
+        return options.hangErrors ? new Promise(() => {}) : Promise.resolve();
       },
       showInformationMessage: async (...args) => {
         infos.push(args);
@@ -87,6 +88,7 @@ function harness(options = {}) {
       end(text) {
         const request = JSON.parse(text);
         calls.push(request);
+        if (request.action === 'saveKey' && options.inputKey) state.hasKey = true;
         queueMicrotask(() => {
           if ((options.failActions || []).includes(request.action)) {
             child.stdout.emit('data', JSON.stringify({ ok: false, error: 'Connection failed safely.' }));
@@ -179,7 +181,7 @@ test('sidebar boots with the requested English provider interface', async () => 
     'DeepSeek',
     'API key',
     'Set API key',
-    'Not configured',
+    'Loading...',
     'Model catalog',
     'Update model catalog',
     'Check connection',
@@ -192,11 +194,19 @@ test('sidebar boots with the requested English provider interface', async () => 
   }
   assert.equal(h.view.webview.html.includes('id="close-manage"'), true);
   assert.doesNotMatch(h.view.webview.html, /<footer|<select|reasoning|type="password"|notice|intro|feedback-icon|Usage dashboard|>Usage</i);
+  const usageStart = h.view.webview.html.indexOf('id="usage"');
+  const switchIndex = h.view.webview.html.indexOf('id="deepseek-switch"');
+  const usageEnd = h.view.webview.html.indexOf('</section>', usageStart);
+  assert(usageStart > 0 && switchIndex > usageEnd);
+  const usageTagStart = h.view.webview.html.indexOf('<section class="usage"');
+  const usageTag = h.view.webview.html.slice(usageTagStart, h.view.webview.html.indexOf('>', usageTagStart) + 1);
+  assert.match(usageTag, /\shidden(?:\s|=|>)/);
   const detailsStart = h.view.webview.html.indexOf('<details class="model-catalog"');
   const detailsEnd = h.view.webview.html.indexOf('</details>', detailsStart);
   const detailsTag = h.view.webview.html.slice(detailsStart, h.view.webview.html.indexOf('>', detailsStart) + 1);
   assert(detailsStart >= 0 && detailsEnd > detailsStart);
   assert.doesNotMatch(detailsTag, /\sopen(?:\s|=|>)/);
+  assert.match(detailsTag, /\shidden(?:\s|=|>)/);
   assert(h.view.webview.html.indexOf('id="models"') > detailsStart);
   assert(h.view.webview.html.indexOf('id="refresh"') > detailsStart);
   assert(h.view.webview.html.indexOf('id="refresh"') < detailsEnd);
@@ -212,11 +222,12 @@ test('sidebar boots with the requested English provider interface', async () => 
   assert.doesNotMatch(usageStyle, /border-top/);
   assert.match(styleSource, /html, body\s*\{[^}]*overflow: hidden/s);
   assert.match(styleSource, /main\s*\{[^}]*overflow-y: auto/s);
-  assert.match(styleSource, /\.usage > \.primary\s*\{[^}]*margin-top: 10px/s);
+  assert.match(styleSource, /#deepseek-switch\s*\{[^}]*margin-top: 10px/s);
   assert.match(styleSource, /@keyframes spin\s*\{\s*to\s*\{\s*transform:\s*rotate\(-360deg\)/s);
   await h.receive({ action: 'ready' });
   const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
   assert.equal(latest.hasKey, true);
+  assert.equal(latest.hasValidKey, true);
   assert.equal(latest.key, undefined);
   assert.equal(latest.balanceAlert.threshold, 5);
   assert.deepEqual(plain(latest.providerLayout), [
@@ -232,7 +243,65 @@ test('Set API key uses the native password dialog and never returns the key', as
   assert.equal(h.inputBoxes.length, 1);
   assert.equal(h.inputBoxes[0].password, true);
   assert(h.calls.some(call => call.action === 'saveKey' && call.key === key));
-  assert.equal(h.messages.filter(message => message.type === 'state').at(-1).state.key, undefined);
+  assert.equal(h.calls.some(call => call.action === 'verify'), true);
+  const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
+  assert.equal(latest.key, undefined);
+  assert.equal(latest.hasValidKey, true);
+});
+
+test('saving an API key validates it before revealing API-only sections', async () => {
+  const h = harness({ hasKey: false, inputKey: 'sk-example_1234567890' });
+  await h.receive({ action: 'ready' });
+  assert.equal(h.calls.some(call => call.action === 'verify'), false);
+  assert.equal(h.calls.some(call => call.action === 'balance'), false);
+
+  await h.receive({ action: 'saveKey' });
+  const actionOrder = h.calls
+    .map(call => call.action)
+    .filter(action => ['saveKey', 'verify', 'balance'].includes(action));
+  assert.deepEqual(actionOrder.slice(0, 3), ['saveKey', 'verify', 'balance']);
+  const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
+  assert.equal(latest.hasKey, true);
+  assert.equal(latest.hasValidKey, true);
+  const states = h.messages.filter(message => message.type === 'state').map(message => message.state);
+  assert.equal(states.some(state => state.keyChecking === true), true);
+  assert.equal(latest.keyChecking, false);
+});
+
+test('an API key that fails validation stays hidden and cannot switch provider', async () => {
+  const h = harness({
+    hasKey: false,
+    inputKey: 'sk-example_1234567890',
+    failActions: ['verify'],
+    hangErrors: true,
+  });
+  await Promise.race([
+    h.receive({ action: 'saveKey' }),
+    new Promise((_, reject) => setTimeout(
+      () => reject(new Error('Saving a key waited for the validation notification.')),
+      500,
+    )),
+  ]);
+  const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
+  assert.equal(latest.hasKey, true);
+  assert.equal(latest.hasValidKey, false);
+  assert.equal(latest.keyChecking, false);
+  assert.equal(h.calls.some(call => call.action === 'balance'), false);
+  assert.equal(h.calls.some(call => call.action === 'apply'), false);
+  assert.deepEqual(plain(h.messages.filter(message => message.type === 'actionResult').at(-1)), {
+    type: 'actionResult',
+    action: 'verify',
+    ok: false,
+    message: 'Connection failed safely.',
+  });
+  assert.equal(h.messages.filter(message => message.type === 'state').at(-1).busy, false);
+
+  await h.receive({ action: 'saveKey' });
+  assert.equal(h.inputBoxes.length, 2);
+
+  await h.receive({ action: 'apply', provider: 'deepseek' });
+  assert.equal(h.calls.some(call => call.action === 'apply'), false);
+  assert.equal(h.errors.at(-1), 'Validate the DeepSeek API key before switching providers.');
 });
 
 test('canceling the native API key dialog preserves the stored key', async () => {
@@ -267,6 +336,9 @@ test('provider visibility and order are validated and persisted', async () => {
 test('ready syncs balance once and polls every minute only while visible', async () => {
   const h = harness();
   await h.receive({ action: 'ready' });
+  const states = h.messages.filter(message => message.type === 'state').map(message => message.state);
+  assert.equal(states.some(state => state.keyChecking === true), true);
+  assert.equal(states.at(-1).keyChecking, false);
   assert.equal(h.calls.filter(call => call.action === 'balance').length, 1);
   assert.equal(h.intervals.length, 1);
   assert.equal(h.intervals[0].delay, 60000);
@@ -275,6 +347,16 @@ test('ready syncs balance once and polls every minute only while visible', async
   h.setVisible(true);
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.calls.filter(call => call.action === 'balance').length, 2);
+});
+
+test('ready keeps a saved key hidden when DeepSeek validation fails', async () => {
+  const h = harness({ failActions: ['verify'] });
+  await h.receive({ action: 'ready' });
+  const latest = h.messages.filter(message => message.type === 'state').at(-1).state;
+  assert.equal(latest.hasKey, true);
+  assert.equal(latest.hasValidKey, false);
+  assert.equal(h.calls.some(call => call.action === 'balance'), false);
+  assert.equal(h.intervals.length, 0);
 });
 
 test('balance alerts notify only when crossing low and zero states', async () => {
@@ -423,6 +505,7 @@ test('untrusted webview messages cannot invoke arbitrary backend actions', async
 
 test('switching sends only the provider and reloads immediately after success', async () => {
   const h = harness();
+  await h.receive({ action: 'ready' });
   await h.receive({ action: 'apply', provider: 'deepseek' });
   const applyIndex = h.calls.findIndex(call => call.action === 'apply');
   const apply = h.calls[applyIndex];
@@ -436,6 +519,7 @@ test('switching sends only the provider and reloads immediately after success', 
 
 test('failed provider switching does not reload the window', async () => {
   const h = harness({ failActions: ['apply'] });
+  await h.receive({ action: 'ready' });
   await h.receive({ action: 'apply', provider: 'deepseek' });
   assert.equal(h.errors.length, 1);
   assert.equal(h.calls.includes('workbench.action.reloadWindow'), false);

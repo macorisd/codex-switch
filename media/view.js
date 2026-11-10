@@ -17,6 +17,8 @@
   const isActive = provider => state?.provider === provider;
   const providerInfo = id => state?.providers.find(provider => provider.id === id);
   const hasDeepSeekKey = () => Boolean(state?.hasKey);
+  const hasValidDeepSeekKey = () => Boolean(state?.hasValidKey);
+  const isCheckingDeepSeekKey = () => Boolean(state?.keyChecking);
 
   function actionButton(id, text, disabled) {
     const button = $(id);
@@ -133,8 +135,8 @@
       ? (balance ? 'Unavailable' : '--')
       : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(total);
     $('balance-update').classList.toggle('loading', balanceLoading);
-    $('balance-update').disabled = busy || !hasDeepSeekKey();
-    $('balance-alert-toggle').disabled = busy || !hasDeepSeekKey();
+    $('balance-update').disabled = busy || !hasValidDeepSeekKey();
+    $('balance-alert-toggle').disabled = busy || !hasValidDeepSeekKey();
 
     const input = $('balance-threshold');
     if (document.activeElement !== input) {
@@ -156,13 +158,20 @@
     actionButton(
       'deepseek-switch',
       isActive('deepseek') ? 'Current Setting' : 'Switch to DeepSeek',
-      busy || isActive('deepseek') || !hasDeepSeekKey(),
+      busy || isActive('deepseek') || !hasValidDeepSeekKey(),
     );
 
-    $('key-dot').classList.toggle('configured', hasDeepSeekKey());
-    $('key-dot').classList.toggle('not-configured', !hasDeepSeekKey());
-    $('key-status').textContent = hasDeepSeekKey() ? 'Configured' : 'Not configured';
-    $('set-key').disabled = busy;
+    const keyChecking = isCheckingDeepSeekKey();
+    const hasValidKey = hasValidDeepSeekKey();
+    $('key-dot').classList.toggle('configured', hasValidKey && !keyChecking);
+    $('key-dot').classList.toggle('not-configured', !hasValidKey && !keyChecking);
+    $('key-dot').classList.toggle('loading', keyChecking);
+    $('key-status').textContent = keyChecking
+      ? 'Loading...'
+      : hasValidKey ? 'Configured' : 'Not configured';
+    $('set-key').disabled = busy || keyChecking;
+    $('model-catalog').hidden = !hasValidDeepSeekKey();
+    $('usage').hidden = !hasValidDeepSeekKey();
 
     $('models').replaceChildren(...state.models.map(model => {
       const item = document.createElement('li');
@@ -171,7 +180,7 @@
     }));
     $('refresh').textContent = pendingAction === 'refresh' && busy ? 'Updating...' : 'Update model catalog';
     $('refresh').disabled = busy;
-    $('verify').disabled = busy || !hasDeepSeekKey();
+    $('verify').disabled = busy || keyChecking || !hasDeepSeekKey();
     renderBalance();
 
     renderManageList();
@@ -234,7 +243,9 @@
 
   window.addEventListener('message', ({ data }) => {
     if (data.type === 'state') {
+      const wasValid = hasValidDeepSeekKey();
       state = data.state;
+      if (wasValid && !hasValidDeepSeekKey()) balance = null;
       busy = data.busy;
       if ((state.providerLayoutRevision || 0) >= layoutRevision) {
         adoptProviderLayout(state.providerLayout, state.providerLayoutRevision || 0);

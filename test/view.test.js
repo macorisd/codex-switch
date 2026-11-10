@@ -75,6 +75,7 @@ function webviewHarness(state) {
   for (const id of [
     'manage-providers', 'manage-panel', 'manage-list', 'provider-list', 'close-manage',
     'set-key', 'openai', 'deepseek-switch', 'current', 'key-dot', 'key-status',
+    'model-catalog', 'usage',
     'models', 'refresh', 'verify', 'connection-feedback', 'connection-feedback-text',
     'catalog-feedback', 'catalog-feedback-text',
     'balance-feedback', 'balance-feedback-text',
@@ -132,6 +133,8 @@ function initialState(providerLayout = [
   return {
     provider,
     hasKey: true,
+    hasValidKey: true,
+    keyChecking: false,
     models: [{ id: 'deepseek-flash', name: 'DeepSeek-Flash' }],
     providers: [
       { id: 'openai', name: 'ChatGPT', subtitle: 'Your Plan' },
@@ -174,6 +177,54 @@ test('webview keeps the active card visible and formats provider labels', () => 
   assert.equal(openaiItem.children[0].children[0].disabled, true);
   assert.equal(openaiItem.children[0].children[1].textContent, 'ChatGPT (Your Plan)');
   assert.equal(deepseekItem.children[0].children[1].textContent, 'DeepSeek (API key)');
+});
+
+test('webview hides API-only sections until the DeepSeek key is valid', () => {
+  const state = initialState();
+  state.hasKey = true;
+  state.hasValidKey = false;
+  const h = webviewHarness(state);
+  assert.equal(h.elements.get('model-catalog').hidden, true);
+  assert.equal(h.elements.get('usage').hidden, true);
+  assert.equal(h.elements.get('deepseek-switch').hidden, false);
+  assert.equal(h.elements.get('deepseek-switch').disabled, true);
+  assert.equal(h.elements.get('key-status').textContent, 'Not configured');
+
+  h.receive({ type: 'state', busy: false, state: initialState() });
+  assert.equal(h.elements.get('model-catalog').hidden, false);
+  assert.equal(h.elements.get('usage').hidden, false);
+  assert.equal(h.elements.get('deepseek-switch').disabled, false);
+  assert.equal(h.elements.get('key-status').textContent, 'Configured');
+});
+
+test('webview shows Loading instead of Not configured during the initial key check', () => {
+  const checkingState = initialState();
+  checkingState.hasValidKey = false;
+  checkingState.keyChecking = true;
+  const h = webviewHarness(checkingState);
+  assert.equal(h.elements.get('key-status').textContent, 'Loading...');
+  assert.equal(h.elements.get('key-dot').classList.contains('loading'), true);
+  assert.equal(h.elements.get('key-dot').classList.contains('configured'), false);
+  assert.equal(h.elements.get('key-dot').classList.contains('not-configured'), false);
+  assert.equal(h.elements.get('set-key').disabled, true);
+  assert.equal(h.elements.get('verify').disabled, true);
+
+  const settledState = initialState();
+  settledState.hasValidKey = false;
+  settledState.keyChecking = false;
+  h.receive({ type: 'state', busy: false, state: settledState });
+  assert.equal(h.elements.get('key-status').textContent, 'Not configured');
+  assert.equal(h.elements.get('key-dot').classList.contains('loading'), false);
+  assert.equal(h.elements.get('set-key').disabled, false);
+});
+
+test('webview re-enables Set API key after a failed validation releases busy', () => {
+  const h = webviewHarness(initialState());
+  h.receive({ type: 'busy', busy: true });
+  assert.equal(h.elements.get('set-key').disabled, true);
+
+  h.receive({ type: 'busy', busy: false });
+  assert.equal(h.elements.get('set-key').disabled, false);
 });
 
 test('webview can uncheck and then reliably check a provider again', () => {

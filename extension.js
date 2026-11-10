@@ -61,6 +61,8 @@ class Selector {
     this.layoutUpdate = Promise.resolve();
     this.activeProvider = null;
     this.hasKey = false;
+    this.hasValidKey = false;
+    this.keyChecking = false;
     this.viewVisible = false;
     this.balanceTimer = null;
     this.balanceRequest = null;
@@ -104,21 +106,28 @@ class Selector {
     this.context.subscriptions.push({ dispose: () => this.stopBalancePolling() });
   }
 
-  async update() {
+  async update(keyChecking = this.keyChecking) {
     if (!this.view) return;
     try {
       const state = await backend({ action: 'status' });
       this.activeProvider = state.provider;
       this.hasKey = Boolean(state.hasKey);
+      if (!this.hasKey) {
+        this.hasValidKey = false;
+        keyChecking = false;
+      }
+      this.keyChecking = Boolean(this.hasKey && keyChecking);
       const webviewState = {
         ...state,
+        hasValidKey: this.hasKey && this.hasValidKey,
+        keyChecking: this.keyChecking,
         providers: PROVIDERS,
         providerLayout: this.providerLayout(state.provider),
         providerLayoutRevision: this.layoutRevision,
         balanceAlert: { ...this.balanceAlert },
       };
       await this.view.webview.postMessage({ type: 'state', state: webviewState, busy: this.busy });
-      if (this.viewVisible && this.hasKey) this.startBalancePolling();
+      if (this.viewVisible && this.hasValidKey) this.startBalancePolling();
       else this.stopBalancePolling();
     } catch (error) {
       await vscode.window.showErrorMessage(error.message);
@@ -184,7 +193,7 @@ class Selector {
   }
 
   startBalancePolling() {
-    if (!this.viewVisible || !this.hasKey || this.balanceTimer) return;
+    if (!this.viewVisible || !this.hasValidKey || this.balanceTimer) return;
     this.balanceTimer = setInterval(() => this.syncBalance(), BALANCE_POLL_MS);
   }
 
@@ -206,7 +215,7 @@ class Selector {
   }
 
   async syncBalance(manual = false) {
-    if (!this.view || !this.viewVisible || !this.hasKey) {
+    if (!this.view || !this.viewVisible || !this.hasValidKey) {
       if (manual) await this.view?.webview.postMessage({ type: 'balanceError', message: 'Balance unavailable.' });
       return;
     }
@@ -264,9 +273,28 @@ class Selector {
     return true;
   }
 
+  async validateApiKey() {
+    this.keyChecking = true;
+    await this.update(true);
+    try {
+      await backend({ action: 'verify' });
+      this.hasValidKey = true;
+    } finally {
+      this.keyChecking = false;
+      await this.update(false);
+    }
+  }
+
   async ready() {
-    await this.update();
-    if (this.viewVisible && this.hasKey) await this.syncBalance();
+    await this.update(true);
+    if (this.viewVisible && this.hasKey && !this.hasValidKey) {
+      try {
+        await this.validateApiKey();
+      } catch {
+        // A saved key is disclosed in the UI only after a successful validation.
+      }
+    }
+    if (this.viewVisible && this.hasValidKey) await this.syncBalance();
   }
 
   async run(message) {
@@ -296,9 +324,14 @@ class Selector {
     await this.view?.webview.postMessage({ type: 'busy', busy: true });
     try {
       if (message.action === 'saveKey') {
-        await this.promptForApiKey();
+        const saved = await this.promptForApiKey();
+        if (saved) {
+          this.hasValidKey = false;
+          await this.update(true);
+          await this.validateApiKey();
+        }
       } else if (message.action === 'verify') {
-        await backend({ action: 'verify' });
+        await this.validateApiKey();
         await this.view?.webview.postMessage({
           type: 'actionResult',
           action: message.action,
@@ -315,24 +348,27 @@ class Selector {
         });
       } else if (message.action === 'apply') {
         if (!['openai', 'deepseek'].includes(message.provider)) throw new Error('Unsupported provider.');
+        if (message.provider === 'deepseek' && !this.hasValidKey) {
+          throw new Error('Validate the DeepSeek API key before switching providers.');
+        }
         await backend({ action: 'apply', provider: message.provider });
         await vscode.commands.executeCommand('workbench.action.reloadWindow');
       }
     } catch (error) {
-      if (['verify', 'refresh'].includes(message.action)) {
+      if (['saveKey', 'verify', 'refresh'].includes(message.action)) {
         await this.view?.webview.postMessage({
           type: 'actionResult',
-          action: message.action,
+          action: message.action === 'saveKey' ? 'verify' : message.action,
           ok: false,
           message: error.message,
         });
       } else {
-        await vscode.window.showErrorMessage(error.message);
+        void vscode.window.showErrorMessage(error.message);
       }
     } finally {
       this.busy = false;
       await this.update();
-      if (message.action === 'saveKey' && this.hasKey) await this.syncBalance();
+      if (['saveKey', 'verify'].includes(message.action) && this.hasValidKey) await this.syncBalance();
     }
   }
 }

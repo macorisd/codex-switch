@@ -54,14 +54,27 @@ Source: explicit user instructions, 2026-11-08.
 - ChatGPT contains only a **Switch to ChatGPT** button, or a disabled
   **Current Setting** button when it is active.
 - DeepSeek shows a red or green status circle with **Not configured** or
-  **Configured**, a **Set API key** button, the available models as a
-  non-interactive fixed list, **Update model catalog**, **Check connection**, and
-  **Switch to DeepSeek**, or a disabled **Current Setting** button when it is
-  active.
+  **Configured**, a **Set API key** button, **Check connection**, and a
+  **Switch to DeepSeek** button, or a disabled **Current Setting** button when
+  it is active. Green **Configured** means the key has been validated, not only
+  saved.
 - **Check connection** is a discreet blue text link aligned to the right of the
   **API key** subtitle rather than a full-width button.
 - **Set API key** opens VS Code's native password dialog. The key is not entered,
   displayed or retained in the sidebar GUI.
+- Model catalog and Available balance remain absent while DeepSeek has no
+  validated API key. Saving a key triggers validation automatically; only a
+  successful validation reveals those sections. The provider switch button
+  remains visible directly below the credential controls whether or not the key
+  is configured, and becomes enabled only after successful validation.
+- A failed API-key validation must release busy controls immediately and keep
+  **Set API key** available for another attempt. Show that validation failure in
+  the local connection feedback rather than waiting for a native notification
+  to be dismissed.
+- While a stored or newly entered API key is being read and validated, show
+  **Loading...** with a neutral status indicator. Do not show a transient
+  **Not configured** state before that check completes, and disable credential
+  actions until it resolves to **Configured** or **Not configured**.
 - **Update model catalog** and **Check connection** show green success or red
   error feedback next to the action that produced it. The feedback has no icon
   or emoji, remains visible for exactly 5 seconds, then disappears.
