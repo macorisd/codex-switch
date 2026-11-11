@@ -206,16 +206,18 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
 - Reload that actual window when needed so the user can inspect the proposed
   changes before merging. Preserve workspace, open editors, credentials and
   configuration. If an active agent connection prevents a safe reload, explain
-  the concrete blocker and do not claim the installation is active or publish
-  the PR as ready until the current-window check is complete. If that check
+  the concrete blocker and do not claim the installation is active until the
+  current-window check is complete. If that check
   requires UI interaction, request the user's reload/review instead of using
   computer use.
 - Always publish the implementation branch and open a real PR in the same
   delivery. A pending reload, current-window check or user visual review must
-  never prevent PR creation: open it as a draft, record the remaining checks
-  in the PLAN and report them honestly. Mark it ready after those checks pass.
-  Do not ask the user whether to create the PR. Source: explicit correction,
-  2026-11-11, superseding the earlier requirement to defer PR creation.
+  never prevent PR creation: open a normal PR, never a draft, record remaining
+  checks in the PLAN and report them honestly. The user tests and merges when
+  satisfied, or requests fixes in the same PR while it remains open. If it is
+  closed, start a new branch and PR from current main. Do not ask whether to
+  create the PR. Source: explicit corrections, 2026-11-11, superseding the
+  earlier requirement to defer PR creation and the proposed draft workaround.
 - This current-window installation requirement was explicitly added by the user
   on 2026-11-07 after a CLI installation left the current window stale. It applies
   to every future codex-switch PR and update.
