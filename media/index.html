@@ -11,7 +11,14 @@
   <main>
     <section class="current" aria-labelledby="current-label">
       <h1 id="current-label">Current Configuration</h1>
-      <strong id="current" aria-live="polite"></strong>
+      <div class="current-row">
+        <strong id="current" aria-live="polite"></strong>
+        <button class="icon-button" id="sync-all" type="button" aria-label="Refresh all visible providers" title="Refresh all visible providers">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M13 5.5A5.5 5.5 0 0 0 3.2 4.1L2 6M2 2.5V6h3.5M3 10.5a5.5 5.5 0 0 0 9.8 1.4L14 10m0 3.5V10h-3.5"/>
+          </svg>
+        </button>
+      </div>
     </section>
 
     <section class="provider-section" aria-labelledby="provider-label">
@@ -90,11 +97,6 @@
               <div class="usage-balance-copy">
                 <strong id="balance-value">--</strong>
               </div>
-              <button class="icon-button" id="balance-update" type="button" aria-label="Update available balance">
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M13 5.5A5.5 5.5 0 0 0 3.2 4.1L2 6M2 2.5V6h3.5M3 10.5a5.5 5.5 0 0 0 9.8 1.4L14 10m0 3.5V10h-3.5"/>
-                </svg>
-              </button>
             </div>
             <div class="action-feedback" id="balance-feedback" role="status" aria-live="polite" hidden>
               <span id="balance-feedback-text"></span>

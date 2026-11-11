@@ -82,7 +82,7 @@ function webviewHarness(state) {
     'models', 'refresh', 'verify', 'connection-feedback', 'connection-feedback-text',
     'catalog-feedback', 'catalog-feedback-text',
     'balance-feedback', 'balance-feedback-text',
-    'balance-value', 'balance-update', 'balance-alert-toggle', 'balance-alert-editor',
+    'balance-value', 'sync-all', 'balance-alert-toggle', 'balance-alert-editor',
     'balance-alert-close', 'balance-threshold', 'balance-threshold-copy',
   ]) add(id);
   elements.get('provider-list').hidden = true;
@@ -309,15 +309,15 @@ test('webview renders balance states and saves the alert threshold', () => {
   assert.equal(h.elements.get('balance-value').classList.contains('low'), false);
 });
 
-test('webview stops and re-enables the balance spinner when loading ends', () => {
+test('webview stops and re-enables the global spinner when all loading ends', () => {
   const h = webviewHarness(initialState());
-  h.receive({ type: 'balanceLoading', loading: true });
-  assert.equal(h.elements.get('balance-update').classList.contains('loading'), true);
-  assert.equal(h.elements.get('balance-update').disabled, false);
+  h.receive({ type: 'syncLoading', loading: true });
+  assert.equal(h.elements.get('sync-all').classList.contains('loading'), true);
+  assert.equal(h.elements.get('sync-all').disabled, true);
 
-  h.receive({ type: 'balanceLoading', loading: false });
-  assert.equal(h.elements.get('balance-update').classList.contains('loading'), false);
-  assert.equal(h.elements.get('balance-update').disabled, false);
+  h.receive({ type: 'syncLoading', loading: false });
+  assert.equal(h.elements.get('sync-all').classList.contains('loading'), false);
+  assert.equal(h.elements.get('sync-all').disabled, false);
 });
 
 test('ChatGPT plan subtitles update everywhere and usage shows remaining values', () => {
@@ -391,4 +391,22 @@ test('both countdowns omit zero units and use a playful message below one minute
   }
   h.receive({ type: 'chatgpt', account: { configured: true, weekly: { resetsAt: now + 2 * 86400 + 30 } } });
   assert.equal(h.elements.get('weekly-countdown').textContent, 'Resets in 2d');
+});
+
+test('global sync button is available without DeepSeek credentials and ignores repeat clicks', () => {
+  const state = initialState();
+  state.hasKey = false;
+  state.hasValidKey = false;
+  const h = webviewHarness(state);
+  const button = h.elements.get('sync-all');
+  assert.equal(button.disabled, false);
+  button.dispatch('click');
+  button.dispatch('click');
+  assert.equal(h.messages.filter(m => m.action === 'syncAll').length, 1);
+  assert.equal(button.classList.contains('loading'), true);
+  h.receive({ type: 'balanceError', message: 'Balance unavailable.' });
+  assert.equal(button.classList.contains('loading'), true);
+  h.receive({ type: 'syncLoading', loading: false });
+  assert.equal(button.classList.contains('loading'), false);
+  assert.equal(button.disabled, false);
 });

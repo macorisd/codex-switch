@@ -12,7 +12,7 @@
   let layoutRevision = 0;
   const feedbackTimers = new Map();
   let balance = null;
-  let balanceLoading = false;
+  let syncLoading = false;
   let account = { loading: true };
   let countdownTimer = null;
   const send = message => vscode.postMessage(message);
@@ -139,8 +139,6 @@
     $('balance-value').textContent = total === null
       ? (balance ? 'Unavailable' : '--')
       : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(total);
-    $('balance-update').classList.toggle('loading', balanceLoading);
-    $('balance-update').disabled = busy || !hasValidDeepSeekKey();
     $('balance-alert-toggle').disabled = busy || !hasValidDeepSeekKey();
 
     const input = $('balance-threshold');
@@ -198,6 +196,8 @@
     if (!state) return;
     const active = providerInfo(state.provider);
     $('current').textContent = active ? `${active.name} (${active.subtitle})` : state.provider;
+    $('sync-all').classList.toggle('loading', syncLoading);
+    $('sync-all').disabled = busy || syncLoading;
 
     for (const [id, card] of cards) card.classList.toggle('current-provider', isActive(id));
     actionButton('openai', isActive('openai') ? 'Current Setting' : 'Switch to ChatGPT', busy || isActive('openai'));
@@ -263,12 +263,12 @@
     clearFeedback('connection-feedback', 'connection-feedback-text');
     send({ action: 'verify' });
   });
-  $('balance-update').addEventListener('click', () => {
-    if (balanceLoading) return;
-    balanceLoading = true;
+  $('sync-all').addEventListener('click', () => {
+    if (syncLoading || busy) return;
+    syncLoading = true;
     clearFeedback('balance-feedback', 'balance-feedback-text');
-    renderBalance();
-    send({ action: 'syncBalance' });
+    render();
+    send({ action: 'syncAll' });
   });
   $('balance-alert-toggle').addEventListener('click', () => {
     const editor = $('balance-alert-editor');
@@ -318,16 +318,14 @@
     } else if (data.type === 'balance') {
       balance = data.balance;
       state.balanceAlert = data.balanceAlert;
-      balanceLoading = false;
       renderBalance();
     } else if (data.type === 'balanceAlert') {
       state.balanceAlert = data.balanceAlert;
       renderBalance();
-    } else if (data.type === 'balanceLoading') {
-      balanceLoading = data.loading;
-      renderBalance();
+    } else if (data.type === 'syncLoading') {
+      syncLoading = data.loading;
+      render();
     } else if (data.type === 'balanceError') {
-      balanceLoading = false;
       balance = null;
       showFeedback('balance-feedback', 'balance-feedback-text', false, data.message);
       renderBalance();

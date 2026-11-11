@@ -19,6 +19,8 @@ function harness(options = {}) {
   const intervals = [];
   const clearedIntervals = [];
   const accountCalls = [];
+  const pendingBackend = [];
+  const backendSignals = [];
   const globalValues = new Map(Object.entries(options.globalValues || {}));
   const context = {
     extensionPath: extensionRoot,
@@ -35,7 +37,7 @@ function harness(options = {}) {
   let receive;
   const disposable = { dispose() {} };
   const state = {
-    provider: 'openai',
+    provider: options.provider || 'openai',
     model: 'gpt-6.1-sol',
     hasKey: options.hasKey !== false,
     models: [{ id: 'deepseek-flash', name: 'DeepSeek-Flash' }],
@@ -80,7 +82,7 @@ function harness(options = {}) {
       executeCommand: async id => calls.push(id),
     },
   };
-  const spawn = (exe, args) => {
+  const spawn = (exe, args, spawnOptions) => {
     const child = new EventEmitter();
     child.stdout = new EventEmitter();
     child.stderr = { resume() {} };
@@ -88,9 +90,10 @@ function harness(options = {}) {
       on() {},
       end(text) {
         const request = JSON.parse(text);
+        backendSignals.push({ action: request.action, signal: spawnOptions?.signal });
         calls.push(request);
         if (request.action === 'saveKey' && options.inputKey) state.hasKey = true;
-        queueMicrotask(() => {
+        const respond = () => {
           if ((options.failActions || []).includes(request.action)) {
             child.stdout.emit('data', JSON.stringify({ ok: false, error: 'Connection failed safely.' }));
           } else {
@@ -103,10 +106,13 @@ function harness(options = {}) {
             child.stdout.emit('data', JSON.stringify({ ok: true, data: result }));
           }
           child.emit('close', 0);
-        });
+        };
+        if ((options.hangActions || []).includes(request.action)) pendingBackend.push({ action: request.action, respond });
+        else queueMicrotask(respond);
       },
     };
     child.kill = () => {};
+    spawnOptions?.signal?.addEventListener('abort', () => child.emit('error', new Error('Aborted')));
     return child;
   };
   const sandbox = {
@@ -169,6 +175,8 @@ function harness(options = {}) {
     intervals,
     clearedIntervals,
     accountCalls,
+    pendingBackend,
+    backendSignals,
     view,
     setVisible: visible => {
       view.visible = visible;
@@ -205,6 +213,10 @@ test('sidebar boots with the requested English provider interface', async () => 
     assert.equal(h.view.webview.html.includes(text), true, text);
   }
   assert.equal(h.view.webview.html.includes('id="close-manage"'), true);
+  assert.equal(h.view.webview.html.includes('id="balance-update"'), false);
+  const syncIndex = h.view.webview.html.indexOf('id="sync-all"');
+  assert(syncIndex > h.view.webview.html.indexOf('id="current"'));
+  assert(syncIndex < h.view.webview.html.indexOf('class="provider-section"'));
   assert.doesNotMatch(h.view.webview.html, /<footer|<select|reasoning|type="password"|notice|intro|feedback-icon|Usage dashboard|>Usage</i);
   const usageStart = h.view.webview.html.indexOf('id="usage"');
   const switchIndex = h.view.webview.html.indexOf('id="deepseek-switch"');
@@ -359,6 +371,7 @@ test('ready syncs balance once and polls every minute only while visible', async
   h.setVisible(true);
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.calls.filter(call => call.action === 'balance').length, 2);
+  assert.equal(h.messages.filter(message => message.type === 'state').at(-1).state.keyChecking, false);
 });
 
 test('ready keeps a saved key hidden when DeepSeek validation fails', async () => {
@@ -382,7 +395,7 @@ test('balance alerts notify only when crossing low and zero states', async () =>
     ],
   });
   await h.receive({ action: 'ready' });
-  for (let i = 0; i < 3; i += 1) await h.receive({ action: 'syncBalance' });
+  for (let i = 0; i < 3; i += 1) await h.receive({ action: 'syncAll' });
   assert.equal(h.warnings.length, 2);
   assert.match(h.warnings[0], /low: \$4\.00/);
   assert.match(h.warnings[1], /exhausted/);
@@ -399,7 +412,7 @@ test('a pending balance notification does not keep the manual sync loading', asy
   });
   await h.receive({ action: 'ready' });
   await Promise.race([
-    h.receive({ action: 'syncBalance' }),
+    h.receive({ action: 'syncAll' }),
     new Promise((_, reject) => setTimeout(
       () => reject(new Error('Balance sync waited for the native notification.')),
       500,
@@ -407,10 +420,10 @@ test('a pending balance notification does not keep the manual sync loading', asy
   ]);
   assert.equal(h.warnings.length, 1);
   assert.deepEqual(
-    plain(h.messages.filter(message => message.type === 'balanceLoading')),
+    plain(h.messages.filter(message => message.type === 'syncLoading')),
     [
-      { type: 'balanceLoading', loading: true },
-      { type: 'balanceLoading', loading: false },
+      { type: 'syncLoading', loading: true },
+      { type: 'syncLoading', loading: false },
     ],
   );
 });
@@ -573,4 +586,75 @@ test('ChatGPT failures are unknown, do not disclose upstream errors, and do not 
   assert.equal(h.errors.length, 0);
   assert.equal(h.messages.some(m => JSON.stringify(m).includes('Private upstream')), false);
   assert(h.calls.some(m => m.action === 'balance'));
+});
+
+test('hidden DeepSeek never validates, refreshes catalog or balance until enabled', async () => {
+  const h = harness({ globalValues: { providerLayout: [{ id: 'openai', visible: true }, { id: 'deepseek', visible: false }] } });
+  await h.receive({ action: 'ready' });
+  await h.receive({ action: 'syncAll' });
+  await h.receive({ action: 'verify' });
+  await h.receive({ action: 'refresh' });
+  assert(!h.calls.some(c => ['verify', 'balance', 'refresh'].includes(c.action)));
+  assert(h.calls.filter(c => c.action === 'status').every(c => c.includeDeepSeek === false));
+  await h.receive({ action: 'saveProviderLayout', revision: 1, layout: [{ id: 'openai', visible: true }, { id: 'deepseek', visible: true }] });
+  await new Promise(resolve => setImmediate(resolve));
+  assert(h.calls.some(c => c.action === 'verify'));
+  assert(h.calls.some(c => c.action === 'balance'));
+  const timers = [...h.intervals];
+  await h.receive({ action: 'saveProviderLayout', revision: 2, layout: [{ id: 'openai', visible: true }, { id: 'deepseek', visible: false }] });
+  const previous = h.calls.filter(c => ['verify', 'balance', 'refresh'].includes(c.action)).length;
+  for (const timer of timers) await timer.listener();
+  await h.receive({ action: 'syncAll' });
+  assert.equal(h.calls.filter(c => ['verify', 'balance', 'refresh'].includes(c.action)).length, previous);
+});
+
+test('hidden ChatGPT does not start an app-server and cancels when disabled', async () => {
+  const h = harness({ provider: 'deepseek', globalValues: { providerLayout: [{ id: 'openai', visible: false }, { id: 'deepseek', visible: true }] } });
+  await h.receive({ action: 'ready' });
+  await h.receive({ action: 'syncAll' });
+  assert.equal(h.accountCalls.length, 0);
+  await h.receive({ action: 'saveProviderLayout', revision: 1, layout: [{ id: 'openai', visible: true }, { id: 'deepseek', visible: true }] });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.accountCalls.length, 1);
+  await h.receive({ action: 'saveProviderLayout', revision: 2, layout: [{ id: 'openai', visible: false }, { id: 'deepseek', visible: true }] });
+  assert(h.accountCalls[0].signal.aborted);
+  for (const timer of h.intervals) await timer.listener();
+  await h.receive({ action: 'syncAll' });
+  assert.equal(h.accountCalls.length, 1);
+});
+
+test('disabling DeepSeek aborts an in-flight balance request and discards its result', async () => {
+  const h = harness({ hangActions: ['balance'] });
+  const ready = h.receive({ action: 'ready' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.pendingBackend.length, 1);
+  const signal = h.backendSignals.find(c => c.action === 'balance').signal;
+  await h.receive({ action: 'saveProviderLayout', revision: 1, layout: [{ id: 'openai', visible: true }, { id: 'deepseek', visible: false }] });
+  await ready;
+  assert(signal.aborted);
+  assert(!h.messages.some(m => m.type === 'balance'));
+});
+
+test('global sync refreshes both visible providers, deduplicates clicks and settles after errors', async () => {
+  const h = harness({ accountError: true, failActions: ['refresh', 'balance'], hangErrors: true });
+  await h.receive({ action: 'ready' });
+  const before = h.accountCalls.length;
+  await Promise.all([h.receive({ action: 'syncAll' }), h.receive({ action: 'syncAll' })]);
+  assert.equal(h.accountCalls.length, before + 1);
+  assert(h.calls.some(c => c.action === 'refresh'));
+  assert.deepEqual(plain(h.messages.filter(m => m.type === 'syncLoading')), [{ type: 'syncLoading', loading: true }, { type: 'syncLoading', loading: false }]);
+  assert.equal(h.messages.filter(m => m.type === 'state').at(-1).busy, false);
+  assert.equal(h.messages.filter(m => m.type === 'state').at(-1).state.keyChecking, false);
+});
+
+test('global spinner waits for the last visible provider independently of balance completion', async () => {
+  let complete;
+  const h = harness({ accountRead: () => new Promise(resolve => { complete = resolve; }) });
+  const sync = h.receive({ action: 'syncAll' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert(h.messages.some(m => m.type === 'balance'));
+  assert.equal(h.messages.filter(m => m.type === 'syncLoading').at(-1).loading, true);
+  complete({ configured: true, plan: 'Plus' });
+  await sync;
+  assert.equal(h.messages.filter(m => m.type === 'syncLoading').at(-1).loading, false);
 });

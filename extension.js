@@ -17,12 +17,13 @@ const PROVIDER_LAYOUT_KEY = 'providerLayout';
 const BALANCE_ALERT_KEY = 'deepseekBalanceAlert';
 const BALANCE_POLL_MS = 60_000;
 
-function backend(request) {
+function backend(request, signal) {
   return new Promise((resolve, reject) => {
     const child = spawn(python, [path.join(__dirname, 'backend', 'bridge.py')], {
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: os.homedir(),
+      signal,
     });
     let stdout = '';
     const timer = setTimeout(() => {
@@ -71,6 +72,9 @@ class Selector {
     this.accountTimer = null;
     this.accountRequest = null;
     this.accountAbort = null;
+    this.deepseekAbort = null;
+    this.deepseekRefresh = null;
+    this.syncRequest = null;
     const savedAlert = context.globalState.get(BALANCE_ALERT_KEY, {});
     this.balanceAlert = {
       threshold: typeof savedAlert.threshold === 'number' && Number.isFinite(savedAlert.threshold)
@@ -98,24 +102,35 @@ class Selector {
     this.context.subscriptions.push(view.onDidChangeVisibility(() => {
       this.viewVisible = view.visible;
       if (view.visible) {
-        this.update();
-        this.syncBalance();
-        this.startBalancePolling();
-        this.syncAccount();
+        void this.ready();
       } else {
-        this.stopBalancePolling();
+        this.suspendDeepSeek();
         this.stopAccountPolling();
       }
     }));
     if (typeof view.onDidDispose === 'function') {
       this.context.subscriptions.push(view.onDidDispose(() => {
         this.viewVisible = false;
-        this.stopBalancePolling();
+        this.suspendDeepSeek();
         this.stopAccountPolling();
       }));
     }
-    this.context.subscriptions.push({ dispose: () => this.stopBalancePolling() });
+    this.context.subscriptions.push({ dispose: () => this.suspendDeepSeek() });
     this.context.subscriptions.push({ dispose: () => this.stopAccountPolling() });
+  }
+
+  canLoad(id) {
+    return this.viewVisible && this.providerLayout().some(entry => entry.id === id && entry.visible);
+  }
+
+  suspendDeepSeek() {
+    this.stopBalancePolling();
+    this.deepseekAbort?.abort();
+  }
+
+  deepseekSignal() {
+    if (!this.deepseekAbort || this.deepseekAbort.signal.aborted) this.deepseekAbort = new AbortController();
+    return this.deepseekAbort.signal;
   }
 
   stopAccountPolling() {
@@ -125,18 +140,19 @@ class Selector {
   }
 
   syncAccount() {
-    if (!this.viewVisible) return Promise.resolve();
+    if (!this.canLoad('openai')) return Promise.resolve();
     if (!this.accountTimer) this.accountTimer = setInterval(() => this.syncAccount(), 60_000);
-    if (this.accountRequest) return this.accountRequest;
+    if (this.accountRequest) return this.accountAbort?.signal.aborted
+      ? this.accountRequest.then(() => this.syncAccount()) : this.accountRequest;
     this.accountAbort = new AbortController();
     this.accountRequest = (async () => {
       try {
         const account = await codexAccount.readAccount(codexAccount.executable(vscode), { signal: this.accountAbort.signal });
-        this.chatgpt = { ...account, loading: false, stale: false };
+        if (this.canLoad('openai')) this.chatgpt = { ...account, loading: false, stale: false };
       } catch {
-        this.chatgpt = { ...this.chatgpt, loading: false, stale: true };
+        if (this.canLoad('openai')) this.chatgpt = { ...this.chatgpt, loading: false, stale: true };
       }
-      if (this.viewVisible) await this.view?.webview.postMessage({ type: 'chatgpt', account: this.chatgpt });
+      if (this.canLoad('openai')) await this.view?.webview.postMessage({ type: 'chatgpt', account: this.chatgpt });
     })().finally(() => { this.accountRequest = null; });
     return this.accountRequest;
   }
@@ -144,7 +160,7 @@ class Selector {
   async update(keyChecking = this.keyChecking) {
     if (!this.view) return;
     try {
-      const state = await backend({ action: 'status' });
+      const state = await backend({ action: 'status', includeDeepSeek: this.canLoad('deepseek') });
       this.activeProvider = state.provider;
       this.hasKey = Boolean(state.hasKey);
       if (!this.hasKey) {
@@ -163,10 +179,12 @@ class Selector {
         chatgpt: this.chatgpt,
       };
       await this.view.webview.postMessage({ type: 'state', state: webviewState, busy: this.busy });
-      if (this.viewVisible && this.hasValidKey) this.startBalancePolling();
+      if (this.canLoad('deepseek') && this.hasValidKey) this.startBalancePolling();
       else this.stopBalancePolling();
+      if (!this.canLoad('deepseek')) this.suspendDeepSeek();
+      if (!this.canLoad('openai')) this.stopAccountPolling();
     } catch (error) {
-      await vscode.window.showErrorMessage(error.message);
+      void vscode.window.showErrorMessage(error.message);
     }
   }
 
@@ -210,12 +228,20 @@ class Selector {
       if (nextRevision < this.layoutRevision) return;
       this.layoutRevision = nextRevision;
       try {
+        const previous = this.providerLayout();
         await this.context.globalState.update(PROVIDER_LAYOUT_KEY, layout);
+        if (!this.canLoad('openai')) this.stopAccountPolling();
+        if (!this.canLoad('deepseek')) this.suspendDeepSeek();
         await this.view?.webview.postMessage({
           type: 'providerLayout',
           layout,
           revision: nextRevision,
         });
+        for (const entry of layout) {
+          if (!entry.visible || previous.find(item => item.id === entry.id)?.visible) continue;
+          if (entry.id === 'openai') void this.syncAccount();
+          else void this.refreshDeepSeek();
+        }
       } catch (error) {
         await this.view?.webview.postMessage({
           type: 'providerLayoutError',
@@ -229,7 +255,7 @@ class Selector {
   }
 
   startBalancePolling() {
-    if (!this.viewVisible || !this.hasValidKey || this.balanceTimer) return;
+    if (!this.canLoad('deepseek') || !this.hasValidKey || this.balanceTimer) return;
     this.balanceTimer = setInterval(() => this.syncBalance(), BALANCE_POLL_MS);
   }
 
@@ -251,13 +277,15 @@ class Selector {
   }
 
   async syncBalance(manual = false) {
-    if (!this.view || !this.viewVisible || !this.hasValidKey) {
+    if (!this.view || !this.canLoad('deepseek') || !this.hasValidKey) {
       if (manual) await this.view?.webview.postMessage({ type: 'balanceError', message: 'Balance unavailable.' });
       return;
     }
-    if (this.balanceRequest) return this.balanceRequest;
-    this.balanceRequest = backend({ action: 'balance' })
+    if (this.balanceRequest) return this.deepseekAbort?.signal.aborted
+      ? this.balanceRequest.then(() => this.syncBalance(manual)) : this.balanceRequest;
+    this.balanceRequest = backend({ action: 'balance' }, this.deepseekSignal())
       .then(async balance => {
+        if (!this.canLoad('deepseek')) return;
         const total = Number.isFinite(balance.total) ? balance.total : null;
         const level = total !== null && total <= 0
           ? 'zero'
@@ -279,7 +307,7 @@ class Selector {
         }
       })
       .catch(async error => {
-        if (manual && this.viewVisible) {
+        if (manual && this.canLoad('deepseek')) {
           await this.view?.webview.postMessage({ type: 'balanceError', message: error.message });
         }
       })
@@ -310,11 +338,14 @@ class Selector {
   }
 
   async validateApiKey() {
+    if (!this.canLoad('deepseek')) return;
+    this.hasValidKey = false;
     this.keyChecking = true;
     await this.update(true);
     try {
-      await backend({ action: 'verify' });
-      this.hasValidKey = true;
+      if (!this.canLoad('deepseek')) return;
+      await backend({ action: 'verify' }, this.deepseekSignal());
+      if (this.canLoad('deepseek')) this.hasValidKey = true;
     } finally {
       this.keyChecking = false;
       await this.update(false);
@@ -322,32 +353,54 @@ class Selector {
   }
 
   async ready() {
-    const accountRequest = this.syncAccount();
-    await this.update(true);
-    if (this.viewVisible && this.hasKey && !this.hasValidKey) {
+    await this.update(!this.hasValidKey && this.canLoad('deepseek'));
+    await Promise.allSettled([this.syncAccount(), this.refreshDeepSeek()]);
+  }
+
+  refreshDeepSeek(manual = false) {
+    if (!this.canLoad('deepseek')) return Promise.resolve();
+    if (this.deepseekRefresh) return this.deepseekAbort?.signal.aborted
+      ? this.deepseekRefresh.then(() => this.refreshDeepSeek(manual)) : this.deepseekRefresh;
+    this.deepseekRefresh = (async () => {
       try {
-        await this.validateApiKey();
+        if (this.hasKey && (manual || !this.hasValidKey)) await this.validateApiKey();
+        if (!this.canLoad('deepseek') || !this.hasValidKey) return;
+        if (manual) {
+          try { await backend({ action: 'refresh' }, this.deepseekSignal()); }
+          catch { if (this.canLoad('deepseek')) await this.view?.webview.postMessage({ type: 'actionResult', action: 'refresh', ok: false, message: 'Model catalog unavailable.' }); }
+        }
+        await this.syncBalance(manual);
       } catch {
-        // A saved key is disclosed in the UI only after a successful validation.
+        if (this.canLoad('deepseek')) await this.view?.webview.postMessage({ type: 'actionResult', action: 'verify', ok: false, message: 'Connection unavailable.' });
       }
-    }
-    if (this.viewVisible && this.hasValidKey) await this.syncBalance();
-    await accountRequest;
+    })().finally(() => { this.deepseekRefresh = null; });
+    return this.deepseekRefresh;
+  }
+
+  syncAll() {
+    if (this.syncRequest) return this.syncRequest;
+    if (this.busy || !this.viewVisible) return Promise.resolve();
+    this.busy = true;
+    this.syncRequest = (async () => {
+      await this.view?.webview.postMessage({ type: 'syncLoading', loading: true });
+      await this.view?.webview.postMessage({ type: 'busy', busy: true });
+      try {
+        await this.update();
+        await Promise.allSettled([this.syncAccount(), this.refreshDeepSeek(true)]);
+      } finally {
+        this.busy = false;
+        await this.update();
+        await this.view?.webview.postMessage({ type: 'syncLoading', loading: false });
+      }
+    })().finally(() => { this.syncRequest = null; });
+    return this.syncRequest;
   }
 
   async run(message) {
     if (!message || typeof message.action !== 'string') return;
     if (message.action === 'ready') return this.ready();
+    if (message.action === 'syncAll') return this.syncAll();
     if (message.action === 'saveProviderLayout') return this.saveProviderLayout(message.layout, message.revision);
-    if (message.action === 'syncBalance') {
-      await this.view?.webview.postMessage({ type: 'balanceLoading', loading: true });
-      try {
-        await this.syncBalance(true);
-      } finally {
-        await this.view?.webview.postMessage({ type: 'balanceLoading', loading: false });
-      }
-      return;
-    }
     if (message.action === 'saveBalanceAlert') {
       try {
         await this.setBalanceAlert(message.threshold);
@@ -357,6 +410,7 @@ class Selector {
       return;
     }
     if (!['saveKey', 'verify', 'refresh', 'apply'].includes(message.action) || this.busy) return;
+    if (['saveKey', 'verify', 'refresh'].includes(message.action) && !this.canLoad('deepseek')) return;
 
     this.busy = true;
     await this.view?.webview.postMessage({ type: 'busy', busy: true });
@@ -377,7 +431,7 @@ class Selector {
           message: 'Connection successful.',
         });
       } else if (message.action === 'refresh') {
-        await backend({ action: 'refresh' });
+        await backend({ action: 'refresh' }, this.deepseekSignal());
         await this.view?.webview.postMessage({
           type: 'actionResult',
           action: message.action,

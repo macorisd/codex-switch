@@ -17,6 +17,8 @@ a configured low-balance threshold or reach zero.
 ChatGPT shows the plan and configuration status of your existing Codex account,
 remaining five-hour and weekly usage, local reset dates with countdowns, and
 available banked resets. Usage refreshes every minute while the panel is open.
+The sync icon beside the current configuration refreshes all visible providers.
+Providers hidden in Manage Providers do not load or refresh until enabled again.
 Unavailable data is labeled explicitly. No resets are consumed. This requires
 the Codex executable bundled with the OpenAI extension, or Codex on PATH.
 

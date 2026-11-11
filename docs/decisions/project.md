@@ -51,6 +51,17 @@ Source: explicit user instructions, 2026-11-08.
 - Under Provider, show one section for **ChatGPT** with its detected plan
   subtitle (see ChatGPT Usage), and one for **DeepSeek** with **API key**.
 - Highlight the active provider's card with a blue perimeter.
+- Place one sync icon to the right of the active provider label in Current
+  Configuration. Remove provider-specific balance sync icons. It refreshes
+  configuration and all visible providers' account/credential status, catalog
+  and usage/balance; keep catalog and connection actions available separately.
+  Spin counter-clockwise until all refresh work settles, including failures.
+- A provider unchecked in Manage Providers must never load or refresh its data:
+  skip initial, automatic and global/manual requests; stop its timers and cancel
+  pending requests when hidden. Re-enabling it loads fresh data and resumes
+  polling while the panel is visible. Shared local configuration metadata may
+  be read to identify the active provider and enforce its mandatory visibility.
+  Source: explicit sync and resource-saving instructions, 2026-11-11.
 - ChatGPT shows account status and usage (see ChatGPT Usage), followed by
   **Switch to ChatGPT**, or disabled **Current Setting** when it is active.
 - DeepSeek shows a red or green status circle with **Not configured** or
@@ -138,11 +149,11 @@ Source: approved PLAN for version 0.2.0, 2026-11-09.
   only.
 - Display DeepSeek's USD `total_balance` as dollars. Never present another
   currency as USD.
-- Sync balance when the panel opens, when **Update** is pressed, and every 60
+- Sync balance when the panel opens, when the global sync is pressed, and every 60
   seconds while the panel remains visible. Cancel polling when hidden or
   disposed and prevent overlapping requests.
-- The balance sync spinner rotates counter-clockwise while a balance request is
-  active. It stops whenever the request settles, independently of how long a
+- The global sync spinner rotates counter-clockwise while provider refreshes
+  are active. It stops when all requests settle, independently of how long a
   native balance notification remains open.
 - **Balance alert** opens a bordered panel with an X close control and defaults
   to a persisted USD threshold of 5.00. The panel explains that the user is
