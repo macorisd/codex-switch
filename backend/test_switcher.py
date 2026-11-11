@@ -14,7 +14,7 @@ catalog = (s.SOURCE / 'catalog.json').read_text('utf-8')
 with tempfile.TemporaryDirectory() as directory:
     s.ROOT = Path(directory)
     s.CONFIG = s.ROOT / 'config.toml'
-    s.KEY = s.ROOT / 'deepseek-key.dpapi'
+    s.KEY = s.ROOT / ('deepseek-key.dpapi' if sys.platform == 'win32' else 'deepseek-key.keyring')
     s.CATALOG = s.ROOT / 'models.json'
     s.STATE = s.ROOT / 'previous.json'
     s.CATALOG.write_text(catalog, encoding='utf-8')
@@ -48,7 +48,7 @@ with tempfile.TemporaryDirectory() as directory:
     assert first['model_provider'] == 'deepseek'
     assert 'forced_login_method' not in first
     assert 'preferred_auth_method' not in first
-    assert first['model_providers']['deepseek']['auth']['command'].endswith('python.exe')
+    assert first['model_providers']['deepseek']['auth']['command'] == str(Path(sys.executable))
     assert 'experimental_bearer_token' not in s.CONFIG.read_text()
     # An unrelated Codex setting changed while DeepSeek was selected.
     s.CONFIG.write_text(s.CONFIG.read_text().replace('"steer"', '"queue"'), encoding='utf-8')
@@ -141,4 +141,6 @@ with tempfile.TemporaryDirectory() as directory:
         s.urllib.request.urlopen = original_urlopen
     assert cny_only['total'] is None
     assert cny_only['availableCurrencies'] == ['CNY']
-    print('PASS: DPAPI round trip, missing-key protection, model switching, CC Switch repair, ChatGPT restoration, balance parsing, unrelated-setting preservation, secret-free backups.')
+    if sys.platform != 'win32':
+        s.credential_store.native_store().delete_password(s.credential_store.service(s.KEY), 'api-key')
+    print('PASS: native credential round trip, missing-key protection, model switching, CC Switch repair, ChatGPT restoration, balance parsing, unrelated-setting preservation, secret-free backups.')

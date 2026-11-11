@@ -6,9 +6,11 @@ const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
 const codexAccount = require('./codex-account');
+const process = require('node:process');
 
-const root = path.join(os.homedir(), '.codex', 'provider-switcher');
-const python = 'python';
+const codexHome = (process.env.CODEX_HOME || '.codex').replace(/^~(?=$|[/\\])/, os.homedir());
+const root = path.join(path.resolve(os.homedir(), codexHome), 'provider-switcher');
+const python = process.platform === 'win32' ? 'python' : 'python3';
 const PROVIDERS = Object.freeze([
   Object.freeze({ id: 'openai', name: 'ChatGPT', subtitle: 'Your Plan' }),
   Object.freeze({ id: 'deepseek', name: 'DeepSeek', subtitle: 'API key' }),
@@ -19,7 +21,8 @@ const BALANCE_POLL_MS = 60_000;
 
 function backend(request, signal) {
   return new Promise((resolve, reject) => {
-    const child = spawn(python, [path.join(__dirname, 'backend', 'bridge.py')], {
+    const interpreter = vscode.workspace.getConfiguration?.('codexSwitch')?.get('pythonPath') || python;
+    const child = spawn(interpreter, [path.join(__dirname, 'backend', 'bridge.py')], {
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: os.homedir(),
@@ -320,7 +323,7 @@ class Selector {
   async promptForApiKey() {
     const key = await vscode.window.showInputBox({
       title: 'DeepSeek API key',
-      prompt: 'The key is encrypted for your Windows user and is not shown in the sidebar.',
+      prompt: 'The key is stored securely for your OS user and is not shown in the sidebar.',
       password: true,
       ignoreFocusOut: true,
       placeHolder: 'sk-...',

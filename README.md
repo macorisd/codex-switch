@@ -4,7 +4,7 @@
 
 Codex Switch is a VS Code sidebar extension that moves Codex between your existing ChatGPT subscription and DeepSeek API providers.
 ChatGPT plan and usage limits, the DeepSeek model catalog and balance stay in one focused panel.
-DeepSeek credentials remain encrypted for your Windows user and provider switches reload VS Code automatically.
+DeepSeek credentials use your operating system secure storage and provider switches reload VS Code automatically.
 
 | Provider | Access | Available models |
 | --- | --- | --- |
@@ -21,9 +21,21 @@ DeepSeek credentials remain encrypted for your Windows user and provider switche
 4. Reload VS Code, open **Codex Switch** from the Activity Bar, configure
    DeepSeek if needed, and switch providers.
 
-Codex Switch requires Windows and Python 3.11+ on `PATH`. Runtime credentials and
-configuration stay in `%USERPROFILE%\.codex\provider-switcher`, outside the
-repository.
+Codex Switch supports VS Code desktop on Windows, macOS and Linux (x64/ARM64),
+with Python 3.11+ and a compatible Codex installation. Windows uses `python`;
+macOS/Linux use `python3`. Set `codexSwitch.pythonPath` to select another
+interpreter, including a virtual environment.
+
+Windows retains existing DPAPI-encrypted keys. macOS uses Keychain and Linux uses
+Secret Service through Python `keyring` (25.7.x); Linux needs an unlocked
+Secret Service provider such as GNOME Keyring and a D-Bus session. Install the
+package into the selected interpreter with `python3 -m pip install 'keyring>=25.7,<26'`.
+If the system Python is managed, use a virtual environment and select its Python
+with `codexSwitch.pythonPath`. No plaintext credential fallback is used.
+
+Runtime state stays in `~/.codex/provider-switcher`, or under `CODEX_HOME` when
+set, outside the repository. With SSH, WSL or containers, the UI extension still
+manages the local desktop's Codex account, not a remote machine's account.
 
 ## Version History
 
@@ -32,6 +44,7 @@ the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
+| 0.3.1 | Support Windows, macOS and Linux with native credential stores, portable Python paths, configurable interpreter, CODEX_HOME support and cross-platform CI. |
 | 0.3.0 | Show the signed-in ChatGPT plan and configuration status, remaining five-hour and weekly usage with exact reset times and countdowns, and available banked resets. Refresh visible providers from one sync control next to the current configuration, without loading hidden providers. |
 | [0.2.1](https://github.com/macorisd/codex-switch/releases/tag/v0.2.1) | Hide DeepSeek's model catalog and balance until its API key is validated, show Loading while credential status is pending, keep the provider switch button visible, reveal the API-only sections automatically after successful validation, and allow immediate retries after an invalid key without leaving controls blocked. |
 | [0.2.0](https://github.com/macorisd/codex-switch/releases/tag/v0.2.0) | Collapse API-key model catalogs by default, add DeepSeek USD balance with one-minute polling and configurable low or zero balance alerts, and recover ChatGPT settings after CC Switch leaves a custom provider. |
@@ -43,8 +56,9 @@ the matching GitHub Release, including its installable VSIX and checksum.
 <details>
 <summary><strong>Developer setup</strong></summary>
 
-Use Node.js 24, npm, Python 3.11+, and VS Code 1.100 or newer on Windows. Windows
-DPAPI encrypts the local DeepSeek credential.
+Use Node.js 24, npm, Python 3.11+, and VS Code 1.100 or newer. Install
+`backend/requirements.txt` in the chosen Python on macOS/Linux. Tests exercise
+the native credential store with isolated temporary identities.
 
 1. Clone the repository and install the locked dependencies:
 
@@ -74,7 +88,7 @@ DPAPI encrypts the local DeepSeek credential.
    code --install-extension codex-provider-switch-<version>.vsix --force
    ```
 
-Runtime state remains in `%USERPROFILE%\.codex\provider-switcher`. Preserve
+Runtime state remains in `~/.codex/provider-switcher` (or under `CODEX_HOME`). Preserve
 `auth.json`, `config.toml`, the encrypted key, and local configuration backups
 when testing provider switches. Never commit credentials or runtime state.
 

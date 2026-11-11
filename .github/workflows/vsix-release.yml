@@ -38,8 +38,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/vsix_release.py resolve
-  build:
+  compatibility:
     needs: resolve
+    if: needs.resolve.outputs.skip == 'false'
+    uses: ./.github/workflows/compatibility.yml
+    with:
+      source-ref: ${{ needs.resolve.outputs.sha }}
+  build:
+    needs: [resolve, compatibility]
     if: needs.resolve.outputs.skip == 'false'
     runs-on: windows-latest
     timeout-minutes: 15
@@ -57,13 +63,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.14'
-      - name: Install packaging tools and test tagged source
+      - name: Install packaging tools
         run: |
           if (Test-Path package-lock.json) {
             npm ci --ignore-scripts
           }
-          npm test
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Build VSIX from the tagged source
         env:
           RELEASE_VERSION: ${{ needs.resolve.outputs.version }}

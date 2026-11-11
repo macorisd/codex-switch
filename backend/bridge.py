@@ -59,6 +59,9 @@ if __name__ == '__main__':
         request = json.loads(sys.stdin.read(16384))
         result = handle(request)
         print(json.dumps({'ok': True, 'data': result}, ensure_ascii=True))
+    except s.credential_store.StoreUnavailable:
+        print(json.dumps({'ok': False, 'error': 'System credential storage requires the Python keyring package. See the installation requirements and codexSwitch.pythonPath setting.'}))
+        sys.exit(1)
     except Exception:
         # Do not expose exception text, request bodies, or upstream responses.
         print(json.dumps({'ok': False, 'error': 'The operation could not be completed. Check the API key, connection and local Codex configuration.'}))

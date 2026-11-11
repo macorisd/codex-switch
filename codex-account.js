@@ -3,15 +3,18 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-function executable(vscode) {
+function executable(vscode, { platform = process.platform, arch = process.arch, exists = fs.existsSync } = {}) {
+  if (!['win32', 'darwin', 'linux'].includes(platform) || !['x64', 'arm64'].includes(arch)) {
+    throw new Error('This Codex platform or architecture is not supported.');
+  }
   const extension = vscode.extensions?.getExtension('openai.chatgpt');
   if (extension) {
-    const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
-    const platform = process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux';
-    const candidate = path.join(extension.extensionPath, 'bin', `${platform}-${arch}`, process.platform === 'win32' ? 'codex.exe' : 'codex');
-    if (fs.existsSync(candidate)) return candidate;
+    const cpu = arch === 'arm64' ? 'aarch64' : 'x86_64';
+    const osName = platform === 'win32' ? 'windows' : platform === 'darwin' ? 'macos' : 'linux';
+    const candidate = path.join(extension.extensionPath, 'bin', `${osName}-${cpu}`, platform === 'win32' ? 'codex.exe' : 'codex');
+    if (exists(candidate)) return candidate;
   }
-  return process.platform === 'win32' ? 'codex.exe' : 'codex';
+  return platform === 'win32' ? 'codex.exe' : 'codex';
 }
 
 function normalize(account, response) {
@@ -102,7 +105,7 @@ function readAccount(command, { spawnProcess = spawn, timeoutMs = 25000, signal 
           }
         }
       });
-      send(1, 'initialize', { clientInfo: { name: 'codex_switch', version: '0.3.0' }, capabilities: { experimentalApi: true } });
+      send(1, 'initialize', { clientInfo: { name: 'codex_switch', version: require('./package.json').version }, capabilities: { experimentalApi: true } });
     } catch { finish(true); }
   });
 }

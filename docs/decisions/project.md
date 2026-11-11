@@ -191,6 +191,20 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
 
 ## Credentials and verification
 
+Source for cross-platform compatibility: explicit user request, 2026-11-11.
+Windows, macOS and Linux desktop use the same provider features. Preserve the
+Windows DPAPI format and existing keys; use macOS Keychain and Linux Secret
+Service via Python keyring 25.7.x, explicitly selecting secure backends only.
+Never fall back to plaintext. Keep the standalone Codex credential helper
+functional outside the extension host. Document OS credential-store prerequisites.
+Use Python 3.11+, defaulting to python on Windows and python3 on macOS/Linux;
+allow codexSwitch.pythonPath to select a compatible virtual environment.
+Honor CODEX_HOME consistently. Keep extensionKind=ui: remote workspaces continue
+to manage the local desktop account. CI must test real native credential stores,
+provider behavior and packaging across the three OSes and x64/ARM64, with
+minimum/current Python coverage. Report actual execution evidence separately
+from platform detection tests; do not claim untested systems are verified.
+
 - Preserve the existing API key, ChatGPT sign-in and user configuration during
   migration. Credentials and local configuration backups remain outside Git.
 - Keep DeepSeek credentials encrypted for the Windows user. Never put a key in

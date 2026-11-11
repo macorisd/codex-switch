@@ -2,7 +2,7 @@
   "name": "codex-provider-switch",
   "displayName": "Codex Switch",
   "description": "Switch Codex between ChatGPT and DeepSeek from the VS Code sidebar.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "macor-local",
   "license": "GPL-3.0-only",
   "repository": {
@@ -29,6 +29,16 @@
     }
   },
   "contributes": {
+    "configuration": {
+      "title": "Codex Switch",
+      "properties": {
+        "codexSwitch.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Python 3.11+ executable for the local connector. Defaults to python on Windows and python3 on macOS/Linux. Install keyring in this interpreter on macOS/Linux."
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -68,6 +78,8 @@
     "backend/bridge.py",
     "backend/switcher.py",
     "backend/credential_helper.py",
+    "backend/credential_store.py",
+    "backend/requirements.txt",
     "backend/catalog.json",
     "docs/banner.svg",
     "docs/extension-readme.md",

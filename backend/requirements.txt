@@ -1,0 +1,2 @@
+# macOS Keychain / Linux Secret Service. Windows keeps its existing DPAPI store.
+keyring>=25.7,<26; sys_platform != "win32"

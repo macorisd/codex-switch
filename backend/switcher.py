@@ -1,6 +1,5 @@
 """Local Codex provider selector. No credentials are stored in TOML or logs."""
-import ctypes
-from ctypes import wintypes
+import credential_store
 import datetime
 import json
 import os
@@ -13,12 +12,12 @@ import tomllib
 import urllib.request
 
 SOURCE = Path(__file__).resolve().parent
-ROOT = Path.home() / '.codex' / 'provider-switcher'
+ROOT = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex'))).expanduser() / 'provider-switcher'
 CONFIG = ROOT.parent / 'config.toml'
-KEY = ROOT / 'deepseek-key.dpapi'
+KEY = ROOT / ('deepseek-key.dpapi' if sys.platform == 'win32' else 'deepseek-key.keyring')
 CATALOG = ROOT / 'deepseek-models.json'
 STATE = ROOT / 'previous-settings.json'
-PYTHON = Path(sys.executable).with_name('python.exe')
+PYTHON = Path(sys.executable)
 SETUP_URL = 'https://cdn.deepseek.com/api-docs/codex-deepseek-setup-en.ps1'
 BALANCE_URL = 'https://api.deepseek.com/user/balance'
 MANAGED = ('model', 'model_provider', 'preferred_auth_method', 'forced_login_method',
@@ -34,6 +33,9 @@ def initialize():
     ROOT.mkdir(parents=True, exist_ok=True)
     if not CATALOG.exists():
         atomic(CATALOG, (SOURCE / 'catalog.json').read_text('utf-8'))
+    store = (SOURCE / 'credential_store.py').read_text('utf-8')
+    if not (ROOT / 'credential_store.py').exists() or (ROOT / 'credential_store.py').read_text('utf-8') != store:
+        atomic(ROOT / 'credential_store.py', store)
     # Keep the existing auth-command path stable across extension/source updates.
     helper = (SOURCE / 'credential_helper.py').read_text('utf-8')
     if not (ROOT / 'switcher.py').exists() or (ROOT / 'switcher.py').read_text('utf-8') != helper:
@@ -52,38 +54,18 @@ def atomic(path, text):
             os.unlink(tmp)
 
 
-class Blob(ctypes.Structure):
-    _fields_ = [('size', wintypes.DWORD), ('data', ctypes.POINTER(ctypes.c_ubyte))]
-
-
-def protect(raw, decrypt=False):
-    buf = (ctypes.c_ubyte * len(raw)).from_buffer_copy(raw)
-    source = Blob(len(raw), buf)
-    target = Blob()
-    crypt = ctypes.WinDLL('crypt32', use_last_error=True)
-    if decrypt:
-        ok = crypt.CryptUnprotectData(ctypes.byref(source), None, None, None, None, 1, ctypes.byref(target))
-    else:
-        ok = crypt.CryptProtectData(ctypes.byref(source), 'Codex DeepSeek API key', None, None, None, 1, ctypes.byref(target))
-    if not ok:
-        raise RuntimeError('Windows could not access the encrypted credential for this user.')
-    try:
-        return ctypes.string_at(target.data, target.size)
-    finally:
-        ctypes.WinDLL('kernel32').LocalFree(target.data)
-
 
 def token():
     if not KEY.exists():
         raise RuntimeError('Save a DeepSeek API key in the local provider selector first.')
-    return protect(bytes.fromhex(KEY.read_text('ascii')), True).decode('utf-8')
+    return credential_store.load(KEY)
 
 
 def save_key(value):
     value = value.strip()
     if not re.fullmatch(r'sk-[A-Za-z0-9_-]{12,}', value):
         raise ValueError('The API key must start with sk- and contain no spaces.')
-    atomic(KEY, protect(value.encode()).hex())
+    atomic(KEY, credential_store.save(KEY, value))
 
 
 def refresh_catalog():
@@ -187,7 +169,7 @@ def switch(model=None, effort='high'):
     if model:
         if not KEY.exists():
             raise RuntimeError('Save your API key first.')
-        token()  # Check DPAPI access without printing the credential.
+        token()  # Check secure credential access without printing the credential.
         models = json.loads(CATALOG.read_text('utf-8'))['models']
         selected = next(m for m in models if m['slug'] == model)
         if effort not in [x['effort'] for x in selected['supported_reasoning_levels']]:
