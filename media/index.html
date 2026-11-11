@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src {{CSP}}; script-src 'nonce-{{NONCE}}';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src {{CSP}}; style-src {{CSP}}; script-src 'nonce-{{NONCE}}';">
   <link rel="stylesheet" href="{{STYLE}}">
   <title>Codex Switch</title>
 </head>
@@ -34,9 +34,14 @@
 
       <div class="provider-list" id="provider-list" hidden>
         <article class="provider-card" data-provider="openai">
-          <header>
-            <h3>ChatGPT</h3>
-            <p id="chatgpt-plan">Your Plan</p>
+          <header class="provider-header">
+            <div class="provider-identity">
+              <span class="provider-icon chatgpt-icon"><img src="{{CHATGPT_ICON}}" width="24" height="24" alt=""></span>
+              <div class="provider-title">
+                <h3>ChatGPT</h3>
+                <p id="chatgpt-plan">Your Plan</p>
+              </div>
+            </div>
           </header>
           <div class="credential-status chatgpt-status">
             <span class="status-dot loading" id="chatgpt-dot" aria-hidden="true"></span>
@@ -63,9 +68,12 @@
 
         <article class="provider-card" data-provider="deepseek">
           <header class="deepseek-header">
-            <div>
-              <h3>DeepSeek</h3>
-              <p>API key</p>
+            <div class="provider-identity">
+              <span class="provider-icon deepseek-icon"><img src="{{DEEPSEEK_ICON}}" width="24" height="24" alt=""></span>
+              <div class="provider-title">
+                <h3>DeepSeek</h3>
+                <p>API key</p>
+              </div>
             </div>
             <button class="text-button connection-link" id="verify">Check connection</button>
           </header>
