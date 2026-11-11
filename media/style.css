@@ -104,7 +104,8 @@ h2 { font-size: 12px; font-weight: 600; }
   border: 1px solid var(--vscode-button-secondaryBorder, transparent);
   border-radius: 4px;
 }
-.provider-list { display: flex; flex-direction: column; gap: 10px; }
+.provider-list { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 10px; }
+.provider-card:only-child { grid-column: 1 / -1; }
 .provider-card {
   padding: 14px;
   border: 1px solid var(--vscode-widget-border, #8885);
@@ -353,4 +354,8 @@ button.current-setting {
   .provider-card { padding: 12px 10px; }
   .usage-balance-row { align-items: flex-start; }
   #balance-value { font-size: 18px; }
+}
+@media (min-width: 650px) {
+  main { max-width: 960px; }
+  .provider-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

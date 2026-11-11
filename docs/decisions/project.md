@@ -57,6 +57,11 @@ Source: explicit user instructions, 2026-11-08.
   Preserve the right-aligned DeepSeek connection action and narrow layouts.
   Source: explicit patch request, 2026-11-11.
 - Highlight the active provider's card with a blue perimeter.
+- Show provider cards in one column below a 650px webview width and two equal
+  columns from 650px onward. Allow the content to grow to 960px in the wide
+  layout, retain the managed order and visibility, and let a sole visible card
+  span the full row. Do not impose a minimum width on the sidebar itself.
+  Source: explicit responsive-layout request, 2026-11-11.
 - Place one sync icon to the right of the active provider label in Current
   Configuration. Remove provider-specific balance sync icons. It refreshes
   configuration and all visible providers' account/credential status, catalog
