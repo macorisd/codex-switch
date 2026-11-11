@@ -8,7 +8,8 @@ const crypto = require('node:crypto');
 const codexAccount = require('./codex-account');
 const process = require('node:process');
 
-const root = path.join(path.resolve(os.homedir(), process.env.CODEX_HOME || '.codex'), 'provider-switcher');
+const codexHome = (process.env.CODEX_HOME || '.codex').replace(/^~(?=$|[/\\])/, os.homedir());
+const root = path.join(path.resolve(os.homedir(), codexHome), 'provider-switcher');
 const python = process.platform === 'win32' ? 'python' : 'python3';
 const PROVIDERS = Object.freeze([
   Object.freeze({ id: 'openai', name: 'ChatGPT', subtitle: 'Your Plan' }),
