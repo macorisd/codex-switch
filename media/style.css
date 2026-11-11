@@ -357,5 +357,9 @@ button.current-setting {
 }
 @media (min-width: 550px) {
   main { max-width: 960px; }
-  .provider-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .provider-list { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+  .provider-card { display: flex; flex-direction: column; }
+  /* Fill surplus row height above the last button without changing its gap. */
+  .provider-card::after { content: ''; order: 1; flex: 1 0 0; }
+  .provider-card > .primary { order: 2; flex-shrink: 0; }
 }
