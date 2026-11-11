@@ -115,3 +115,17 @@ test('cancellation and startup errors terminate without exposing upstream errors
   failed.child.emit('error', new Error('private details'));
   await assert.rejects(failure, { message: 'Codex account unavailable.' });
 });
+
+const { executable } = require('../codex-account');
+test('Codex executable resolution covers all supported OS and CPU combinations', () => {
+  const path = require('node:path');
+  for (const [platform, osName] of [['win32','windows'],['darwin','macos'],['linux','linux']]) {
+    for (const [arch, cpu] of [['x64','x86_64'],['arm64','aarch64']]) {
+      const expected = path.join('extension', 'bin', `${osName}-${cpu}`, platform === 'win32' ? 'codex.exe' : 'codex');
+      const vscode = { extensions: { getExtension: () => ({ extensionPath: 'extension' }) } };
+      assert.equal(executable(vscode, { platform, arch, exists: p => p === expected }), expected);
+      assert.equal(executable(vscode, { platform, arch, exists: () => false }), platform === 'win32' ? 'codex.exe' : 'codex');
+    }
+  }
+  assert.throws(() => executable({}, { platform: 'linux', arch: 'arm' }), /not supported/);
+});

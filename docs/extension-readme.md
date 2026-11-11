@@ -22,6 +22,11 @@ Providers hidden in Manage Providers do not load or refresh until enabled again.
 Unavailable data is labeled explicitly. No resets are consumed. This requires
 the Codex executable bundled with the OpenAI extension, or Codex on PATH.
 
-Requires Windows and Python 3.11+ on PATH.
+Requires VS Code desktop on Windows, macOS or Linux (x64/ARM64), Python 3.11+
+and a compatible Codex installation. Set codexSwitch.pythonPath for a custom
+Python executable. macOS/Linux also require Python keyring 25.7.x in that
+interpreter. Linux requires an unlocked Secret Service keyring and D-Bus session.
+Windows preserves existing DPAPI keys; macOS uses Keychain. No plaintext fallback.
+Runtime paths honor CODEX_HOME. See the repository installation requirements.
 
 [Providers, version history and downloads](https://github.com/macorisd/codex-switch)
