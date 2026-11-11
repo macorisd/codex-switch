@@ -14,6 +14,14 @@ a collapsed disclosure and Available balance shows the current USD balance. The
 balance refreshes every minute while open and can notify you when credits cross
 a configured low-balance threshold or reach zero.
 
+ChatGPT shows the plan and configuration status of your existing Codex account,
+remaining five-hour and weekly usage, local reset dates with countdowns, and
+available banked resets. Usage refreshes every minute while the panel is open.
+The sync icon beside the current configuration refreshes all visible providers.
+Providers hidden in Manage Providers do not load or refresh until enabled again.
+Unavailable data is labeled explicitly. No resets are consumed. This requires
+the Codex executable bundled with the OpenAI extension, or Codex on PATH.
+
 Requires Windows and Python 3.11+ on PATH.
 
 [Providers, version history and downloads](https://github.com/macorisd/codex-switch)

@@ -11,7 +11,14 @@
   <main>
     <section class="current" aria-labelledby="current-label">
       <h1 id="current-label">Current Configuration</h1>
-      <strong id="current" aria-live="polite"></strong>
+      <div class="current-row">
+        <strong id="current" aria-live="polite"></strong>
+        <button class="icon-button" id="sync-all" type="button" aria-label="Refresh all visible providers" title="Refresh all visible providers">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M13 5.5A5.5 5.5 0 0 0 3.2 4.1L2 6M2 2.5V6h3.5M3 10.5a5.5 5.5 0 0 0 9.8 1.4L14 10m0 3.5V10h-3.5"/>
+          </svg>
+        </button>
+      </div>
     </section>
 
     <section class="provider-section" aria-labelledby="provider-label">
@@ -29,8 +36,28 @@
         <article class="provider-card" data-provider="openai">
           <header>
             <h3>ChatGPT</h3>
-            <p>Your Plan</p>
+            <p id="chatgpt-plan">Your Plan</p>
           </header>
+          <div class="credential-status chatgpt-status">
+            <span class="status-dot loading" id="chatgpt-dot" aria-hidden="true"></span>
+            <span id="chatgpt-status">Loading...</span>
+          </div>
+          <div id="chatgpt-usage" class="chatgpt-usage" hidden>
+            <p id="chatgpt-stale" class="usage-note" hidden>Usage unavailable. Previous data may be out of date.</p>
+            <div class="usage-window">
+              <div class="usage-window-heading"><span id="five-hour-label">5-hour usage remaining</span><strong id="five-hour-value">Unavailable</strong></div>
+              <progress id="five-hour-bar" max="100" aria-labelledby="five-hour-label" hidden></progress>
+              <p class="usage-note" id="five-hour-reset"></p>
+              <p class="usage-note" id="five-hour-countdown"></p>
+            </div>
+            <div class="usage-window">
+              <div class="usage-window-heading"><span id="weekly-label">Weekly usage remaining</span><strong id="weekly-value">Unavailable</strong></div>
+              <progress id="weekly-bar" max="100" aria-labelledby="weekly-label" hidden></progress>
+              <p class="usage-note" id="weekly-reset"></p>
+              <p class="usage-note" id="weekly-countdown"></p>
+            </div>
+            <div class="banked-resets"><span>Banked resets</span><strong id="banked-resets">Unavailable</strong></div>
+          </div>
           <button class="primary" id="openai">Switch to ChatGPT</button>
         </article>
 
@@ -70,11 +97,6 @@
               <div class="usage-balance-copy">
                 <strong id="balance-value">--</strong>
               </div>
-              <button class="icon-button" id="balance-update" type="button" aria-label="Update available balance">
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M13 5.5A5.5 5.5 0 0 0 3.2 4.1L2 6M2 2.5V6h3.5M3 10.5a5.5 5.5 0 0 0 9.8 1.4L14 10m0 3.5V10h-3.5"/>
-                </svg>
-              </button>
             </div>
             <div class="action-feedback" id="balance-feedback" role="status" aria-live="polite" hidden>
               <span id="balance-feedback-text"></span>

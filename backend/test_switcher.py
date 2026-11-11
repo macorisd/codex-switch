@@ -21,6 +21,17 @@ with tempfile.TemporaryDirectory() as directory:
     s.initialize()
     original = 'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "medium"\nservice_tier = "default"\n\n[desktop]\nfollowUpQueueMode = "steer"\n\n[projects."C:/example"]\ntrust_level = "trusted"\n'
     s.CONFIG.write_text(original, encoding='utf-8')
+    # A hidden provider must not even read its catalog for shared status.
+    sys.modules['switcher'] = s
+    bridge_spec = importlib.util.spec_from_file_location('bridge', Path(__file__).with_name('bridge.py'))
+    bridge = importlib.util.module_from_spec(bridge_spec)
+    bridge_spec.loader.exec_module(bridge)
+    actual_catalog = s.CATALOG
+    s.CATALOG = s.ROOT / 'absent-hidden-catalog.json'
+    try:
+        assert bridge.handle({'action': 'status', 'includeDeepSeek': False})['models'] == []
+    finally:
+        s.CATALOG = actual_catalog
     try:
         s.switch('deepseek-flash')
         raise AssertionError('Missing key was accepted')

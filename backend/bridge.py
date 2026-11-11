@@ -5,9 +5,9 @@ import tomllib
 import switcher as s
 
 
-def status():
+def status(include_deepseek=True):
     config = tomllib.loads(s.CONFIG.read_text('utf-8-sig'))
-    catalog = json.loads(s.CATALOG.read_text('utf-8'))
+    catalog = json.loads(s.CATALOG.read_text('utf-8')) if include_deepseek or config.get('model_provider') == 'deepseek' else {'models': []}
     return {
         'provider': config.get('model_provider', 'openai'),
         'model': config.get('model', ''),
@@ -24,7 +24,7 @@ def status():
 def handle(request):
     action = request.get('action')
     if action == 'status':
-        return status()
+        return status(request.get('includeDeepSeek', True))
     if action == 'saveKey':
         s.save_key(request.get('key', ''))
     elif action == 'verify':

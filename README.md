@@ -3,7 +3,7 @@
 </p>
 
 Codex Switch is a VS Code sidebar extension that moves Codex between your existing ChatGPT subscription and DeepSeek API providers.
-Providers, the model catalog and DeepSeek balance stay in one focused panel.
+ChatGPT plan and usage limits, the DeepSeek model catalog and balance stay in one focused panel.
 DeepSeek credentials remain encrypted for your Windows user and provider switches reload VS Code automatically.
 
 | Provider | Access | Available models |
@@ -32,6 +32,7 @@ the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
+| 0.3.0 | Show the signed-in ChatGPT plan and configuration status, remaining five-hour and weekly usage with exact reset times and countdowns, and available banked resets. Refresh visible providers from one sync control next to the current configuration, without loading hidden providers. |
 | [0.2.1](https://github.com/macorisd/codex-switch/releases/tag/v0.2.1) | Hide DeepSeek's model catalog and balance until its API key is validated, show Loading while credential status is pending, keep the provider switch button visible, reveal the API-only sections automatically after successful validation, and allow immediate retries after an invalid key without leaving controls blocked. |
 | [0.2.0](https://github.com/macorisd/codex-switch/releases/tag/v0.2.0) | Collapse API-key model catalogs by default, add DeepSeek USD balance with one-minute polling and configurable low or zero balance alerts, and recover ChatGPT settings after CC Switch leaves a custom provider. |
 | [0.1.3](https://github.com/macorisd/codex-switch/releases/tag/v0.1.3) | Simplify the English sidebar, add persistent provider visibility and ordering, restore native API key entry and configuration status, improve active and action feedback states, and reload automatically after a successful provider switch. |

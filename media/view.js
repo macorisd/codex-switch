@@ -12,10 +12,15 @@
   let layoutRevision = 0;
   const feedbackTimers = new Map();
   let balance = null;
-  let balanceLoading = false;
+  let syncLoading = false;
+  let account = { loading: true };
+  let countdownTimer = null;
   const send = message => vscode.postMessage(message);
   const isActive = provider => state?.provider === provider;
-  const providerInfo = id => state?.providers.find(provider => provider.id === id);
+  const providerInfo = id => {
+    const info = state?.providers.find(provider => provider.id === id);
+    return info && id === 'openai' ? { ...info, subtitle: account.configured && account.plan ? `Your ${account.plan} Plan` : 'Your Plan' } : info;
+  };
   const hasDeepSeekKey = () => Boolean(state?.hasKey);
   const hasValidDeepSeekKey = () => Boolean(state?.hasValidKey);
   const isCheckingDeepSeekKey = () => Boolean(state?.keyChecking);
@@ -134,8 +139,6 @@
     $('balance-value').textContent = total === null
       ? (balance ? 'Unavailable' : '--')
       : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(total);
-    $('balance-update').classList.toggle('loading', balanceLoading);
-    $('balance-update').disabled = busy || !hasValidDeepSeekKey();
     $('balance-alert-toggle').disabled = busy || !hasValidDeepSeekKey();
 
     const input = $('balance-threshold');
@@ -148,10 +151,53 @@
     }).format(threshold);
   }
 
+  function renderAccount() {
+    $('chatgpt-plan').textContent = providerInfo('openai')?.subtitle || 'Your Plan';
+    $('chatgpt-dot').classList.toggle('configured', account.configured === true);
+    $('chatgpt-dot').classList.toggle('not-configured', account.configured === false);
+    $('chatgpt-dot').classList.toggle('loading', Boolean(account.loading));
+    $('chatgpt-dot').classList.toggle('unavailable', !account.loading && account.configured === undefined);
+    $('chatgpt-status').textContent = account.loading ? 'Loading...'
+      : account.configured === true ? (account.stale ? 'Configured (out of date)' : 'Configured')
+        : account.configured === false ? (account.stale ? 'Not configured (out of date)' : 'Not configured') : 'Unavailable';
+    $('chatgpt-usage').hidden = !account.configured;
+    $('chatgpt-stale').hidden = !account.stale && account.usageAvailable !== false;
+    for (const [prefix, value] of [['five-hour', account.fiveHour], ['weekly', account.weekly]]) {
+      const remaining = Number.isFinite(value?.remaining) ? value.remaining : null;
+      $(prefix + '-value').textContent = remaining === null ? 'Unavailable' : `${Math.round(remaining)}%`;
+      $(prefix + '-bar').hidden = remaining === null;
+      $(prefix + '-bar').value = remaining ?? 0;
+      const reset = value?.resetsAt ? new Date(value.resetsAt * 1000) : null;
+      const validReset = reset && Number.isFinite(reset.getTime());
+      $(prefix + '-reset').textContent = validReset
+        ? `Resets ${new Intl.DateTimeFormat(undefined, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(reset)}`
+        : 'Reset: Unavailable';
+      const minutes = validReset ? Math.max(0, Math.floor((reset.getTime() - Date.now()) / 60000)) : null;
+      const units = prefix === 'weekly'
+        ? [[Math.floor(minutes / 1440), 'd'], [Math.floor(minutes / 60) % 24, 'h'], [minutes % 60, 'm']]
+        : [[Math.floor(minutes / 60), 'h'], [minutes % 60, 'm']];
+      const countdown = units.filter(([amount]) => amount > 0).map(([amount, unit]) => `${amount}${unit}`).join(' ');
+      $(prefix + '-countdown').textContent = minutes === null ? '' : countdown
+        ? `Resets in ${countdown}` : "Resets in a few seconds. Blink and you'll miss it!";
+    }
+    $('banked-resets').textContent = Number.isInteger(account.bankedResets) ? String(account.bankedResets) : 'Unavailable';
+  }
+
+  function updateCountdownTimer() {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+    if (!document.hidden) countdownTimer = setInterval(renderAccount, 60_000);
+  }
+  document.addEventListener('visibilitychange', updateCountdownTimer);
+  window.addEventListener('pagehide', () => clearInterval(countdownTimer));
+  updateCountdownTimer();
+
   function render() {
     if (!state) return;
     const active = providerInfo(state.provider);
     $('current').textContent = active ? `${active.name} (${active.subtitle})` : state.provider;
+    $('sync-all').classList.toggle('loading', syncLoading);
+    $('sync-all').disabled = busy || syncLoading;
 
     for (const [id, card] of cards) card.classList.toggle('current-provider', isActive(id));
     actionButton('openai', isActive('openai') ? 'Current Setting' : 'Switch to ChatGPT', busy || isActive('openai'));
@@ -182,6 +228,7 @@
     $('refresh').disabled = busy;
     $('verify').disabled = busy || keyChecking || !hasDeepSeekKey();
     renderBalance();
+    renderAccount();
 
     renderManageList();
     renderProviderOrder();
@@ -216,12 +263,12 @@
     clearFeedback('connection-feedback', 'connection-feedback-text');
     send({ action: 'verify' });
   });
-  $('balance-update').addEventListener('click', () => {
-    if (balanceLoading) return;
-    balanceLoading = true;
+  $('sync-all').addEventListener('click', () => {
+    if (syncLoading || busy) return;
+    syncLoading = true;
     clearFeedback('balance-feedback', 'balance-feedback-text');
-    renderBalance();
-    send({ action: 'syncBalance' });
+    render();
+    send({ action: 'syncAll' });
   });
   $('balance-alert-toggle').addEventListener('click', () => {
     const editor = $('balance-alert-editor');
@@ -245,11 +292,15 @@
     if (data.type === 'state') {
       const wasValid = hasValidDeepSeekKey();
       state = data.state;
+      account = state.chatgpt || account;
       if (wasValid && !hasValidDeepSeekKey()) balance = null;
       busy = data.busy;
       if ((state.providerLayoutRevision || 0) >= layoutRevision) {
         adoptProviderLayout(state.providerLayout, state.providerLayoutRevision || 0);
       }
+      render();
+    } else if (data.type === 'chatgpt') {
+      account = data.account;
       render();
     } else if (data.type === 'busy') {
       busy = data.busy;
@@ -267,16 +318,14 @@
     } else if (data.type === 'balance') {
       balance = data.balance;
       state.balanceAlert = data.balanceAlert;
-      balanceLoading = false;
       renderBalance();
     } else if (data.type === 'balanceAlert') {
       state.balanceAlert = data.balanceAlert;
       renderBalance();
-    } else if (data.type === 'balanceLoading') {
-      balanceLoading = data.loading;
-      renderBalance();
+    } else if (data.type === 'syncLoading') {
+      syncLoading = data.loading;
+      render();
     } else if (data.type === 'balanceError') {
-      balanceLoading = false;
       balance = null;
       showFeedback('balance-feedback', 'balance-feedback-text', false, data.message);
       renderBalance();
