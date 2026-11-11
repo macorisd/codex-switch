@@ -50,6 +50,12 @@ Source: explicit user instructions, 2026-11-08.
   **DeepSeek (API key)**, and never exposes a concrete model.
 - Under Provider, show one section for **ChatGPT** with its detected plan
   subtitle (see ChatGPT Usage), and one for **DeepSeek** with **API key**.
+- Place each provider's recognizable logo in a compact rounded app-icon tile
+  to the left of its name and subtitle, aligned as one header identity group.
+  Bundle the logo assets locally, retain their attribution, and make the image
+  decorative for screen readers because the adjacent name already labels it.
+  Preserve the right-aligned DeepSeek connection action and narrow layouts.
+  Source: explicit patch request, 2026-11-11.
 - Highlight the active provider's card with a blue perimeter.
 - Place one sync icon to the right of the active provider label in Current
   Configuration. Remove provider-specific balance sync icons. It refreshes

@@ -98,6 +98,8 @@ class Selector {
       '{{CSP}}': view.webview.cspSource,
       '{{STYLE}}': view.webview.asWebviewUri(vscode.Uri.joinPath(media, 'style.css')).toString(),
       '{{SCRIPT}}': view.webview.asWebviewUri(vscode.Uri.joinPath(media, 'view.js')).toString(),
+      '{{CHATGPT_ICON}}': view.webview.asWebviewUri(vscode.Uri.joinPath(media, 'providers', 'openai.svg')).toString(),
+      '{{DEEPSEEK_ICON}}': view.webview.asWebviewUri(vscode.Uri.joinPath(media, 'providers', 'deepseek.svg')).toString(),
     };
     for (const [key, value] of Object.entries(replacements)) html = html.split(key).join(value);
     view.webview.html = html;
