@@ -76,6 +76,9 @@ function webviewHarness(state) {
     'manage-providers', 'manage-panel', 'manage-list', 'provider-list', 'close-manage',
     'set-key', 'openai', 'deepseek-switch', 'current', 'key-dot', 'key-status',
     'model-catalog', 'usage',
+    'chatgpt-plan', 'chatgpt-dot', 'chatgpt-status', 'chatgpt-usage', 'chatgpt-stale',
+    'five-hour-value', 'five-hour-bar', 'five-hour-reset', 'five-hour-countdown',
+    'weekly-value', 'weekly-bar', 'weekly-reset', 'weekly-countdown', 'banked-resets',
     'models', 'refresh', 'verify', 'connection-feedback', 'connection-feedback-text',
     'catalog-feedback', 'catalog-feedback-text',
     'balance-feedback', 'balance-feedback-text',
@@ -116,6 +119,8 @@ function webviewHarness(state) {
       return timers.length;
     },
     clearTimeout() {},
+    setInterval() { return 1; },
+    clearInterval() {},
   };
   vm.runInNewContext(
     fs.readFileSync(path.join(extensionRoot, 'media', 'view.js'), 'utf8'),
@@ -313,4 +318,57 @@ test('webview stops and re-enables the balance spinner when loading ends', () =>
   h.receive({ type: 'balanceLoading', loading: false });
   assert.equal(h.elements.get('balance-update').classList.contains('loading'), false);
   assert.equal(h.elements.get('balance-update').disabled, false);
+});
+
+test('ChatGPT plan subtitles update everywhere and usage shows remaining values', () => {
+  const h = webviewHarness(initialState());
+  const resetsAt = Math.floor(Date.now() / 1000) + 2 * 3600 + 15 * 60;
+  h.receive({ type: 'chatgpt', account: {
+    configured: true, plan: 'Business', usageAvailable: true,
+    fiveHour: { remaining: 82, resetsAt }, weekly: { remaining: 0, resetsAt: resetsAt + 7 * 86400 }, bankedResets: 1,
+  } });
+  assert.equal(h.elements.get('current').textContent, 'ChatGPT (Your Business Plan)');
+  assert.equal(h.elements.get('chatgpt-plan').textContent, 'Your Business Plan');
+  assert.equal(h.elements.get('manage-list').children[0].children[0].children[1].textContent, 'ChatGPT (Your Business Plan)');
+  assert.equal(h.elements.get('chatgpt-status').textContent, 'Configured');
+  assert.equal(h.elements.get('chatgpt-usage').hidden, false);
+  assert.equal(h.elements.get('five-hour-bar').value, 82);
+  assert.equal(h.elements.get('five-hour-value').textContent, '82%');
+  assert.equal(h.elements.get('weekly-bar').value, 0);
+  assert.equal(h.elements.get('weekly-bar').hidden, false);
+  assert.equal(h.elements.get('five-hour-countdown').textContent, 'Resets in 2h 15m');
+  assert.equal(h.elements.get('weekly-countdown').textContent, 'Resets in 7d 2h 15m');
+  assert.match(h.elements.get('five-hour-reset').textContent, /^Resets /);
+  assert(!/GMT|UTC/.test(h.elements.get('five-hour-reset').textContent));
+  assert.equal(h.elements.get('banked-resets').textContent, '1');
+});
+
+test('ChatGPT distinguishes zero, missing values, stale data, and an absent account', () => {
+  const h = webviewHarness(initialState());
+  assert.equal(h.elements.get('chatgpt-status').textContent, 'Loading...');
+  h.receive({ type: 'chatgpt', account: { configured: true, plan: 'Plus', usageAvailable: true, bankedResets: 0, fiveHour: { remaining: 100, resetsAt: 1 } } });
+  assert.equal(h.elements.get('banked-resets').textContent, '0');
+  assert.equal(h.elements.get('five-hour-countdown').textContent, 'Resets in 0h 0m');
+  assert.equal(h.elements.get('weekly-value').textContent, 'Unavailable');
+  assert.equal(h.elements.get('weekly-bar').hidden, true);
+  assert.equal(h.elements.get('weekly-reset').textContent, 'Reset: Unavailable');
+  h.receive({ type: 'chatgpt', account: { configured: true, stale: true } });
+  assert.equal(h.elements.get('chatgpt-stale').hidden, false);
+  assert.equal(h.elements.get('chatgpt-status').textContent, 'Configured (out of date)');
+  assert.equal(h.elements.get('banked-resets').textContent, 'Unavailable');
+  h.receive({ type: 'chatgpt', account: { configured: false } });
+  assert.equal(h.elements.get('chatgpt-status').textContent, 'Not configured');
+  assert.equal(h.elements.get('chatgpt-usage').hidden, true);
+  assert.equal(h.elements.get('chatgpt-plan').textContent, 'Your Plan');
+  h.receive({ type: 'chatgpt', account: { stale: true } });
+  assert.equal(h.elements.get('chatgpt-status').textContent, 'Unavailable');
+});
+
+test('ChatGPT account details remain available when DeepSeek is the active provider', () => {
+  const h = webviewHarness(initialState(undefined, 'deepseek'));
+  h.receive({ type: 'chatgpt', account: { configured: true, plan: 'Go', bankedResets: 2 } });
+  assert.equal(h.elements.get('current').textContent, 'DeepSeek (API key)');
+  assert.equal(h.elements.get('chatgpt-plan').textContent, 'Your Go Plan');
+  assert.equal(h.elements.get('chatgpt-usage').hidden, false);
+  assert.equal(h.elements.get('banked-resets').textContent, '2');
 });

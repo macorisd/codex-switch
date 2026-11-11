@@ -18,6 +18,7 @@ function harness(options = {}) {
   const inputBoxes = [];
   const intervals = [];
   const clearedIntervals = [];
+  const accountCalls = [];
   const globalValues = new Map(Object.entries(options.globalValues || {}));
   const context = {
     extensionPath: extensionRoot,
@@ -113,6 +114,7 @@ function harness(options = {}) {
     __dirname: extensionRoot,
     setTimeout,
     clearTimeout,
+    AbortController,
     setInterval: (listener, delay) => {
       const timer = { listener, delay };
       intervals.push(timer);
@@ -121,6 +123,15 @@ function harness(options = {}) {
     clearInterval: timer => clearedIntervals.push(timer),
     require: name => {
       if (name === 'vscode') return vscode;
+      if (name === './codex-account') return {
+        executable: () => 'codex.exe',
+        readAccount: async (exe, values) => {
+          accountCalls.push(values);
+          if (options.accountRead) return options.accountRead(values);
+          if (options.accountError) throw new Error('Private upstream error');
+          return options.account || { configured: false, usageAvailable: false };
+        },
+      };
       if (name === 'node:child_process') return { spawn };
       return require(name);
     },
@@ -157,6 +168,7 @@ function harness(options = {}) {
     globalValues,
     intervals,
     clearedIntervals,
+    accountCalls,
     view,
     setVisible: visible => {
       view.visible = visible;
@@ -340,7 +352,7 @@ test('ready syncs balance once and polls every minute only while visible', async
   assert.equal(states.some(state => state.keyChecking === true), true);
   assert.equal(states.at(-1).keyChecking, false);
   assert.equal(h.calls.filter(call => call.action === 'balance').length, 1);
-  assert.equal(h.intervals.length, 1);
+  assert.equal(h.intervals.length, 2);
   assert.equal(h.intervals[0].delay, 60000);
   h.setVisible(false);
   assert(h.clearedIntervals.includes(h.intervals[0]));
@@ -356,7 +368,7 @@ test('ready keeps a saved key hidden when DeepSeek validation fails', async () =
   assert.equal(latest.hasKey, true);
   assert.equal(latest.hasValidKey, false);
   assert.equal(h.calls.some(call => call.action === 'balance'), false);
-  assert.equal(h.intervals.length, 0);
+  assert.equal(h.intervals.length, 1); // ChatGPT still polls independently.
 });
 
 test('balance alerts notify only when crossing low and zero states', async () => {
@@ -523,4 +535,42 @@ test('failed provider switching does not reload the window', async () => {
   await h.receive({ action: 'apply', provider: 'deepseek' });
   assert.equal(h.errors.length, 1);
   assert.equal(h.calls.includes('workbench.action.reloadWindow'), false);
+});
+
+test('ChatGPT polls independently, prevents overlaps and cancels while hidden', async () => {
+  let complete;
+  const h = harness({ hasKey: false, accountRead: () => new Promise(resolve => { complete = resolve; }) });
+  const ready = h.receive({ action: 'ready' });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.accountCalls.length, 1);
+  h.intervals[0].listener();
+  h.intervals[0].listener();
+  assert.equal(h.accountCalls.length, 1);
+  h.setVisible(false);
+  assert.equal(h.accountCalls[0].signal.aborted, true);
+  complete({ configured: true, plan: 'Pro', usageAvailable: true });
+  await ready;
+  assert.equal(h.messages.some(m => m.type === 'chatgpt'), false);
+  h.setVisible(true);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.accountCalls.length, 2);
+  complete({ configured: true, plan: 'Pro', usageAvailable: true });
+  await new Promise(resolve => setImmediate(resolve));
+  const latest = h.messages.filter(m => m.type === 'chatgpt').at(-1).account;
+  assert.equal(latest.configured, true);
+  assert.equal(latest.plan, 'Pro');
+  h.setVisible(false);
+  assert(h.clearedIntervals.includes(h.intervals.at(-1)));
+});
+
+test('ChatGPT failures are unknown, do not disclose upstream errors, and do not block DeepSeek', async () => {
+  const h = harness({ accountError: true });
+  await h.receive({ action: 'ready' });
+  const account = h.messages.find(m => m.type === 'chatgpt').account;
+  assert.equal(account.configured, undefined);
+  assert.equal(account.stale, true);
+  assert.equal(account.loading, false);
+  assert.equal(h.errors.length, 0);
+  assert.equal(h.messages.some(m => JSON.stringify(m).includes('Private upstream')), false);
+  assert(h.calls.some(m => m.action === 'balance'));
 });

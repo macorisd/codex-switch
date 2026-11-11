@@ -5,6 +5,7 @@ const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
+const codexAccount = require('./codex-account');
 
 const root = path.join(os.homedir(), '.codex', 'provider-switcher');
 const python = 'python';
@@ -66,6 +67,10 @@ class Selector {
     this.viewVisible = false;
     this.balanceTimer = null;
     this.balanceRequest = null;
+    this.chatgpt = { loading: true };
+    this.accountTimer = null;
+    this.accountRequest = null;
+    this.accountAbort = null;
     const savedAlert = context.globalState.get(BALANCE_ALERT_KEY, {});
     this.balanceAlert = {
       threshold: typeof savedAlert.threshold === 'number' && Number.isFinite(savedAlert.threshold)
@@ -96,14 +101,44 @@ class Selector {
         this.update();
         this.syncBalance();
         this.startBalancePolling();
+        this.syncAccount();
       } else {
         this.stopBalancePolling();
+        this.stopAccountPolling();
       }
     }));
     if (typeof view.onDidDispose === 'function') {
-      this.context.subscriptions.push(view.onDidDispose(() => this.stopBalancePolling()));
+      this.context.subscriptions.push(view.onDidDispose(() => {
+        this.viewVisible = false;
+        this.stopBalancePolling();
+        this.stopAccountPolling();
+      }));
     }
     this.context.subscriptions.push({ dispose: () => this.stopBalancePolling() });
+    this.context.subscriptions.push({ dispose: () => this.stopAccountPolling() });
+  }
+
+  stopAccountPolling() {
+    clearInterval(this.accountTimer);
+    this.accountTimer = null;
+    this.accountAbort?.abort();
+  }
+
+  syncAccount() {
+    if (!this.viewVisible) return Promise.resolve();
+    if (!this.accountTimer) this.accountTimer = setInterval(() => this.syncAccount(), 60_000);
+    if (this.accountRequest) return this.accountRequest;
+    this.accountAbort = new AbortController();
+    this.accountRequest = (async () => {
+      try {
+        const account = await codexAccount.readAccount(codexAccount.executable(vscode), { signal: this.accountAbort.signal });
+        this.chatgpt = { ...account, loading: false, stale: false };
+      } catch {
+        this.chatgpt = { ...this.chatgpt, loading: false, stale: true };
+      }
+      if (this.viewVisible) await this.view?.webview.postMessage({ type: 'chatgpt', account: this.chatgpt });
+    })().finally(() => { this.accountRequest = null; });
+    return this.accountRequest;
   }
 
   async update(keyChecking = this.keyChecking) {
@@ -125,6 +160,7 @@ class Selector {
         providerLayout: this.providerLayout(state.provider),
         providerLayoutRevision: this.layoutRevision,
         balanceAlert: { ...this.balanceAlert },
+        chatgpt: this.chatgpt,
       };
       await this.view.webview.postMessage({ type: 'state', state: webviewState, busy: this.busy });
       if (this.viewVisible && this.hasValidKey) this.startBalancePolling();
@@ -286,6 +322,7 @@ class Selector {
   }
 
   async ready() {
+    const accountRequest = this.syncAccount();
     await this.update(true);
     if (this.viewVisible && this.hasKey && !this.hasValidKey) {
       try {
@@ -295,6 +332,7 @@ class Selector {
       }
     }
     if (this.viewVisible && this.hasValidKey) await this.syncBalance();
+    await accountRequest;
   }
 
   async run(message) {

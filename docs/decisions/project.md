@@ -48,11 +48,11 @@ Source: explicit user instructions, 2026-11-08.
 - Show only **Current Configuration** and **Provider**. Current Configuration
   names the active provider and its subtitle, such as **ChatGPT (Your Plan)** or
   **DeepSeek (API key)**, and never exposes a concrete model.
-- Under Provider, show one section for **ChatGPT** with the subtitle
-  **Your Plan**, and one section for **DeepSeek** with the subtitle **API key**.
+- Under Provider, show one section for **ChatGPT** with its detected plan
+  subtitle (see ChatGPT Usage), and one for **DeepSeek** with **API key**.
 - Highlight the active provider's card with a blue perimeter.
-- ChatGPT contains only a **Switch to ChatGPT** button, or a disabled
-  **Current Setting** button when it is active.
+- ChatGPT shows account status and usage (see ChatGPT Usage), followed by
+  **Switch to ChatGPT**, or disabled **Current Setting** when it is active.
 - DeepSeek shows a red or green status circle with **Not configured** or
   **Configured**, a **Set API key** button, **Check connection**, and a
   **Switch to DeepSeek** button, or a disabled **Current Setting** button when
@@ -97,6 +97,31 @@ Source: explicit user instructions, 2026-11-08.
   **Update model catalog**. The collapsed disclosure has a single bottom divider,
   never both top and bottom borders. The following Available balance section
   must not add a second top divider.
+
+## ChatGPT Usage
+
+Source: user request and approved 0.3.0 PLAN, 2026-11-11.
+
+- Read the existing Codex ChatGPT account without changing sign-in or the
+  selected provider. Account configuration is independent of provider selection.
+- Use **Your Free/Go/Plus/Pro/Business Plan** when identified, otherwise
+  **Your Plan**, consistently in the card, Current Configuration and Manage
+  Providers. Show **Loading...**, then **Configured** or **Not configured**
+  with the corresponding neutral, green or red indicator. A request failure
+  is not proof that no account exists; mark retained information as out of date.
+- ChatGPT never shows a model catalog.
+- Show remaining percentages in accessible five-hour and weekly usage bars,
+  identifying windows by their actual duration. Each includes an exact local
+  reset date and time in the user's local time zone without a GMT/UTC suffix.
+  Label countdowns **Resets in**; use hours and minutes for five-hour usage
+  and days, hours and minutes (`xd xh xm`) for weekly usage. Source: explicit
+  refinement and clarification, 2026-11-11.
+- Show the available **Banked resets** count, without consuming resets.
+- Missing fields are **Unavailable**, never assumed to be zero. Refresh when
+  the panel opens and every 60 seconds while visible, without overlapping
+  requests; stop polling when hidden/disposed. Update countdowns each minute.
+- Keep tokens, email, account identifiers and unfiltered service responses
+  outside the webview and logs. Preserve existing credentials and configuration.
 
 ## DeepSeek Usage
 
@@ -161,19 +186,27 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
   never send, prefill or retain the key in the webview.
 - Never force `forced_login_method = "api"` to switch providers: this was
   observed to sign out an existing ChatGPT account during initial setup.
-- Verify backend/configuration behavior and the extension tests when their code
-  changes. For visible changes, inspect the actual VS Code sidebar; do not claim
-  visual verification from automated tests alone.
+- **Do not use computer-use tools in this project**, including native Windows
+  automation and browser computer-use integrations. Source: explicit user
+  instruction, 2026-11-11. Use terminal, tests and supported non-UI APIs for
+  development, installation and verification. This supersedes earlier directions
+  to automate inspection of the VS Code sidebar.
+- Verify backend/configuration behavior and extension tests when code changes.
+  For visible changes, report the automated checks and any pending user visual
+  review separately; automated tests do not establish visual verification.
 - Before opening or updating a PR, install the exact VSIX built from that PR's
   final source into the user's **current VS Code instance and active profile**.
-  Verify the version actually loaded in that window and its visible changes.
+  Verify the version actually loaded in that window through supported non-UI
+  evidence when available; leave visual review to the user.
   Installing into the default CLI profile, inspecting an installation directory,
   or testing only in an isolated development host is not sufficient.
 - Reload that actual window when needed so the user can inspect the proposed
   changes before merging. Preserve workspace, open editors, credentials and
   configuration. If an active agent connection prevents a safe reload, explain
   the concrete blocker and do not claim the installation is active or publish
-  the PR as ready until the current-window check is complete.
+  the PR as ready until the current-window check is complete. If that check
+  requires UI interaction, request the user's reload/review instead of using
+  computer use.
 - This current-window installation requirement was explicitly added by the user
   on 2026-11-07 after a CLI installation left the current window stale. It applies
   to every future codex-switch PR and update.

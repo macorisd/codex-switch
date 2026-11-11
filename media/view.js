@@ -13,9 +13,14 @@
   const feedbackTimers = new Map();
   let balance = null;
   let balanceLoading = false;
+  let account = { loading: true };
+  let countdownTimer = null;
   const send = message => vscode.postMessage(message);
   const isActive = provider => state?.provider === provider;
-  const providerInfo = id => state?.providers.find(provider => provider.id === id);
+  const providerInfo = id => {
+    const info = state?.providers.find(provider => provider.id === id);
+    return info && id === 'openai' ? { ...info, subtitle: account.configured && account.plan ? `Your ${account.plan} Plan` : 'Your Plan' } : info;
+  };
   const hasDeepSeekKey = () => Boolean(state?.hasKey);
   const hasValidDeepSeekKey = () => Boolean(state?.hasValidKey);
   const isCheckingDeepSeekKey = () => Boolean(state?.keyChecking);
@@ -148,6 +153,44 @@
     }).format(threshold);
   }
 
+  function renderAccount() {
+    $('chatgpt-plan').textContent = providerInfo('openai')?.subtitle || 'Your Plan';
+    $('chatgpt-dot').classList.toggle('configured', account.configured === true);
+    $('chatgpt-dot').classList.toggle('not-configured', account.configured === false);
+    $('chatgpt-dot').classList.toggle('loading', Boolean(account.loading));
+    $('chatgpt-dot').classList.toggle('unavailable', !account.loading && account.configured === undefined);
+    $('chatgpt-status').textContent = account.loading ? 'Loading...'
+      : account.configured === true ? (account.stale ? 'Configured (out of date)' : 'Configured')
+        : account.configured === false ? (account.stale ? 'Not configured (out of date)' : 'Not configured') : 'Unavailable';
+    $('chatgpt-usage').hidden = !account.configured;
+    $('chatgpt-stale').hidden = !account.stale && account.usageAvailable !== false;
+    for (const [prefix, value] of [['five-hour', account.fiveHour], ['weekly', account.weekly]]) {
+      const remaining = Number.isFinite(value?.remaining) ? value.remaining : null;
+      $(prefix + '-value').textContent = remaining === null ? 'Unavailable' : `${Math.round(remaining)}%`;
+      $(prefix + '-bar').hidden = remaining === null;
+      $(prefix + '-bar').value = remaining ?? 0;
+      const reset = value?.resetsAt ? new Date(value.resetsAt * 1000) : null;
+      const validReset = reset && Number.isFinite(reset.getTime());
+      $(prefix + '-reset').textContent = validReset
+        ? `Resets ${new Intl.DateTimeFormat(undefined, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(reset)}`
+        : 'Reset: Unavailable';
+      const minutes = validReset ? Math.max(0, Math.ceil((reset.getTime() - Date.now()) / 60000)) : null;
+      $(prefix + '-countdown').textContent = minutes === null ? '' : prefix === 'weekly'
+        ? `Resets in ${Math.floor(minutes / 1440)}d ${Math.floor(minutes / 60) % 24}h ${minutes % 60}m`
+        : `Resets in ${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+    }
+    $('banked-resets').textContent = Number.isInteger(account.bankedResets) ? String(account.bankedResets) : 'Unavailable';
+  }
+
+  function updateCountdownTimer() {
+    clearInterval(countdownTimer);
+    countdownTimer = null;
+    if (!document.hidden) countdownTimer = setInterval(renderAccount, 60_000);
+  }
+  document.addEventListener('visibilitychange', updateCountdownTimer);
+  window.addEventListener('pagehide', () => clearInterval(countdownTimer));
+  updateCountdownTimer();
+
   function render() {
     if (!state) return;
     const active = providerInfo(state.provider);
@@ -182,6 +225,7 @@
     $('refresh').disabled = busy;
     $('verify').disabled = busy || keyChecking || !hasDeepSeekKey();
     renderBalance();
+    renderAccount();
 
     renderManageList();
     renderProviderOrder();
@@ -245,11 +289,15 @@
     if (data.type === 'state') {
       const wasValid = hasValidDeepSeekKey();
       state = data.state;
+      account = state.chatgpt || account;
       if (wasValid && !hasValidDeepSeekKey()) balance = null;
       busy = data.busy;
       if ((state.providerLayoutRevision || 0) >= layoutRevision) {
         adoptProviderLayout(state.providerLayout, state.providerLayoutRevision || 0);
       }
+      render();
+    } else if (data.type === 'chatgpt') {
+      account = data.account;
       render();
     } else if (data.type === 'busy') {
       busy = data.busy;
