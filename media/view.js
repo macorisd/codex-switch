@@ -174,10 +174,13 @@
       $(prefix + '-reset').textContent = validReset
         ? `Resets ${new Intl.DateTimeFormat(undefined, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(reset)}`
         : 'Reset: Unavailable';
-      const minutes = validReset ? Math.max(0, Math.ceil((reset.getTime() - Date.now()) / 60000)) : null;
-      $(prefix + '-countdown').textContent = minutes === null ? '' : prefix === 'weekly'
-        ? `Resets in ${Math.floor(minutes / 1440)}d ${Math.floor(minutes / 60) % 24}h ${minutes % 60}m`
-        : `Resets in ${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+      const minutes = validReset ? Math.max(0, Math.floor((reset.getTime() - Date.now()) / 60000)) : null;
+      const units = prefix === 'weekly'
+        ? [[Math.floor(minutes / 1440), 'd'], [Math.floor(minutes / 60) % 24, 'h'], [minutes % 60, 'm']]
+        : [[Math.floor(minutes / 60), 'h'], [minutes % 60, 'm']];
+      const countdown = units.filter(([amount]) => amount > 0).map(([amount, unit]) => `${amount}${unit}`).join(' ');
+      $(prefix + '-countdown').textContent = minutes === null ? '' : countdown
+        ? `Resets in ${countdown}` : "Resets in a few seconds. Blink and you'll miss it!";
     }
     $('banked-resets').textContent = Number.isInteger(account.bankedResets) ? String(account.bankedResets) : 'Unavailable';
   }

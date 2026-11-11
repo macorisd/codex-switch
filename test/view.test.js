@@ -322,7 +322,7 @@ test('webview stops and re-enables the balance spinner when loading ends', () =>
 
 test('ChatGPT plan subtitles update everywhere and usage shows remaining values', () => {
   const h = webviewHarness(initialState());
-  const resetsAt = Math.floor(Date.now() / 1000) + 2 * 3600 + 15 * 60;
+  const resetsAt = Math.floor(Date.now() / 1000) + 2 * 3600 + 15 * 60 + 30;
   h.receive({ type: 'chatgpt', account: {
     configured: true, plan: 'Business', usageAvailable: true,
     fiveHour: { remaining: 82, resetsAt }, weekly: { remaining: 0, resetsAt: resetsAt + 7 * 86400 }, bankedResets: 1,
@@ -348,7 +348,7 @@ test('ChatGPT distinguishes zero, missing values, stale data, and an absent acco
   assert.equal(h.elements.get('chatgpt-status').textContent, 'Loading...');
   h.receive({ type: 'chatgpt', account: { configured: true, plan: 'Plus', usageAvailable: true, bankedResets: 0, fiveHour: { remaining: 100, resetsAt: 1 } } });
   assert.equal(h.elements.get('banked-resets').textContent, '0');
-  assert.equal(h.elements.get('five-hour-countdown').textContent, 'Resets in 0h 0m');
+  assert.equal(h.elements.get('five-hour-countdown').textContent, "Resets in a few seconds. Blink and you'll miss it!");
   assert.equal(h.elements.get('weekly-value').textContent, 'Unavailable');
   assert.equal(h.elements.get('weekly-bar').hidden, true);
   assert.equal(h.elements.get('weekly-reset').textContent, 'Reset: Unavailable');
@@ -371,4 +371,24 @@ test('ChatGPT account details remain available when DeepSeek is the active provi
   assert.equal(h.elements.get('chatgpt-plan').textContent, 'Your Go Plan');
   assert.equal(h.elements.get('chatgpt-usage').hidden, false);
   assert.equal(h.elements.get('banked-resets').textContent, '2');
+});
+
+test('both countdowns omit zero units and use a playful message below one minute', () => {
+  const h = webviewHarness(initialState());
+  const now = Math.floor(Date.now() / 1000);
+  for (const [offset, expected] of [
+    [2 * 3600 + 30, 'Resets in 2h'],
+    [15 * 60 + 30, 'Resets in 15m'],
+    [2 * 3600 + 15 * 60 + 30, 'Resets in 2h 15m'],
+    [30, "Resets in a few seconds. Blink and you'll miss it!"],
+    [-1, "Resets in a few seconds. Blink and you'll miss it!"],
+  ]) {
+    h.receive({ type: 'chatgpt', account: { configured: true,
+      fiveHour: { resetsAt: now + offset }, weekly: { resetsAt: now + offset },
+    } });
+    assert.equal(h.elements.get('five-hour-countdown').textContent, expected);
+    assert.equal(h.elements.get('weekly-countdown').textContent, expected);
+  }
+  h.receive({ type: 'chatgpt', account: { configured: true, weekly: { resetsAt: now + 2 * 86400 + 30 } } });
+  assert.equal(h.elements.get('weekly-countdown').textContent, 'Resets in 2d');
 });

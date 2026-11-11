@@ -116,6 +116,9 @@ Source: user request and approved 0.3.0 PLAN, 2026-11-11.
   Label countdowns **Resets in**; use hours and minutes for five-hour usage
   and days, hours and minutes (`xd xh xm`) for weekly usage. Source: explicit
   refinement and clarification, 2026-11-11.
+- Omit every zero-valued countdown unit in both windows. When no complete
+  minute remains, display **Resets in a few seconds. Blink and you'll miss it!**
+  Source: explicit refinement, 2026-11-11.
 - Show the available **Banked resets** count, without consuming resets.
 - Missing fields are **Unavailable**, never assumed to be zero. Refresh when
   the panel opens and every 60 seconds while visible, without overlapping
