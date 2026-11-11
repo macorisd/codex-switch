@@ -197,7 +197,7 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
 - Verify backend/configuration behavior and extension tests when code changes.
   For visible changes, report the automated checks and any pending user visual
   review separately; automated tests do not establish visual verification.
-- Before opening or updating a PR, install the exact VSIX built from that PR's
+- Before delivering a PR, install the exact VSIX built from that PR's
   final source into the user's **current VS Code instance and active profile**.
   Verify the version actually loaded in that window through supported non-UI
   evidence when available; leave visual review to the user.
@@ -210,6 +210,12 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
   the PR as ready until the current-window check is complete. If that check
   requires UI interaction, request the user's reload/review instead of using
   computer use.
+- Always publish the implementation branch and open a real PR in the same
+  delivery. A pending reload, current-window check or user visual review must
+  never prevent PR creation: open it as a draft, record the remaining checks
+  in the PLAN and report them honestly. Mark it ready after those checks pass.
+  Do not ask the user whether to create the PR. Source: explicit correction,
+  2026-11-11, superseding the earlier requirement to defer PR creation.
 - This current-window installation requirement was explicitly added by the user
   on 2026-11-07 after a CLI installation left the current window stale. It applies
   to every future codex-switch PR and update.
