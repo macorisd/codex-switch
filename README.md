@@ -56,7 +56,7 @@ the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
-| 0.4.0 | Add eight API-key providers through a shared engine, searchable model selection, full-width OpenRouter with laboratory/free-model filtering, explicit model tests, and supported balance/quota information with opt-in alerts. |
+| [0.4.0](https://github.com/macorisd/codex-switch/releases/tag/v0.4.0) | Add eight API-key providers through a shared engine, searchable model selection, full-width OpenRouter with laboratory/free-model filtering, explicit model tests, and supported balance/quota information with opt-in alerts. |
 | [0.3.3](https://github.com/macorisd/codex-switch/releases/tag/v0.3.3) | Arrange providers in two columns from a panel width of 550px with equal card heights and aligned bottom buttons, retaining natural heights on narrower panels and full width for a single visible provider. |
 | [0.3.2](https://github.com/macorisd/codex-switch/releases/tag/v0.3.2) | Add rounded app-style ChatGPT and DeepSeek logos beside each provider name and subtitle. |
 | [0.3.1](https://github.com/macorisd/codex-switch/releases/tag/v0.3.1) | Support Windows, macOS and Linux with native credential stores, portable Python paths, configurable interpreter, CODEX_HOME support and cross-platform CI. |
