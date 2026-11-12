@@ -69,6 +69,13 @@ Source: explicit user instructions, 2026-11-08.
   button, aligning the buttons while retaining their existing minimum gap.
   Below 550px, keep natural card heights and existing spacing.
   Source: explicit responsive-layout request, 2026-11-11.
+- Aggregators with laboratory/model filters (currently OpenRouter) span the full
+  row in the wide layout. Provide a combinable **Free models only** filter using
+  the provider's verified free-model metadata/identifier rules. Never guess that
+  an unknown price means free. Fill wide-grid gaps with subsequent half-width
+  cards: ChatGPT → OpenRouter → DeepSeek renders ChatGPT/DeepSeek in the first
+  row and OpenRouter across the next. The managed order still determines the
+  narrow layout. Source: explicit refinements, 2026-11-12.
 - Place one sync icon to the right of the active provider label in Current
   Configuration. Remove provider-specific balance sync icons. It refreshes
   configuration and all visible providers' account/credential status, catalog
@@ -132,10 +139,11 @@ Source: explicit user instructions, 2026-11-08.
   Configuration and the Provider section; repair any persisted layout that hides
   it. Keep the provider section hidden until the persisted filter and order have
   been applied so a window reload never flashes the complete provider list.
-- Keep the sidebar compact. API-key providers now expose searchable model and
-  supported reasoning-effort selection inside their collapsed catalog; persist
-  each provider's selection. This supersedes the previous first-model-only rule.
-  Source: explicit eight-provider implementation request, 2026-11-12.
+- Keep the sidebar compact. API-key providers expose searchable model selection
+  inside their collapsed catalog; persist each provider's model. Do not include
+  Reasoning controls in any provider card: users set reasoning in Codex's chat.
+  Preserve capability metadata for Codex's native model controls.
+  Source: explicit refinement, 2026-11-12, superseding sidebar effort selection.
 - Providers with API-key credentials show the model catalog in a disclosure that
   is collapsed by default. Expanding it shows model selection and
   **Update model catalog**. The collapsed disclosure has a single bottom divider,
@@ -212,14 +220,25 @@ Source: approved PLAN for version 0.2.0, 2026-11-09.
 - The global sync spinner rotates counter-clockwise while provider refreshes
   are active. It stops when all requests settle, independently of how long a
   native balance notification remains open.
-- **Balance alert** opens a bordered panel with an X close control and defaults
-  to a persisted USD threshold of 5.00. The panel explains that the user is
-  notified below that credit amount and that setting it to 0 disables low-balance
-  alerts. Leave a clear 10 px gap between the panel and the provider switch
-  button; they must not touch.
-- Low balance is yellow and zero balance is red.
-- Notify only when crossing below the threshold or reaching zero, not on every
-  sync while the state remains unchanged. Rearm alerts when the balance recovers.
+- **Balance alert** is shared by every API-key provider and stores an independent
+  threshold, default **0**. This new opt-in system replaces the legacy automatic
+  DeepSeek threshold; old implicit settings do not activate it. Its bordered
+  editor has an X close control and a 10 px gap before the switch button.
+  Clamp negative input to 0 on blur. At 0, disable every notification and keep
+  the balance in the normal theme foreground, including exhausted balances.
+- With a positive threshold, balances at/above it use the normal foreground,
+  positive balances below it are yellow, and exhausted balances are red.
+  Use reported currency units or, for quota-only providers, the lowest reported
+  remaining percentage. Never fabricate data for a provider without a reliable
+  balance/quota API; explain that limitation in its alert editor.
+- On each extension start, the first valid reading establishes a silent baseline
+  per provider. Notify once on normal-to-low and low-to-exhausted transitions.
+  A direct normal-to-exhausted transition produces only the exhausted warning.
+  Never notify on unchanged states or recovery; recovery rearms subsequent
+  downward transitions, including exhausted-to-low-to-exhausted. Threshold,
+  currency/metric or credential changes establish a new silent baseline.
+  Source for the shared opt-in transition rules: explicit user refinement,
+  2026-11-12, superseding the earlier DeepSeek-only alert behavior.
 - Balance notifications must not block completion of a balance sync. Showing a
   warning is fire-and-forget, and the manual update always clears its loading
   state in a cleanup path even if synchronization throws.

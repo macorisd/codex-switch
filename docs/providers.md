@@ -11,9 +11,10 @@ and usage remain separate. Private runtime state stays outside this repository.
    Alibaba PAYG needs your workspace hostname. Only official HTTPS hosts are
    accepted; redirects never forward credentials.
 3. **Set API key** uses the native password dialog and existing OS secure store.
-4. Expand **Model catalog** and choose a model and supported reasoning effort.
-   Search and selection persist per provider; OpenRouter also filters laboratories.
-5. Optionally **Test selected model (uses API credits)**. Two synthetic Responses
+4. Expand **Model catalog** and choose a model. Selection persists per provider.
+   Set reasoning in Codex's chat; provider cards have no Reasoning controls.
+   OpenRouter combines search, laboratory filtering and **Free models only**.
+5. Optionally **Test model** (uses API credits). Two synthetic Responses
    requests test function calling and continuation with its result, replaying
    returned reasoning items. Each has a 1,024 output-token cap. No tool executes
    and no workspace file is sent. This does not certify a complete Codex session.
@@ -53,7 +54,7 @@ endpoint invalidates validation and model-test status.
 `GET /models` supplies IDs/metadata where supported. Unsupported image/audio/
 embedding-only candidates are excluded. Services also listing incompatible legacy
 models use native-family filters. Unknown capabilities default conservatively to
-text, a 32K harness context fallback, no reasoning selector, no custom tools and
+text, a 32K harness context fallback, no advertised reasoning levels, no custom tools and
 no parallel tools. That fallback is not a claim about a model's actual maximum.
 
 OpenRouter uses [model properties](https://openrouter.ai/docs/api/api-reference/models/list-all-models-and-their-properties):
@@ -64,6 +65,21 @@ is not established for every route. Custom/freeform tools are disabled for
 OpenRouter: Codex uses function tools and shell edits. Eligible Claude/Gemini
 models therefore need no local protocol conversion. Routing, billing, encrypted
 reasoning, streaming and full agent sessions still need real-key verification.
+
+Aggregator cards declare `modelFilters` and span a full row from 550px. The wide
+grid fills gaps with subsequent ordinary cards: ChatGPT → OpenRouter → DeepSeek
+places ChatGPT/DeepSeek together before the full-width OpenRouter card. Below
+550px, the managed order remains unchanged. Search, laboratory and free filters
+combine without implicitly changing the selected model or writing Codex config.
+
+Free classification uses explicit zero prompt/completion pricing and rejects
+any reported nonzero charge. When pricing is absent, OpenRouter's documented
+[`:free` variants and `openrouter/free`](https://openrouter.ai/docs/guides/routing/model-variants/free)
+are recognized. Missing prices, malformed values and marketing names do not
+establish free access. Other aggregators can declare their own verified free IDs/
+suffix and normalize official pricing to the shared format. Free models still
+need text/tool support; free access does not certify Responses compatibility or
+remove upstream rate limits. The filter never introduces paid fallbacks.
 
 Small model-specific rules in the definitions cover missing metadata: GLM 5.3,
 Kimi K3, MiniMax M3 code mode, MiMo 2.6 (including required `use_responses_lite`),
@@ -85,8 +101,7 @@ Selection is checked against the saved catalog before writing Codex config.
 
 ## Balance and limits
 
-- DeepSeek: [USD balance](https://api-docs.deepseek.com/api/get-user-balance),
-  preserving crossing-based low/zero alerts.
+- DeepSeek: [USD balance](https://api-docs.deepseek.com/api/get-user-balance).
 - OpenRouter: [credits](https://openrouter.ai/docs/api/api-reference/credits/get-remaining-credits),
   account `total_credits - total_usage`, not a per-key spending limit. Missing
   billing permission hides balance without invalidating model access.
@@ -104,6 +119,22 @@ OpenAI organization-admin billing requires different permissions from ordinary
 inference keys. No dependable ordinary-key remaining balance/limit contract was
 established for Z.AI, Qwen, xAI or MiMo. Those cards show no fabricated zero
 balances, estimated spend or guessed limits. Missing/non-finite data stays hidden.
+
+Every API card has an independent **Balance alert**, disabled at the default 0.
+The new opt-in preferences replace the legacy automatic DeepSeek alert setting.
+Negative input becomes 0 on blur. At 0, balances use the normal theme foreground
+even when exhausted, and no warnings appear. A positive threshold uses the
+reported currency, or the lowest reported remaining percentage for quota-only
+providers. Cards without reliable readings explain why alerts cannot run.
+
+At/above the threshold the amount is neutral; below it is yellow; at/below 0 is
+red. Initial readings after starting the extension are silent. Notify only when
+crossing from neutral to yellow or from yellow to red; a direct neutral-to-red
+drop produces one exhausted warning. Repeated reads and recovery never notify.
+Recovery rearms subsequent downward crossings, including red → yellow → red.
+Threshold, credential or metric/currency changes establish a silent new baseline;
+settings changes do not make extra API requests. Only thresholds persist, so
+restarting never replays an old warning. Hidden providers remain inactive.
 
 ## CC Switch and maintenance
 

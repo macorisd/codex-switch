@@ -12,6 +12,9 @@
   },
   {
     "id": "openrouter",
+    "modelFilters": { "laboratory": true, "free": true },
+    "freeModelSuffix": ":free",
+    "freeModelIds": ["openrouter/free"],
     "name": "OpenRouter",
     "subtitle": "API key",
     "baseUrl": "https://openrouter.ai/api/v1",

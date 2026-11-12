@@ -63,9 +63,9 @@ class ApiSessions {
       if (state.valid && this.definitions.find(p => p.id === id).usage) {
         try { state.balance = await request('balance'); state.balanceError = ''; }
         catch { state.balance = null; state.balanceError = 'Balance unavailable.'; }
-        if (id === 'deepseek' && Number.isFinite(state.balance?.total)) await this.alerts(state.balance.total);
+        if (state.balance) this.alerts(id, state.balance);
       }
-    } else { state.valid = false; state.balance = null; state.balanceError = ''; }
+    } else { state.valid = false; state.balance = null; state.balanceError = ''; this.alerts(id, null); }
     state.error = '';
   }
   refresh(id, manual = false) {
@@ -89,6 +89,7 @@ class ApiSessions {
           : { title: `${p.name} official API endpoint`, value: state.baseUrl || p.baseUrl, prompt: 'Use the official Responses endpoint for your region/plan. Alibaba PAYG needs its workspace endpoint.' });
         if (value === undefined || !live()) return;
         Object.assign(state, await request(operation, isKey ? { key: value } : { url: value }));
+        this.alerts(id, null);
         state.valid = false; await this.load(id, args, true);
       } else if (operation === 'refresh') {
         if (!state.hasKey) { state.feedback = null; return; }

@@ -1,11 +1,12 @@
 'use strict';
 // Static template + textContent only: upstream model names never become markup.
 window.ApiCards = class {
-  constructor(send) { this.send = send; this.entries = new Map(); this.buffer = new Map(); }
+  constructor(send) { this.send = send; this.entries = new Map(); this.buffer = new Map(); this.alerts = {}; }
   card(provider) {
     if (this.entries.has(provider.id)) return this.entries.get(provider.id).card;
     const card = document.createElement('article');
     card.className = 'provider-card'; card.dataset.provider = provider.id;
+    card.classList.toggle('provider-aggregator', Boolean(provider.modelFilters?.laboratory));
     card.innerHTML = `<header class="provider-header">
         <div class="provider-identity">
           <span class="provider-icon api-icon"></span>
@@ -21,9 +22,9 @@ window.ApiCards = class {
       <details class="model-catalog" data-role="catalog" hidden><summary>Model catalog</summary><div class="model-catalog-content">
       <input type="search" data-role="search" aria-label="Search models" placeholder="Search models...">
       <select data-role="lab" aria-label="Filter laboratory" hidden></select>
+      <label class="model-free-filter" data-role="free-filter" hidden><input type="checkbox" data-role="free">Free models only</label>
       <select data-role="model" size="6" aria-label="Select model"></select>
       <p class="usage-note model-selection" data-role="selected"></p>
-      <label class="api-effort">Reasoning <select data-role="effort" aria-label="Reasoning effort"></select></label>
       <p class="usage-note" data-role="compatibility"></p>
       <div class="action-row">
         <button class="text-button" data-role="refresh-models">Update model catalog</button>
@@ -39,7 +40,7 @@ window.ApiCards = class {
       </div></details>
       <div class="usage" data-role="balance" hidden><h4>Available balance</h4><strong class="api-balance" data-role="amount"></strong></div>
       <div class="chatgpt-usage" data-role="windows" hidden></div>
-      <div data-role="alerts" hidden><button class="text-button" data-role="alert-toggle">Balance alert</button><div class="balance-alert-editor" data-role="alert-panel" hidden><button class="balance-alert-close" data-role="alert-close" aria-label="Close balance alert">&times;</button><p>Notify below this USD balance. Set 0 to disable low-balance alerts.</p><input type="number" min="0" step="0.01" data-role="threshold" aria-label="Balance alert threshold"></div></div>
+      <div data-role="alerts" hidden><button class="text-button" data-role="alert-toggle">Balance alert</button><div class="balance-alert-editor" data-role="alert-panel" hidden><button class="balance-alert-close" data-role="alert-close" aria-label="Close balance alert">&times;</button><p data-role="alert-description"></p><input type="number" min="0" step="0.01" data-role="threshold" aria-label="Balance alert threshold"></div></div>
       <button class="text-button" data-role="endpoint">API endpoint</button>
       <button class="primary" data-role="apply">Switch provider</button>`;
     card.querySelector('h3').textContent = provider.name;
@@ -56,9 +57,9 @@ window.ApiCards = class {
     get('apply').onclick = () => send('apply');
     get('search').oninput = () => this.models(entry);
     get('lab').onchange = () => this.models(entry);
-    get('model').onchange = () => send('select', { model: get('model').value, effort: '' });
-    get('effort').onchange = () => send('select', { model: entry.state.model, effort: get('effort').value });
-    get('alerts').hidden = provider.id !== 'deepseek';
+    get('free-filter').hidden = !provider.modelFilters?.free;
+    get('free').onchange = () => this.models(entry);
+    get('model').onchange = () => send('select', { model: get('model').value });
     get('alert-panel').id = `${provider.id}-balance-alert`;
     get('alert-toggle').setAttribute('aria-controls', get('alert-panel').id);
     get('alert-toggle').setAttribute('aria-expanded', 'false');
@@ -70,8 +71,17 @@ window.ApiCards = class {
       get('alert-panel').hidden = true;
       get('alert-toggle').setAttribute('aria-expanded', 'false');
     };
-    get('threshold').value = '5';
-    get('threshold').onchange = () => this.send({ action: 'saveBalanceAlert', threshold: Number(get('threshold').value) });
+    get('threshold').value = String(this.alerts[provider.id]?.threshold ?? 0);
+    const saveThreshold = () => {
+      const threshold = window.BalanceAlerts.threshold(get('threshold').value);
+      get('threshold').value = String(threshold);
+      if (threshold === (this.alerts[provider.id]?.threshold ?? 0)) return;
+      this.alerts[provider.id] = { threshold };
+      this.renderBalance(entry);
+      this.send({ action: 'saveBalanceAlert', provider: provider.id, threshold });
+    };
+    get('threshold').onchange = saveThreshold;
+    get('threshold').onblur = saveThreshold;
     get('test').onclick = () => send('test');
     this.update(provider.id, this.buffer.get(provider.id) || entry.state);
     return card;
@@ -81,7 +91,8 @@ window.ApiCards = class {
     const search = get('search').value.toLowerCase();
     const lab = get('lab').value;
     const scrollTop = preserveScroll ? get('model').scrollTop : 0;
-    const models = (state.models || []).filter(m => (!lab || m.id.split('/')[0] === lab) && `${m.id} ${m.name}`.toLowerCase().includes(search));
+    const models = (state.models || []).filter(m => (!lab || m.id.split('/')[0] === lab)
+      && (!get('free').checked || m.free === true) && `${m.id} ${m.name}`.toLowerCase().includes(search));
     get('model').replaceChildren(...models.map(m => {
       const option = document.createElement('option'); option.value = m.id; option.textContent = m.name === m.id ? m.id : `${m.name} (${m.id})`; option.selected = m.id === state.model; return option;
     }));
@@ -89,13 +100,23 @@ window.ApiCards = class {
     const selected = state.models?.find(m => m.id === state.model);
     get('selected').textContent = selected ? `Selected: ${selected.id}` : '';
     get('selected').title = selected?.id || '';
-    get('effort').replaceChildren(...['', ...(selected?.efforts || [])].map(value => {
-      const option = document.createElement('option'); option.value = value; option.textContent = value || 'Provider default'; option.selected = value === state.effort; return option;
-    }));
     get('compatibility').textContent = state.tested ? 'Function tools and replay passed. Streaming and a full Codex session still need verification.'
       : state.needsTest ? 'No models endpoint. Documented fallback models; test one to validate the key.' : selected?.compatibility || '';
     if (provider.id === 'openrouter' && !state.tested) get('compatibility').textContent = 'Text/tool-capable models only. Function tools are used; custom tools are disabled. Test the selected model to check Responses and reasoning replay.';
-    get('effort').parentElement.hidden = !selected?.efforts.length;
+  }
+  renderBalance(entry) {
+    const { get, state, provider } = entry;
+    const threshold = this.alerts[provider.id]?.threshold ?? 0;
+    const level = window.BalanceAlerts.level(state.balance, threshold);
+    for (const [name, target] of [['balance-low', 'low'], ['balance-zero', 'zero']]) {
+      get('amount').classList.toggle(name, level === target);
+      get('windows').classList.toggle(name, level === target);
+    }
+    const metric = window.BalanceAlerts.metric(state.balance);
+    get('alert-description').textContent = metric
+      ? `Notify on downward crossings below this ${metric.unit === '%' ? 'remaining quota (%)' : metric.unit + ' balance'}. Set 0 to disable all alerts. Initial readings are silent.`
+      : 'Alerts need a reported balance or remaining quota. No reliable reading is available. Set 0 to disable all alerts.';
+    get('threshold').setAttribute('aria-label', `Balance alert threshold${metric ? ` (${metric.unit})` : ''}`);
   }
   clearFeedback(entry) {
     clearTimeout(entry.feedbackTimer);
@@ -138,17 +159,16 @@ window.ApiCards = class {
       return row;
     }));
     get('amount').textContent = Number.isFinite(state.balance?.total) && ['USD', 'CNY'].includes(state.balance.currency) ? new Intl.NumberFormat('en-US', { style: 'currency', currency: state.balance.currency, currencyDisplay: 'code' }).format(state.balance.total) : '';
-    get('amount').classList.toggle('balance-low', id === 'deepseek' && state.balance?.total < (this.threshold ?? 5));
-    get('amount').classList.toggle('balance-zero', state.balance?.total <= 0);
+    this.renderBalance(entry);
     const disabled = state.loading || state.working;
-    for (const role of ['key', 'refresh', 'refresh-models', 'endpoint', 'model', 'effort', 'test']) get(role).disabled = Boolean(disabled);
+    for (const role of ['key', 'refresh', 'refresh-models', 'endpoint', 'model', 'test']) get(role).disabled = Boolean(disabled);
     get('refresh').disabled = Boolean(disabled || !state.hasKey);
-    const current = entry.active && state.model === this.appliedModel && (!state.effort || state.effort === this.appliedEffort);
+    const current = entry.active && state.model === this.appliedModel;
     get('apply').disabled = Boolean(disabled || !state.valid || !state.model || current);
     get('apply').textContent = current ? 'Current Setting' : `Switch to ${provider.name}`;
     get('apply').classList.toggle('current-setting', current);
-    get('alerts').hidden = provider.id !== 'deepseek' || !state.valid;
-    if (provider.id === 'openrouter') {
+    get('alerts').hidden = !state.valid;
+    if (provider.modelFilters?.laboratory) {
       const previous = get('lab').value;
       get('lab').hidden = false;
       get('lab').replaceChildren(...['', ...new Set((state.models || []).map(m => m.id.split('/')[0]))].sort().map(lab => {
@@ -159,9 +179,11 @@ window.ApiCards = class {
   }
   alert(value) {
     if (!value) return;
-    this.threshold = value.threshold;
-    const entry = this.entries.get('deepseek');
-    if (entry && document.activeElement !== entry.get('threshold')) entry.get('threshold').value = String(value.threshold);
+    this.alerts = value;
+    for (const [id, entry] of this.entries) {
+      if (document.activeElement !== entry.get('threshold')) entry.get('threshold').value = String(value[id]?.threshold ?? 0);
+      this.renderBalance(entry);
+    }
   }
   closePanels() {
     for (const entry of this.entries.values()) {
@@ -169,10 +191,10 @@ window.ApiCards = class {
       entry.get('alert-toggle').setAttribute('aria-expanded', 'false');
     }
   }
-  active(provider, model, effort) {
-    if (this.activeProvider === provider && this.appliedModel === model && this.appliedEffort === effort) return;
+  active(provider, model) {
+    if (this.activeProvider === provider && this.appliedModel === model) return;
     this.activeProvider = provider;
-    this.appliedModel = model; this.appliedEffort = effort;
+    this.appliedModel = model;
     for (const [id, entry] of this.entries) { entry.active = id === provider; entry.card.classList.toggle('current-provider', entry.active); this.update(id, entry.state); }
   }
 };

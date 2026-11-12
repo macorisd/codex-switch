@@ -8,10 +8,11 @@ const crypto = require('node:crypto');
 const process = require('node:process');
 const codexAccount = require('./codex-account');
 const { ApiSessions } = require('./api-session');
+const balanceAlerts = require('./media/balance-alerts');
 const DEFINITIONS = require('./backend/providers.json');
 const PROVIDERS = [{ id: 'openai', name: 'ChatGPT', subtitle: 'Your Plan' }, ...DEFINITIONS];
 const PROVIDER_LAYOUT_KEY = 'providerLayout';
-const BALANCE_ALERT_KEY = 'deepseekBalanceAlert';
+const BALANCE_ALERT_KEY = 'apiBalanceAlerts';
 const codexHome = (process.env.CODEX_HOME || '.codex').replace(/^~(?=$|[/\\])/, os.homedir());
 const root = path.join(path.resolve(os.homedir(), codexHome), 'provider-switcher');
 const python = process.platform === 'win32' ? 'python' : 'python3';
@@ -64,12 +65,14 @@ class Selector {
     this.activeProvider = null;
     this.viewVisible = false;
     this.chatgpt = { loading: true };
-    this.balanceAlert = { threshold: 5, level: 'ok', ...context.globalState.get(BALANCE_ALERT_KEY, {}) };
+    const savedAlerts = context.globalState.get(BALANCE_ALERT_KEY, {});
+    this.balanceAlerts = Object.fromEntries(DEFINITIONS.map(p => [p.id, { threshold: balanceAlerts.threshold(savedAlerts?.[p.id]?.threshold) }]));
+    this.alertTracker = new balanceAlerts.Tracker();
     this.api = new ApiSessions({ definitions: DEFINITIONS, request: backend,
       visible: id => this.canLoad(id), post: value => this.view?.webview.postMessage(value),
       input: options => vscode.window.showInputBox(options),
       apply: work => this.applyProvider(work), timers: { setInterval, clearInterval },
-      alerts: total => this.checkBalance(total) });
+      alerts: (id, balance) => this.checkBalance(id, balance) });
   }
   canLoad(id) { return this.viewVisible && this.providerLayout().some(p => p.id === id && p.visible); }
   resolveWebviewView(view) {
@@ -80,7 +83,7 @@ class Selector {
     const nonce = crypto.randomBytes(24).toString('base64');
     let html = fs.readFileSync(path.join(this.context.extensionPath, 'media', 'index.html'), 'utf8');
     const replacements = { '{{NONCE}}': nonce, '{{CSP}}': view.webview.cspSource };
-    for (const [name, file] of Object.entries({ STYLE: 'style.css', SCRIPT: 'view.js', API_SCRIPT: 'api-view.js', CHATGPT_ICON: 'providers/openai.svg', DEEPSEEK_ICON: 'providers/deepseek.svg' })) {
+    for (const [name, file] of Object.entries({ STYLE: 'style.css', SCRIPT: 'view.js', API_SCRIPT: 'api-view.js', ALERT_SCRIPT: 'balance-alerts.js', CHATGPT_ICON: 'providers/openai.svg', DEEPSEEK_ICON: 'providers/deepseek.svg' })) {
       replacements[`{{${name}}}`] = view.webview.asWebviewUri(vscode.Uri.joinPath(media, ...file.split('/'))).toString();
     }
     for (const [key, value] of Object.entries(replacements)) html = html.split(key).join(value);
@@ -101,7 +104,7 @@ class Selector {
       this.activeProvider = local.provider;
       await this.view?.webview.postMessage({ type: 'state', busy: this.busy, state: { ...local,
         providers: PROVIDERS.map(p => ({ ...p, iconUri: p.icon ? this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'providers', p.icon)).toString() : undefined })), providerLayout: this.providerLayout(), providerLayoutRevision: this.layoutRevision,
-        chatgpt: this.chatgpt, balanceAlert: this.balanceAlert } });
+        chatgpt: this.chatgpt, balanceAlerts: this.balanceAlerts } });
       this.api.reconcile();
       if (!this.canLoad('openai')) this.stopAccountPolling();
     } catch { void vscode.window.showErrorMessage('The local Codex configuration could not be read.'); }
@@ -126,13 +129,16 @@ class Selector {
     })().finally(() => { this.accountRequest = null; });
     return this.accountRequest;
   }
-  async checkBalance(total) {
-    const level = total <= 0 ? 'zero' : this.balanceAlert.threshold > 0 && total < this.balanceAlert.threshold ? 'low' : 'ok';
-    const previous = this.balanceAlert.level;
-    this.balanceAlert.level = level;
-    await this.context.globalState.update(BALANCE_ALERT_KEY, this.balanceAlert);
-    if (level !== previous && level !== 'ok') void vscode.window.showWarningMessage(level === 'zero'
-      ? 'DeepSeek credits are exhausted.' : `DeepSeek balance is low: $${total.toFixed(2)} remaining.`);
+  checkBalance(id, balance) {
+    if (!balance) { this.alertTracker.reset(id); return; }
+    const warning = this.alertTracker.observe(id, balance, this.balanceAlerts[id].threshold);
+    if (!warning) return;
+    const name = DEFINITIONS.find(p => p.id === id).name;
+    const remaining = warning.unit === '%' ? `${warning.value.toFixed(1)}%`
+      : new Intl.NumberFormat('en-US', { style: 'currency', currency: warning.unit, currencyDisplay: 'code' }).format(warning.value);
+    void vscode.window.showWarningMessage(warning.level === 'zero'
+      ? `${name} ${warning.unit === '%' ? 'quota' : 'credits'} exhausted.`
+      : `${name} ${warning.unit === '%' ? 'quota' : 'balance'} is low: ${remaining} remaining.`);
   }
   async applyProvider(work) {
     if (this.busy) return;
@@ -146,12 +152,15 @@ class Selector {
     if (message.action === 'saveProviderLayout') return this.saveProviderLayout(message.layout, message.revision);
     if (message.action === 'api') return this.api.run(message);
     if (message.action === 'saveBalanceAlert') {
-      const value = Number(message.threshold);
-      if (!Number.isFinite(value) || value < 0) return;
-      this.balanceAlert = { threshold: value, level: 'ok' };
-      await this.context.globalState.update(BALANCE_ALERT_KEY, this.balanceAlert);
-      await this.view?.webview.postMessage({ type: 'balanceAlert', balanceAlert: this.balanceAlert });
-      return this.api.refresh('deepseek');
+      const id = message.provider;
+      if (!DEFINITIONS.some(p => p.id === id) || !this.canLoad(id) || !Number.isFinite(Number(message.threshold))) return;
+      const value = balanceAlerts.threshold(message.threshold);
+      this.balanceAlerts[id] = { threshold: value };
+      this.alertTracker.reset(id);
+      this.alertTracker.observe(id, this.api.sessions.get(id).balance, value);
+      await this.context.globalState.update(BALANCE_ALERT_KEY, this.balanceAlerts);
+      await this.view?.webview.postMessage({ type: 'balanceAlerts', balanceAlerts: this.balanceAlerts });
+      return;
     }
     if (message.action === 'syncAll') {
       if (this.busy || !this.viewVisible) return;

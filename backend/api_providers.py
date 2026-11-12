@@ -1,5 +1,6 @@
 """Shared API-key provider engine. Definitions are data; no protocol conversion."""
 import datetime
+from decimal import Decimal, InvalidOperation
 import json
 import math
 import re
@@ -87,6 +88,25 @@ def save_key(provider, value):
     s.atomic(cache_path(provider), json.dumps(data))
 
 
+def free_model(p, item):
+    """Explicit zero pricing, or documented free IDs when pricing is absent.
+
+    A provider with another pricing shape should normalize it in its adapter;
+    missing/unknown prices and a marketing name containing 'free' are not proof.
+    """
+    pricing = item.get('pricing')
+    if isinstance(pricing, dict) and {'prompt', 'completion'} <= pricing.keys():
+        try:
+            prices = [Decimal(str(value)) for value in pricing.values()]
+            if all(value.is_finite() for value in prices):
+                return all(value == 0 for value in prices)
+        except (InvalidOperation, ValueError):
+            return False
+        return False
+    slug = item.get('id', '')
+    return slug in p.get('freeModelIds', []) or bool(p.get('freeModelSuffix') and slug.endswith(p['freeModelSuffix']))
+
+
 def normalize(provider, raw):
     p = definition(provider)
     models = []
@@ -126,7 +146,7 @@ def normalize(provider, raw):
         context = item.get('context_length', item.get('context_window', capabilities.get('context', 32768)))
         if type(context) is not int or not 4096 <= context <= 10_000_000:
             context = 32768
-        models.append({'id': slug, 'name': str(item.get('name', slug))[:200], 'efforts': efforts,
+        models.append({'id': slug, 'name': str(item.get('name', slug))[:200], 'efforts': efforts, 'free': free_model(p, item),
             'context': context, 'image': capabilities.get('image', False) or 'image' in input_modalities,
             'parallel': capabilities.get('parallel', False), 'freeform': capabilities.get('freeform', False),
             'toolMode': capabilities.get('toolMode'), 'defaultEffort': default_effort,

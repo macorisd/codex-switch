@@ -346,11 +346,14 @@ h4 { margin: 0; font-size: 12px; font-weight: 600; }
   font: inherit;
 }
 .model-catalog-content select[size] { height: 135px; }
-.api-effort { display: grid; gap: 4px; font-size: 11px; }
+.model-free-filter { display: flex; align-items: center; gap: 7px; font-size: 11px; }
+.model-free-filter input { width: auto; margin: 0; accent-color: var(--vscode-focusBorder); }
 .model-selection { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .api-balance { font-size: 20px; }
-.balance-low { color: var(--vscode-editorWarning-foreground); }
-.balance-zero { color: var(--vscode-errorForeground); }
+.balance-low { color: var(--vscode-editorWarning-foreground, #d6a000); }
+.balance-zero { color: var(--vscode-errorForeground, #e05252); }
+.chatgpt-usage.balance-low progress { accent-color: var(--vscode-editorWarning-foreground, #d6a000); }
+.chatgpt-usage.balance-zero progress { accent-color: var(--vscode-errorForeground, #e05252); }
 [data-role="endpoint"] { align-self: flex-start; margin-top: 8px; }
 .primary {
   display: block;
@@ -374,6 +377,8 @@ button.current-setting {
   .provider-card > .primary { min-height: 50px; }
 }
 @media (min-width: 550px) {
+  .provider-list { grid-auto-flow: row dense; }
+  .provider-aggregator { grid-column: 1 / -1; }
   main { max-width: 960px; }
   .provider-list { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
   .provider-card { display: flex; flex-direction: column; }

@@ -194,7 +194,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 const layout = visible => [{ id: 'openai', visible: true }, ...definitions.map(p => ({ id: p.id, visible: visible.includes(p.id) }))];
 const requests = (h, operation, id) => h.calls.filter(c => c.action === 'api' && c.operation === operation && (!id || c.provider === id));
 
-test('secure sidebar boots with two scripts and ten declarative providers', async () => {
+test('secure sidebar boots with nonce-protected scripts and ten declarative providers', async () => {
   const h = harness({ hasKey: false });
   assert(h.commands.has('codexSwitch.open'));
   assert.match(h.view.webview.html, /default-src 'none'/);
@@ -303,13 +303,41 @@ test('ChatGPT remains independent and global sync waits for its last request', a
   assert.equal(h.messages.filter(m=>m.type==='syncLoading').at(-1).loading,false);
 });
 
-test('balance alerts fire only on crossings and never wait for the notification', async () => {
-  const h=harness({hangWarnings:true,globalValues:{providerLayout:layout(['deepseek'])},balances:[{total:4,currency:'USD'},{total:4,currency:'USD'},{total:0,currency:'USD'},{total:0,currency:'USD'},{total:9,currency:'USD'},{total:4,currency:'USD'}]});
+test('provider alerts are opt-in, silent initially, independent and never block refresh', async () => {
+  for (const id of definitions.filter(p => p.usage).map(p => p.id)) {
+    const balances = [4, 4, 0, 0, 3, 0, 9, 4, 0].map(total => ({total, currency:'USD'}));
+    const h = harness({hangWarnings:true, globalValues:{providerLayout:layout([id]), apiBalanceAlerts:{[id]:{threshold:5}}}, balances});
+    await h.receive({action:'ready'});
+    assert.equal(h.warnings.length,0, `${id} startup`);
+    for (let i=0; i<8; i++) await h.receive({action:'syncAll'});
+    assert.equal(h.warnings.length,4, id);
+    assert.match(h.warnings[0], /exhausted/);
+    assert.match(h.warnings[1], /exhausted/);
+    assert.match(h.warnings[2], /is low/);
+    const before = h.calls.length;
+    await h.receive({action:'saveBalanceAlert',provider:id,threshold:-2});
+    assert.equal(h.globalValues.get('apiBalanceAlerts')[id].threshold,0);
+    assert.equal(h.calls.length,before, 'changing a threshold needs no request');
+    await h.receive({action:'syncAll'});
+    assert.equal(h.warnings.length,4, 'disabled zero never warns');
+    const next = harness({globalValues:Object.fromEntries(h.globalValues), balances:[{total:0,currency:'USD'}]});
+    await next.receive({action:'ready'});
+    assert.equal(next.warnings.length,0, 'restart never replays warnings');
+  }
+});
+
+test('all API providers have independent default-zero preferences and legacy defaults stay disabled', async () => {
+  const h = harness({globalValues:{deepseekBalanceAlert:{threshold:5,level:'low'}}});
   await h.receive({action:'ready'});
-  for(let i=0;i<5;i++) await h.receive({action:'syncAll'});
-  assert.equal(h.warnings.length,3);
-  await h.receive({action:'saveBalanceAlert',threshold:2});
-  assert.equal(h.globalValues.get('deepseekBalanceAlert').threshold,2);
+  const prefs = h.messages.find(m=>m.type==='state').state.balanceAlerts;
+  for (const p of definitions) assert.equal(prefs[p.id].threshold,0);
+  await h.receive({action:'saveBalanceAlert',provider:'openrouter',threshold:3});
+  assert.equal(h.globalValues.get('apiBalanceAlerts').openrouter.threshold,3);
+  assert.equal(h.globalValues.get('apiBalanceAlerts').deepseek.threshold,0);
+  await h.receive({action:'saveBalanceAlert',provider:'openai',threshold:1});
+  await h.receive({action:'saveBalanceAlert',provider:'openrouter',threshold:'invalid'});
+  assert.equal(h.globalValues.get('apiBalanceAlerts').openrouter.threshold,3);
+  assert.equal(h.warnings.length,0);
 });
 
 test('hidden ChatGPT never starts the app server and disabling it aborts pending reads', async()=>{

@@ -126,6 +126,25 @@ class ProvidersTest(unittest.TestCase):
         self.assertEqual(api.normalize('openai-api',[{'id':'gpt-3.5-turbo'},{'id':'gpt-5-audio'},{'id':'text-embedding-3'}]),[])
         self.assertEqual(api.normalize('xai',[{'id':'grok-unknown'}])[0]['efforts'],[])
 
+    def test_free_model_metadata_uses_verified_ids_or_explicit_zero_prices(self):
+        items = [
+            {'id':'lab/a:free'}, {'id':'openrouter/free'},
+            {'id':'lab/zero', 'pricing':{'prompt':'0','completion':'0','request':'0'}},
+            {'id':'lab/paid', 'pricing':{'prompt':'0','completion':'0.01'}},
+            {'id':'lab/request-fee', 'pricing':{'prompt':'0','completion':'0','request':'0.01'}},
+            {'id':'lab/unknown', 'name':'Freedom'},
+            {'id':'lab/invalid', 'pricing':{'prompt':'NaN','completion':'0'}},
+            {'id':'lab/missing', 'pricing':{'prompt':'0'}},
+            {'id':'lab/tiny', 'pricing':{'prompt':'1e-999','completion':'0'}},
+        ]
+        for item in items:
+            item['supported_parameters'] = ['tools']
+        models = api.normalize('openrouter', items)
+        self.assertEqual([m['free'] for m in models], [True,True,True,False,False,False,False,False,False])
+        # A future aggregator can declare its own free identifiers, without UI logic.
+        self.assertTrue(api.free_model({'freeModelSuffix':'-gratis'}, {'id':'lab/model-gratis'}))
+        self.assertFalse(api.free_model({}, {'id':'lab/a:free'}))
+
     def test_native_keyring_services_are_isolated_and_legacy_deepseek_is_unchanged(self):
         services=[s.credential_store.service(api.key_path(p)) for p in api.PROVIDERS]
         self.assertEqual(len(set(services)),9)

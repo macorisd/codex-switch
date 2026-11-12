@@ -14,9 +14,9 @@ function harness({provider='openai',visible=['openai','deepseek'],chatgpt={loadi
   const messages=[],timers=[];
   const sandbox={window,document,acquireVsCodeApi:()=>({postMessage:m=>messages.push(m)}),setInterval:()=>1,clearInterval(){},setTimeout:(fn,delay)=>{timers.push({fn,delay});return timers.length;},clearTimeout(){}};
   const context=vm.createContext(sandbox);
-  for(const file of ['api-view.js','view.js']) vm.runInContext(fs.readFileSync(path.join(root,'media',file),'utf8'),context);
+  for(const file of ['balance-alerts.js','api-view.js','view.js']) vm.runInContext(fs.readFileSync(path.join(root,'media',file),'utf8'),context);
   const receive=data=>{const event=new window.Event('message');event.data=data;window.dispatchEvent(event);};
-  receive({type:'state',busy:false,state:{provider,model:'test-model',effort:'high',providers,providerLayout:layout(visible),providerLayoutRevision:0,chatgpt,balanceAlert:{threshold:5}}});
+  receive({type:'state',busy:false,state:{provider,model:'test-model',effort:'high',providers,providerLayout:layout(visible),providerLayoutRevision:0,chatgpt,balanceAlerts:{}}});
   return {window,document,messages,timers,receive,$:id=>document.getElementById(id),card:id=>document.querySelector(`article[data-provider="${id}"]`),api:(id,state)=>receive({type:'apiState',provider:id,state})};
 }
 const configured={loading:false,hasKey:true,valid:true,model:'test-model',effort:'high',models:[{id:'test-model',name:'Test model',efforts:['low','high']}],balance:{total:8,currency:'USD'}};
@@ -36,13 +36,13 @@ test('real HTML and shared card template apply filtering before revealing provid
   }
 });
 
-test('all nine API cards share configuration, errors, model and reasoning controls',()=>{
+test('all nine API cards share configuration, errors and model controls without reasoning',()=>{
   const h=harness({visible:providers.map(p=>p.id)});
   for(const p of definitions){
     const card=h.card(p.id); h.api(p.id,configured);
     assert.equal(field(card,'status').textContent,'Configured'); assert(!field(card,'catalog').hidden);
     assert(!field(card,'catalog').hasAttribute('open'));
-    assert.equal(field(card,'model').children.length,1);
+    assert.equal(field(card,'model').children.length,1); assert.equal(field(card,'effort'),null);
     field(card,'key').click(); assert.equal(h.messages.at(-1).provider,p.id);
     h.api(p.id,{...configured,valid:false,error:'Invalid key'});
     assert.equal(field(card,'status').textContent,'Not configured'); assert(!field(card,'key').disabled);
@@ -145,14 +145,81 @@ test('OpenRouter search/lab filters retain one card and render upstream names as
   assert.match(field(card,'test').closest('.model-test').textContent,/credits/);
 });
 
-test('selection sends model/effort; active provider can apply a changed model',()=>{
+test('selection sends only the model; native reasoning does not change the active card',()=>{
   const h=harness({provider:'openrouter',visible:['openai','openrouter']});
   h.api('openrouter',configured); const card=h.card('openrouter');
   assert.equal(field(card,'apply').textContent,'Current Setting'); assert(field(card,'apply').disabled);
   field(card,'model').dispatchEvent(new h.window.Event('change'));
   assert.equal(h.messages.at(-1).operation,'select'); assert.equal(h.messages.at(-1).model,'test-model');
   h.api('openrouter',{...configured,model:'other',models:[{id:'other',name:'Other',efforts:[]}]});
-  assert(!field(card,'apply').disabled); assert(field(card,'effort').parentElement.hidden);
+  assert(!field(card,'apply').disabled); assert.equal(field(card,'effort'),null);
+  assert.equal(h.messages.at(-1).effort,undefined);
+});
+
+test('aggregators combine free, laboratory and search filters without changing selection', () => {
+  const h = harness({visible:['openai','openrouter','deepseek']});
+  const card = h.card('openrouter');
+  const models = [
+    {id:'lab/paid',name:'Paid',free:false},
+    {id:'lab/model:free',name:'Model (free)',free:true},
+    {id:'other/zero',name:'Zero price',free:true},
+    {id:'other/unknown',name:'Unknown price',free:false},
+  ];
+  h.api('openrouter', {...configured,model:'lab/paid',models});
+  assert(card.classList.contains('provider-aggregator'));
+  assert(!h.card('deepseek').classList.contains('provider-aggregator'));
+  assert(!field(card,'free-filter').hidden);
+  field(card,'free').checked = true;
+  field(card,'free').dispatchEvent(new h.window.Event('change'));
+  assert.equal(field(card,'model').children.length,2);
+  [...field(card,'lab').children].find(o=>o.value==='lab').selected=true;
+  field(card,'lab').dispatchEvent(new h.window.Event('change'));
+  assert.equal(field(card,'model').children.length,1);
+  assert.equal(field(card,'model').firstChild.value,'lab/model:free');
+  assert.match(field(card,'selected').textContent,/lab\/paid/);
+  field(card,'search').value='missing'; field(card,'search').dispatchEvent(new h.window.Event('input'));
+  assert.equal(field(card,'model').children.length,0);
+  assert(!h.messages.some(m=>m.operation==='select'), 'filters never select or switch implicitly');
+  const css=fs.readFileSync(path.join(root,'media/style.css'),'utf8');
+  assert.match(css.slice(css.indexOf('@media (min-width: 550px)')), /\.provider-aggregator\s*\{ grid-column: 1 \/ -1;/);
+  assert.match(css.slice(css.indexOf('@media (min-width: 550px)')), /\.provider-list\s*\{ grid-auto-flow: row dense;/);
+  h.receive({type:'providerLayout',revision:1,layout:[{id:'openai',visible:true},{id:'openrouter',visible:true},{id:'deepseek',visible:true},...definitions.filter(p=>!['openrouter','deepseek'].includes(p.id)).map(p=>({id:p.id,visible:false}))]});
+  assert.deepEqual([...h.$('provider-list').children].map(c=>c.dataset.provider),['openai','openrouter','deepseek'], 'narrow layout retains the managed order; wide CSS fills gaps');
+});
+
+test('all API cards clamp thresholds on blur and update colors independently without extra requests', () => {
+  const h = harness({visible:providers.map(p=>p.id)});
+  for (const {id} of definitions) {
+    const card = h.card(id);
+    h.api(id, {...configured,balance:{total:0,currency:'USD'}});
+    assert(!field(card,'alerts').hidden);
+    assert.equal(field(card,'threshold').value,'0');
+    assert(!field(card,'amount').classList.contains('balance-zero'));
+    field(card,'threshold').value='5'; field(card,'threshold').dispatchEvent(new h.window.Event('blur'));
+    assert.equal(h.messages.at(-1).provider,id);
+    assert.equal(h.messages.at(-1).threshold,5);
+    assert(field(card,'amount').classList.contains('balance-zero'));
+    h.api(id, {...configured,balance:{total:2,currency:'CNY'}});
+    assert(field(card,'amount').classList.contains('balance-low'));
+    assert(!field(card,'amount').classList.contains('balance-zero'));
+    assert.match(field(card,'alert-description').textContent,/CNY/);
+    field(card,'threshold').value='-3'; field(card,'threshold').dispatchEvent(new h.window.Event('blur'));
+    assert.equal(field(card,'threshold').value,'0');
+    assert.equal(h.messages.at(-1).threshold,0);
+    assert(!field(card,'amount').classList.contains('balance-low'));
+    h.api(id, {...configured,balance:null});
+    assert(field(card,'balance').hidden);
+    assert.match(field(card,'alert-description').textContent,/No reliable reading/);
+  }
+  const card=h.card('minimax');
+  h.api('minimax', {...configured,balance:{windows:[{label:'Weekly',remaining:2}]}});
+  field(card,'threshold').value='4'; field(card,'threshold').dispatchEvent(new h.window.Event('blur'));
+  assert(field(card,'windows').classList.contains('balance-low'));
+  assert.match(field(card,'alert-description').textContent,/%/);
+  h.receive({type:'balanceAlerts',balanceAlerts:{minimax:{threshold:0},openrouter:{threshold:3}}});
+  h.receive({type:'chatgpt',account:{loading:false,configured:true}});
+  assert(!field(card,'windows').classList.contains('balance-low'));
+  assert.equal(field(h.card('openrouter'),'threshold').value,'3');
 });
 
 test('provider manager reliably hides, reenables and reorders without hiding the active provider',()=>{
@@ -169,7 +236,9 @@ test('provider manager reliably hides, reenables and reorders without hiding the
 test('balance currency, alert preferences and five-second feedback remain consistent',()=>{
   const h=harness(); const card=h.card('deepseek');
   h.api('deepseek',{...configured,balance:{total:2,currency:'USD'},feedback:{stamp:1,ok:true}});
-  assert.match(field(card,'amount').textContent,/USD/); assert(field(card,'amount').classList.contains('balance-low'));
+  assert.match(field(card,'amount').textContent,/USD/); assert(!field(card,'amount').classList.contains('balance-low'));
+  h.receive({type:'balanceAlerts',balanceAlerts:{deepseek:{threshold:5}}});
+  assert(field(card,'amount').classList.contains('balance-low'));
   assert.equal(field(card,'feedback').textContent,'Success'); assert.equal(h.timers.at(-1).delay,5000);
   h.timers.at(-1).fn(); assert.equal(field(card,'feedback').textContent,'');
   field(card,'alert-toggle').click(); assert(!field(card,'alert-panel').hidden);
@@ -180,7 +249,7 @@ test('balance currency, alert preferences and five-second feedback remain consis
   field(card,'alert-toggle').click();
   field(card,'threshold').value='2'; field(card,'threshold').dispatchEvent(new h.window.Event('change'));
   assert.equal(h.messages.at(-1).threshold,2);
-  h.receive({type:'balanceAlert',balanceAlert:{threshold:3}}); assert.equal(field(card,'threshold').value,'3');
+  h.receive({type:'balanceAlerts',balanceAlerts:{deepseek:{threshold:3}}}); assert.equal(field(card,'threshold').value,'3');
   field(card,'alert-close').click(); assert(field(card,'alert-panel').hidden);
   h.api('deepseek',{...configured,balance:null,balanceError:'Balance unavailable.'}); assert(field(card,'balance').hidden);
 });

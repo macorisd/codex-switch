@@ -164,8 +164,8 @@
     actionButton('openai', isActive('openai') ? 'Current Setting' : 'Switch to ChatGPT', busy || isActive('openai'));
     $('sync-all').classList.toggle('loading', syncLoading);
     $('sync-all').disabled = syncLoading || busy;
-    apiCards.active(state.provider, state.model, state.effort);
-    apiCards.alert(state.balanceAlert);
+    apiCards.active(state.provider, state.model);
+    apiCards.alert(state.balanceAlerts);
     renderAccount(); renderManageList(); renderProviderOrder();
   }
   function setManageOpen(open) {
@@ -192,8 +192,9 @@
       adoptProviderLayout(state.providerLayout, state.providerLayoutRevision || 0); render();
     } else if (data.type === 'apiState') {
       apiCards.update(data.provider, data.state);
-    } else if (data.type === 'balanceAlert') {
-      apiCards.alert(data.balanceAlert);
+    } else if (data.type === 'balanceAlerts') {
+      if (state) state.balanceAlerts = data.balanceAlerts;
+      apiCards.alert(data.balanceAlerts);
     } else if (data.type === 'chatgpt') { account = data.account; render();
     } else if (data.type === 'syncLoading') { syncLoading = data.loading; render();
     } else if (data.type === 'providerLayout' || data.type === 'providerLayoutError') {
