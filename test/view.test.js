@@ -203,6 +203,7 @@ test('all API cards clamp thresholds on blur and update colors independently wit
     assert(field(card,'amount').classList.contains('balance-low'));
     assert(!field(card,'amount').classList.contains('balance-zero'));
     assert.match(field(card,'alert-description').textContent,/CNY/);
+    assert.doesNotMatch(field(card,'alert-description').textContent,/Initial readings are silent/);
     field(card,'threshold').value='-3'; field(card,'threshold').dispatchEvent(new h.window.Event('blur'));
     assert.equal(field(card,'threshold').value,'0');
     assert.equal(h.messages.at(-1).threshold,0);
@@ -231,6 +232,28 @@ test('provider manager reliably hides, reenables and reorders without hiding the
   checks()[1].checked=true; checks()[1].dispatchEvent(new h.window.Event('change'));
   assert.deepEqual([...h.$('provider-list').children].map(c=>c.dataset.provider),['openai','deepseek']);
   h.$('close-manage').click(); assert(h.$('manage-panel').hidden);
+});
+
+test('provider manager edits the current layout after unchanged host acknowledgements', () => {
+  const h=harness({visible:providers.map(p=>p.id)});
+  const choice=id=>h.$('manage-list').querySelector(`[data-provider="${id}"] input`);
+  const initialChoice=choice('deepseek');
+  h.receive({type:'providerLayout',revision:0,layout:layout(providers.map(p=>p.id))});
+  assert.equal(choice('deepseek'),initialChoice, 'unchanged manager retains controls');
+  for (const {id} of definitions) {
+    choice(id).checked=false;
+    choice(id).dispatchEvent(new h.window.Event('change'));
+    const sent=h.messages.at(-1);
+    assert.equal(sent.action,'saveProviderLayout');
+    assert.equal(sent.layout.find(p=>p.id===id).visible,false,id);
+    assert(![...h.$('provider-list').children].some(c=>c.dataset.provider===id),id);
+    h.receive({type:'providerLayout',revision:sent.revision,layout:JSON.parse(JSON.stringify(sent.layout))});
+    // Another host snapshot may have identical values but new layout objects.
+    h.receive({type:'providerLayout',revision:sent.revision,layout:JSON.parse(JSON.stringify(sent.layout))});
+  }
+  assert.deepEqual([...h.$('provider-list').children].map(c=>c.dataset.provider),['openai']);
+  choice('openrouter').checked=true; choice('openrouter').dispatchEvent(new h.window.Event('change'));
+  assert.deepEqual([...h.$('provider-list').children].map(c=>c.dataset.provider),['openai','openrouter']);
 });
 
 test('balance currency, alert preferences and five-second feedback remain consistent',()=>{

@@ -114,7 +114,7 @@ window.ApiCards = class {
     }
     const metric = window.BalanceAlerts.metric(state.balance);
     get('alert-description').textContent = metric
-      ? `Notify on downward crossings below this ${metric.unit === '%' ? 'remaining quota (%)' : metric.unit + ' balance'}. Set 0 to disable all alerts. Initial readings are silent.`
+      ? `Notify on downward crossings below this ${metric.unit === '%' ? 'remaining quota (%)' : metric.unit + ' balance'}. Set 0 to disable all alerts.`
       : 'Alerts need a reported balance or remaining quota. No reliable reading is available. Set 0 to disable all alerts.';
     get('threshold').setAttribute('aria-label', `Balance alert threshold${metric ? ` (${metric.unit})` : ''}`);
   }

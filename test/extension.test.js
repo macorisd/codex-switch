@@ -161,7 +161,9 @@ function harness(options = {}) {
         receive = fn;
         return disposable;
       },
-      postMessage: async value => messages.push(plain(value)),
+      postMessage: async value => {
+        const data=plain(value); messages.push(data); options.onPost?.(data);
+      },
     },
   };
   provider.resolveWebviewView(view);
@@ -347,4 +349,54 @@ test('hidden ChatGPT never starts the app server and disabling it aborts pending
   assert.equal(h.accountCalls.length,1);
   await h.receive({action:'saveProviderLayout',layout:[{id:'openai',visible:false},...layout(['deepseek']).slice(1)],revision:2});
   assert(h.accountCalls[0].signal.aborted);
+});
+
+test('real sidebar and host keep repeated provider toggles hidden across refreshes and reloads', async () => {
+  function linked(globalValues={}) {
+    let deliver;
+    const host=harness({globalValues,onPost:data=>deliver?.(data)});
+    const {window,document}=require('linkedom').parseHTML(host.view.webview.html);
+    const outgoing=[];
+    deliver=data=>{const event=new window.Event('message');event.data=data;window.dispatchEvent(event);};
+    const context=vm.createContext({window,document,
+      acquireVsCodeApi:()=>({postMessage:m=>outgoing.push(plain(m))}),
+      setInterval:()=>1,clearInterval(){},setTimeout:()=>1,clearTimeout(){},
+    });
+    for (const file of ['balance-alerts.js','api-view.js','view.js']) {
+      vm.runInContext(fs.readFileSync(path.join(extensionRoot,'media',file),'utf8'),context);
+    }
+    return {host,document,
+      choice:id=>document.querySelector(`#manage-list [data-provider="${id}"] input`),
+      visible:()=>[...document.querySelector('#provider-list').children].map(c=>c.dataset.provider),
+      flush:async()=>{while(outgoing.length) await host.receive(outgoing.shift());},
+      toggle(id,visible) {
+        const checkbox=this.choice(id); checkbox.checked=visible;
+        checkbox.dispatchEvent(new window.Event('change'));
+      },
+    };
+  }
+  const h=linked(); await h.flush();
+  assert.equal(h.visible().length,10);
+  for (const {id} of definitions) {
+    // The host sends a new layout object with identical values on each sync.
+    await h.host.receive({action:'syncAll'});
+    h.toggle(id,false);
+    assert(!h.visible().includes(id), `${id} disappears before the host acknowledges`);
+    await h.flush();
+    assert(!h.visible().includes(id), `${id} stays hidden after acknowledgement`);
+    assert.equal(h.host.globalValues.get('providerLayout').find(p=>p.id===id).visible,false);
+  }
+  assert.deepEqual(h.visible(),['openai']);
+  const count=requests(h.host,'status').length;
+  await h.host.receive({action:'syncAll'});
+  assert.equal(requests(h.host,'status').length,count, 'hidden APIs make no refresh requests');
+  h.toggle('openrouter',true); await h.flush();
+  await h.host.receive({action:'syncAll'});
+  assert(h.visible().includes('openrouter'));
+  assert(requests(h.host,'status').length>count, 'reenabling resumes requests');
+  h.toggle('openrouter',false); await h.flush();
+  const reopened=linked(Object.fromEntries(h.host.globalValues)); await reopened.flush();
+  assert.deepEqual(reopened.visible(),['openai']);
+  assert.equal(requests(reopened.host,'status').length,0, 'hidden APIs stay inactive after reload');
+  for (const {id} of definitions) assert.equal(reopened.choice(id).checked,false,id);
 });

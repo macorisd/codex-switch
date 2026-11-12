@@ -139,6 +139,10 @@ Source: explicit user instructions, 2026-11-08.
   Configuration and the Provider section; repair any persisted layout that hides
   it. Keep the provider section hidden until the persisted filter and order have
   been applied so a window reload never flashes the complete provider list.
+  Checkbox and ordering actions must use the current layout after host
+  acknowledgements and account/configuration refreshes. Verify repeated edits
+  through the real webview/host message loop, including persistence and hidden
+  request suppression. Source: reported visibility regression, 2026-11-12.
 - Keep the sidebar compact. API-key providers expose searchable model selection
   inside their collapsed catalog; persist each provider's model. Do not include
   Reasoning controls in any provider card: users set reasoning in Codex's chat.
@@ -224,6 +228,8 @@ Source: approved PLAN for version 0.2.0, 2026-11-09.
   threshold, default **0**. This new opt-in system replaces the legacy automatic
   DeepSeek threshold; old implicit settings do not activate it. Its bordered
   editor has an X close control and a 10 px gap before the switch button.
+  Keep its copy concise: omit "Initial readings are silent"; silent startup is
+  behavior, not explanatory UI copy. Source: explicit correction, 2026-11-12.
   Clamp negative input to 0 on blur. At 0, disable every notification and keep
   the balance in the normal theme foreground, including exhausted balances.
 - With a positive threshold, balances at/above it use the normal foreground,

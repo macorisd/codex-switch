@@ -63,8 +63,9 @@
       checkbox.disabled = locked;
       checkbox.setAttribute('aria-label', `Show ${info.name} (${info.subtitle})`);
       checkbox.addEventListener('change', () => {
-        if (locked) return;
-        entry.visible = checkbox.checked;
+        const current = providerLayout.find(item => item.id === entry.id);
+        if (!current || isActive(entry.id)) return;
+        current.visible = checkbox.checked;
         renderProviderOrder();
         sendLayout();
       });
@@ -73,8 +74,10 @@
       label.append(checkbox, name);
 
       const move = (offset) => {
-        const target = index + offset;
-        [providerLayout[index], providerLayout[target]] = [providerLayout[target], providerLayout[index]];
+        const currentIndex = providerLayout.findIndex(item => item.id === entry.id);
+        const target = currentIndex + offset;
+        if (currentIndex < 0 || target < 0 || target >= providerLayout.length) return;
+        [providerLayout[currentIndex], providerLayout[target]] = [providerLayout[target], providerLayout[currentIndex]];
         renderManageList();
         renderProviderOrder();
         sendLayout();
