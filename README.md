@@ -6,18 +6,18 @@ Codex Switch is a VS Code sidebar extension that switches Codex between your Cha
 Keep account usage, searchable models and supported balances with optional alerts in one panel.
 Keys use your operating system secure storage; switching preserves ChatGPT sign-in and reloads VS Code automatically.
 
-| Provider | Access | Available models |
-| --- | --- | --- |
-| ChatGPT | Existing ChatGPT subscription and sign-in | Models available to your account |
-| DeepSeek | API key | Refreshed official Codex catalog |
-| OpenRouter | API key | Discover text/tool-capable models; search and filter laboratories |
-| OpenAI API | API key, separate billing | Discover Responses model candidates |
-| Z.AI (GLM) | Coding Plan API key | Discover models; documented GLM fallback |
-| Moonshot AI (Kimi) | Regional API key | Discover native Responses models |
-| Alibaba Cloud (Qwen) | Token Plan or workspace PAYG key | Discover models; documented plan-specific fallback |
-| xAI (Grok) | API key | Discover Grok models |
-| MiniMax | M Plan or PAYG API key | Discover native Responses M-series models |
-| Xiaomi MiMo | PAYG or Token Plan API key | Discover native Responses models |
+| Provider | Access |
+| --- | --- |
+| ChatGPT | Existing ChatGPT subscription and sign-in |
+| DeepSeek | API key |
+| OpenRouter | API key |
+| OpenAI API | API key, separate billing |
+| Z.AI (GLM) | Coding Plan API key |
+| Moonshot AI (Kimi) | Regional API key |
+| Alibaba Cloud (Qwen) | Token Plan or workspace PAYG key |
+| xAI (Grok) | API key |
+| MiniMax | M Plan or PAYG API key |
+| Xiaomi MiMo | PAYG or Token Plan API key |
 
 See [provider setup, official sources and compatibility limits](docs/providers.md).
 Catalog validation is separate from inference. **Test selected model (uses API credits)**
@@ -56,6 +56,7 @@ the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
+| 0.4.1 | Refresh the banner with a minimal design and continuous slogan; simplify the provider table. |
 | [0.4.0](https://github.com/macorisd/codex-switch/releases/tag/v0.4.0) | Add eight API-key providers through a shared engine, searchable model selection, full-width OpenRouter with laboratory/free-model filtering, explicit model tests, and supported balance/quota information with opt-in alerts. |
 | [0.3.3](https://github.com/macorisd/codex-switch/releases/tag/v0.3.3) | Arrange providers in two columns from a panel width of 550px with equal card heights and aligned bottom buttons, retaining natural heights on narrower panels and full width for a single visible provider. |
 | [0.3.2](https://github.com/macorisd/codex-switch/releases/tag/v0.3.2) | Add rounded app-style ChatGPT and DeepSeek logos beside each provider name and subtitle. |

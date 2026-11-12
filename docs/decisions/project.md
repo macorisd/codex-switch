@@ -32,11 +32,12 @@ Source: explicit user instructions and initialization answers, 2026-11-07.
   DeepSeek model, recover the most recent valid ChatGPT values from Codex Switch
   configuration backups instead of restoring the incompatible snapshot.
 - Follow microplanner's README structure: an SVG banner, a three-line product
-  explanation, the available-provider and model table, **Install**, **Version
+  explanation, a provider/access table without an Available models column, **Install**, **Version
   History**, and a **Developer setup** disclosure. Use **Codex Switch** as the
   banner title and **Switch AI providers in Codex with a click. Without ever
-  leaving VS Code.** as its subtitle. Keep the two sentences on separate lines
-  within the existing banner. Source for the updated slogan: user, 2026-11-12.
+  leaving VS Code.** as its subtitle. Treat the slogan as one continuous paragraph;
+  wrap only for available space, never force a new paragraph between sentences.
+  Source: user refinements, 2026-11-12.
 - Document installation from the latest GitHub Release, plus local development,
   tests, packaging and runtime-state requirements in the developer disclosure.
 - Keep a suitable `.gitignore` for source, tooling, packaging and local state.
@@ -267,8 +268,10 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
   only the title and subtitle; omit platform labels, badges and extra copy.
 - The banner subtitle ends with a period and the title/subtitle block is
   optically centered vertically against the logo.
-- The banner background is a single diagonal two-stop gradient from white to a
-  soft purple. Do not add decorative motifs or additional vector details.
+- Use a restrained minimal banner with a small, tasteful detail in its right
+  sector. Preserve the supplied logo, its purple identity, the title and complete
+  slogan. This redesign supersedes the earlier white/purple background-gradient
+  and no-decoration requirements. Source: explicit redesign request, 2026-11-12.
 - Use a transparent monochrome SVG for the VS Code Activity Bar, with the gear
   expressed as negative space. It replaces the original two-arrow symbol and
   follows the editor's icon color in both light and dark themes.
