@@ -50,6 +50,34 @@ test('all nine API cards share configuration, errors, model and reasoning contro
   }
 });
 
+test('API feedback stays hidden until a completed action and disappears fully after expiry', () => {
+  const h = harness({ visible: providers.map(provider => provider.id) });
+  for (const provider of definitions) {
+    const feedback = field(h.card(provider.id), 'feedback');
+    assert.equal(feedback.hidden, true, provider.id);
+    h.api(provider.id, configured);
+    assert.equal(feedback.hidden, true, `${provider.id} configured`);
+
+    h.api(provider.id, { ...configured, feedback: { stamp: 1, ok: null } });
+    assert.equal(feedback.hidden, true, `${provider.id} pending`);
+    h.api(provider.id, { ...configured, feedback: { stamp: 2 } });
+    assert.equal(feedback.hidden, true, `${provider.id} incomplete`);
+
+    for (const [stamp, ok] of [[3, true], [4, false]]) {
+      const state = { ...configured, feedback: { stamp, ok } };
+      h.api(provider.id, state);
+      assert.equal(feedback.hidden, false);
+      assert.equal(feedback.textContent, ok ? 'Success' : 'Failed');
+      assert.equal(h.timers.at(-1).delay, 5000);
+      h.timers.at(-1).fn();
+      assert.equal(feedback.hidden, true);
+      assert.equal(feedback.textContent, '');
+      h.api(provider.id, state);
+      assert.equal(feedback.hidden, true, `${provider.id} repeated result`);
+    }
+  }
+});
+
 test('OpenRouter search/lab filters retain one card and render upstream names as text',()=>{
   const h=harness({visible:['openai','openrouter']});
   const card=h.card('openrouter');

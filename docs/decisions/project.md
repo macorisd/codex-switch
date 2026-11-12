@@ -106,6 +106,9 @@ Source: explicit user instructions, 2026-11-08.
 - **Update model catalog** and **Check connection** show green success or red
   error feedback next to the action that produced it. The feedback has no icon
   or emoji, remains visible for exactly 5 seconds, then disappears.
+  Keep the feedback element hidden before an action result and after expiry,
+  including its border, background and layout space. Source: user-reported empty
+  red boxes on API-provider cards, 2026-11-12.
 - A **Manage Providers** action next to the Provider heading opens the complete
   provider list, with an X control that closes the panel. Each provider is labeled
   as **Provider (subtitle)**, has a checkbox and controls to move it up or down;

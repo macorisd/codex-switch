@@ -44,6 +44,7 @@ window.ApiCards = class {
     get('threshold').value = '5';
     get('threshold').onchange = () => this.send({ action: 'saveBalanceAlert', threshold: Number(get('threshold').value) });
     const feedback = document.createElement('span'); feedback.className = 'action-feedback'; feedback.dataset.role = 'feedback'; feedback.setAttribute('role', 'status');
+    feedback.hidden = true;
     get('refresh').after(feedback);
     const test = document.createElement('button'); test.type = 'button'; test.className = 'text-button'; test.dataset.role = 'test';
     test.textContent = 'Test selected model (uses API credits)'; test.onclick = () => send('test');
@@ -73,13 +74,17 @@ window.ApiCards = class {
     const entry = this.entries.get(id); if (!entry) { this.buffer.set(id, state); return; }
     const { get, provider } = entry;
     entry.state = state;
-    if (state.feedback?.ok !== null && state.feedback?.stamp && state.feedback.stamp !== entry.feedbackStamp) {
+    if (typeof state.feedback?.ok === 'boolean' && state.feedback.stamp && state.feedback.stamp !== entry.feedbackStamp) {
       entry.feedbackStamp = state.feedback.stamp;
       clearTimeout(entry.feedbackTimer);
       get(state.feedback.operation === 'test' ? 'test' : state.feedback.origin || 'refresh').after(get('feedback'));
       get('feedback').textContent = state.feedback.ok ? 'Success' : 'Failed';
       get('feedback').className = 'action-feedback ' + (state.feedback.ok ? 'success' : 'error');
-      entry.feedbackTimer = setTimeout(() => { get('feedback').textContent = ''; }, 5000);
+      get('feedback').hidden = false;
+      entry.feedbackTimer = setTimeout(() => {
+        get('feedback').hidden = true;
+        get('feedback').textContent = '';
+      }, 5000);
     }
     get('status').textContent = state.loading ? 'Loading...' : state.valid ? 'Configured' : 'Not configured';
     get('dot').className = 'status-dot ' + (state.loading ? 'loading' : state.valid ? 'configured' : 'not-configured');
