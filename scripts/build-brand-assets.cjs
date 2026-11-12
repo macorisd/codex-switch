@@ -8,22 +8,36 @@ const geometry = logo.match(/<path id="mark"[^>]*d="([^"]+)"/)[1];
 const defs = logo.match(/<defs>([\s\S]+?)<\/defs>/)[1];
 const title = 'Codex Switch';
 const subtitle = 'Switch AI providers in Codex with a click. Without ever leaving VS Code.';
+// Two continuous, evenly spaced ribbons. The foreground passes over the other
+// with a narrow paper-colored clearance, rather than an ambiguous intersection.
+const ribbon = (lane, reverse = false) => {
+  const start = (reverse ? 1166 : 946) + lane * 8;
+  const end = (reverse ? 946 : 1166) + lane * 8;
+  return `M${start} -35 C${start} 100 ${end} 220 ${end} 355`;
+};
+const contours = (reverse, stroke, width) => Array.from({ length: 7 }, (_, lane) =>
+  `<path d="${ribbon(lane, reverse)}" stroke="${stroke}" stroke-width="${width}"/>`).join('\n      ');
 const banner = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title description">
   <title id="title">${title}</title>
   <desc id="description">The purple Codex Switch rosette and gear beside the words: ${subtitle}</desc>
   <defs>
     ${defs}
+    <linearGradient id="flow-ink" gradientUnits="userSpaceOnUse" x1="970" y1="0" x2="1170" y2="320"><stop stop-color="#B6A8D6"/><stop offset=".5" stop-color="#8874B9"/><stop offset="1" stop-color="#655099"/></linearGradient>
+    <clipPath id="banner-bounds"><rect width="1200" height="320" rx="24"/></clipPath>
   </defs>
-  <rect x=".5" y=".5" width="1199" height="319" rx="28" fill="#FAFAF8" stroke="#E7E7E5"/>
-  <path transform="translate(74 70) scale(.18) translate(-128 -128)" fill="url(#purple)" fill-rule="evenodd" d="${geometry}"/>
-  <text x="282" y="155" fill="#25252E" font-family="Segoe UI,Arial,sans-serif" font-size="64" font-weight="650" letter-spacing="-2">${title}</text>
-  <text x="285" y="205" fill="#65656F" font-family="Segoe UI,Arial,sans-serif" font-size="21">${subtitle}</text>
-  <g fill="none" stroke-linecap="round" stroke-width="1.5" aria-hidden="true">
-    <path d="M1030 194 H1045 C1080 194 1080 126 1115 126 H1140" stroke="#DFDEE7"/>
-    <path d="M1030 126 H1045 C1080 126 1080 194 1115 194 H1140" stroke="#9689CA"/>
-    <circle cx="1030" cy="126" r="3" fill="#9689CA" stroke="none"/>
-    <circle cx="1140" cy="194" r="3" fill="#9689CA" stroke="none"/>
+  <g clip-path="url(#banner-bounds)">
+    <rect width="1200" height="320" fill="#FAFAF8"/>
+    <path transform="translate(70 90) scale(.14) translate(-128 -128)" fill="url(#purple)" fill-rule="evenodd" d="${geometry}"/>
+    <text x="254" y="155" fill="#282632" font-family="Segoe UI,Arial,sans-serif" font-size="58" font-weight="600" letter-spacing="-1.8">${title}</text>
+    <text x="256" y="205" fill="#6B6874" font-family="Segoe UI,Arial,sans-serif" font-size="20">${subtitle}</text>
+    <g fill="none" aria-hidden="true">
+      ${contours(true, '#D5D1DE', 1.3)}
+      <path d="${ribbon(3)}" stroke="#FAFAF8" stroke-width="63"/>
+      <path d="${ribbon(3)}" stroke="#EFEBF6" stroke-width="48"/>
+      ${contours(false, 'url(#flow-ink)', 1.5)}
+    </g>
   </g>
+  <rect x=".5" y=".5" width="1199" height="319" rx="24" fill="none" stroke="#E9E7EC"/>
 </svg>
 `;
 const sidebar = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">

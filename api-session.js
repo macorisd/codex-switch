@@ -74,20 +74,31 @@ class ApiSessions {
     }
     return this.task(id, args => this.load(id, args, manual));
   }
+  endpointInput(provider, state) {
+    return this.input({ title: `${provider.name} official API endpoint`,
+      value: state.baseUrl || provider.baseUrl, ignoreFocusOut: true,
+      prompt: 'Use the official Responses endpoint for your region/plan. Alibaba PAYG needs its workspace endpoint.' });
+  }
   run(message) {
     const { provider: id, operation } = message;
     const p = this.definitions.find(p => p.id === id);
     if (!p || !this.visible(id) || this.pending.has(id)) return Promise.resolve();
+    if (operation === 'endpoint' && !this.sessions.get(id).valid) return Promise.resolve();
     return this.task(id, async args => {
       const { state, request, live } = args;
       state.error = '';
       state.feedback = ['refresh', 'test'].includes(operation) ? { operation, origin: message.origin, ok: null, stamp: Date.now() } : null;
       if (operation === 'saveKey' || operation === 'endpoint') {
         const isKey = operation === 'saveKey';
-        const value = await this.input(isKey
-          ? { title: `${p.name} API key`, password: true, ignoreFocusOut: true, prompt: 'Stored securely for your OS user. Model tests are separate and may incur API charges.' }
-          : { title: `${p.name} official API endpoint`, value: state.baseUrl || p.baseUrl, prompt: 'Use the official Responses endpoint for your region/plan. Alibaba PAYG needs its workspace endpoint.' });
+        const value = isKey ? await this.input({ title: `${p.name} API key`, password: true, ignoreFocusOut: true,
+          prompt: 'Stored securely for your OS user. Model tests are separate and may incur API charges.' })
+          : await this.endpointInput(p, state);
         if (value === undefined || !live()) return;
+        if (isKey && !state.valid && p.endpointSetup) {
+          const url = await this.endpointInput(p, state);
+          if (url === undefined || !live()) return;
+          Object.assign(state, await request('endpoint', { url }));
+        }
         Object.assign(state, await request(operation, isKey ? { key: value } : { url: value }));
         this.alerts(id, null);
         state.valid = false; await this.load(id, args, true);

@@ -7,10 +7,14 @@ and usage remain separate. Private runtime state stays outside this repository.
 ## Setup
 
 1. Enable the provider in **Manage Providers**. Hidden cards make no requests.
-2. If necessary, use **API endpoint** for your official regional/plan URL.
-   Alibaba PAYG needs your workspace hostname. Only official HTTPS hosts are
-   accepted; redirects never forward credentials.
-3. **Set API key** uses the native password dialog and existing OS secure store.
+2. **Set API key** uses the native password dialog and existing OS secure store.
+   Initial setup for Kimi, Qwen, MiniMax and MiMo also asks for the official
+   regional/plan endpoint before saving or validating the key. Accept the
+   default or enter your official URL; Alibaba PAYG needs its workspace hostname.
+   Canceling that step leaves credentials unchanged. Only official HTTPS hosts
+   are accepted; redirects never forward credentials.
+3. Once **Configured**, **API endpoint** appears to the right of **Check connection**
+   for later changes. It is hidden while **Not configured**.
 4. Expand **Model catalog** and choose a model. Selection persists per provider.
    Set reasoning in Codex's chat; provider cards have no Reasoning controls.
    OpenRouter combines search, laboratory filtering and **Free models only**.

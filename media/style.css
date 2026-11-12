@@ -231,6 +231,8 @@ button {
 }
 .action-row > .text-button { justify-self: start; min-width: 0; max-width: 100%; text-align: left; overflow-wrap: anywhere; }
 .connection-action { margin-top: 8px; }
+.connection-controls { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.connection-controls > .text-button { min-width: 0; text-align: left; overflow-wrap: anywhere; }
 .action-feedback {
   grid-column: 2;
   margin: 0;
@@ -354,7 +356,6 @@ h4 { margin: 0; font-size: 12px; font-weight: 600; }
 .balance-zero { color: var(--vscode-errorForeground, #e05252); }
 .chatgpt-usage.balance-low progress { accent-color: var(--vscode-editorWarning-foreground, #d6a000); }
 .chatgpt-usage.balance-zero progress { accent-color: var(--vscode-errorForeground, #e05252); }
-[data-role="endpoint"] { align-self: flex-start; margin-top: 8px; }
 .primary {
   display: block;
   width: 100%;

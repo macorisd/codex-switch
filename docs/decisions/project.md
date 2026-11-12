@@ -102,6 +102,11 @@ Source: explicit user instructions, 2026-11-08.
   Long names must not move credential controls into different rows.
   Source: full responsive-interface review requested on 2026-11-12, superseding
   the previous placement beside the API key subtitle.
+- Place **API endpoint** to the right of **Check connection** in that action row,
+  with feedback in its fixed result slot. Hide the endpoint action whenever the
+  provider is not configured. Initial setup for providers with regional or
+  plan-specific endpoints must remain possible through the native key setup.
+  Source: explicit placement/visibility refinement, 2026-11-12.
 - **Set API key** opens VS Code's native password dialog. The key is not entered,
   displayed or retained in the sidebar GUI.
 - Model catalog and Available balance remain absent while DeepSeek has no
@@ -268,10 +273,14 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
   only the title and subtitle; omit platform labels, badges and extra copy.
 - The banner subtitle ends with a period and the title/subtitle block is
   optically centered vertically against the logo.
-- Use a restrained minimal banner with a small, tasteful detail in its right
+- Use a restrained minimal banner with a considered switching motif in its right
   sector. Preserve the supplied logo, its purple identity, the title and complete
   slogan. This redesign supersedes the earlier white/purple background-gradient
   and no-decoration requirements. Source: explicit redesign request, 2026-11-12.
+  The first tiny two-line detail was rejected as too sparse. Develop the same
+  concept with stronger presence, deliberate proportions and refined execution
+  integrated with the overall composition. Preserve restraint and the continuous
+  slogan. Source: explicit design-review correction, 2026-11-12.
 - Use a transparent monochrome SVG for the VS Code Activity Bar, with the gear
   expressed as negative space. It replaces the original two-arrow symbol and
   follows the editor's icon color in both light and dark themes.
