@@ -7,10 +7,14 @@ and usage remain separate. Private runtime state stays outside this repository.
 ## Setup
 
 1. Enable the provider in **Manage Providers**. Hidden cards make no requests.
-2. If necessary, use **API endpoint** for your official regional/plan URL.
-   Alibaba PAYG needs your workspace hostname. Only official HTTPS hosts are
-   accepted; redirects never forward credentials.
-3. **Set API key** uses the native password dialog and existing OS secure store.
+2. **Set API key** uses the native password dialog and existing OS secure store.
+   Initial setup for Kimi, Qwen, MiniMax and MiMo also asks for the official
+   regional/plan endpoint before saving or validating the key. Accept the
+   default or enter your official URL; Alibaba PAYG needs its workspace hostname.
+   Canceling that step leaves credentials unchanged. Only official HTTPS hosts
+   are accepted; redirects never forward credentials.
+3. Once **Configured**, **API endpoint** appears to the right of **Check connection**
+   for later changes. It is hidden while **Not configured**.
 4. Expand **Model catalog** and choose a model. Selection persists per provider.
    Set reasoning in Codex's chat; provider cards have no Reasoning controls.
    OpenRouter combines search, laboratory filtering and **Free models only**.
@@ -155,6 +159,34 @@ only for a genuinely different published catalog/usage shape, not another card,
 controller or config writer. Verify effort/wire changes against official docs.
 
 ## Verification boundary
+
+### Credential storage without package setup
+
+Windows keeps the original DPAPI-encrypted files. macOS calls Apple's
+[Keychain Services](https://developer.apple.com/documentation/security/keychain-services)
+directly through Python's standard-library ctypes. Linux bundles the unmodified
+Jeepney 0.9.0 wheel (49 KB, MIT license) to access the desktop's native
+[Secret Service](https://specifications.freedesktop.org/secret-service/latest/).
+Its pinned hash is checked before import; attribution and the source are in
+`backend/vendor/NOTICE.md`. No pip, virtual environment or download is required
+for credential storage. Python 3.11+ remains the connector's runtime requirement.
+
+Existing Windows blobs, Keychain generic-password service/account attributes and
+Linux service/username lookup attributes are preserved. Existing vault items are
+updated in place. Runtime files on macOS/Linux contain only a non-secret presence
+marker. The standalone auth helper receives its bundled code/client automatically
+and continues working without the extension host or installed Python packages.
+
+The OS may present an authorization/unlock prompt; cancellation fails safely.
+On Linux the service is activated through the desktop's D-Bus session and a
+default collection can be created through the vault's own prompt. A desktop with
+no secure vault cannot be turned into one without OS facilities; the connector
+fails closed rather than fabricating encryption or writing a plaintext fallback.
+The standard `plain` session algorithm describes the local D-Bus transfer encoding,
+not file storage. Disk encryption remains the native vault's responsibility;
+the extension never writes a secret or master password into a local fallback.
+
+### Tests and real-key limits
 
 Mocks cover every API provider: credential isolation, discovery, fallback and
 401/403/429/500 failures, selection persistence, Responses tools/reasoning replay,

@@ -2,7 +2,7 @@
   "name": "codex-provider-switch",
   "displayName": "Codex Switch",
   "description": "Switch Codex between ChatGPT and nine API-key providers from the VS Code sidebar.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "publisher": "macor-local",
   "license": "GPL-3.0-only",
   "repository": {
@@ -35,7 +35,7 @@
         "codexSwitch.pythonPath": {
           "type": "string",
           "default": "",
-          "description": "Python 3.11+ executable for the local connector. Defaults to python on Windows and python3 on macOS/Linux. Install keyring in this interpreter on macOS/Linux."
+          "description": "Python 3.11+ executable for the local connector. Defaults to python on Windows and python3 on macOS/Linux. No additional Python packages are required."
         }
       }
     },
@@ -68,7 +68,7 @@
   },
   "scripts": {
     "brand": "node scripts/build-brand-assets.cjs",
-    "test": "node --test test/*.test.js && python backend/test_switcher.py && python backend/test_api_providers.py && python -m unittest discover -s scripts -p test_*.py",
+    "test": "node --test test/*.test.js && python -S backend/test_switcher.py && python -S backend/test_api_providers.py && python -S -m unittest discover -s backend -p test_credential*.py && python -m unittest discover -s scripts -p test_*.py",
     "package": "vsce package --readme-path docs/extension-readme.md"
   },
   "files": [
@@ -79,6 +79,8 @@
     "backend/switcher.py",
     "backend/credential_helper.py",
     "backend/credential_store.py",
+    "backend/credential_native.py",
+    "backend/vendor",
     "backend/requirements.txt",
     "backend/catalog.json",
     "docs/banner.svg",

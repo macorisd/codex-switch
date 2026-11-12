@@ -32,11 +32,12 @@ Source: explicit user instructions and initialization answers, 2026-11-07.
   DeepSeek model, recover the most recent valid ChatGPT values from Codex Switch
   configuration backups instead of restoring the incompatible snapshot.
 - Follow microplanner's README structure: an SVG banner, a three-line product
-  explanation, the available-provider and model table, **Install**, **Version
+  explanation, a provider/access table without an Available models column, **Install**, **Version
   History**, and a **Developer setup** disclosure. Use **Codex Switch** as the
   banner title and **Switch AI providers in Codex with a click. Without ever
-  leaving VS Code.** as its subtitle. Keep the two sentences on separate lines
-  within the existing banner. Source for the updated slogan: user, 2026-11-12.
+  leaving VS Code.** as its subtitle. Treat the slogan as one continuous paragraph;
+  wrap only for available space, never force a new paragraph between sentences.
+  Source: user refinements, 2026-11-12.
 - Document installation from the latest GitHub Release, plus local development,
   tests, packaging and runtime-state requirements in the developer disclosure.
 - Keep a suitable `.gitignore` for source, tooling, packaging and local state.
@@ -101,6 +102,11 @@ Source: explicit user instructions, 2026-11-08.
   Long names must not move credential controls into different rows.
   Source: full responsive-interface review requested on 2026-11-12, superseding
   the previous placement beside the API key subtitle.
+- Place **API endpoint** to the right of **Check connection** in that action row,
+  with feedback in its fixed result slot. Hide the endpoint action whenever the
+  provider is not configured. Initial setup for providers with regional or
+  plan-specific endpoints must remain possible through the native key setup.
+  Source: explicit placement/visibility refinement, 2026-11-12.
 - **Set API key** opens VS Code's native password dialog. The key is not entered,
   displayed or retained in the sidebar GUI.
 - Model catalog and Available balance remain absent while DeepSeek has no
@@ -267,8 +273,21 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
   only the title and subtitle; omit platform labels, badges and extra copy.
 - The banner subtitle ends with a period and the title/subtitle block is
   optically centered vertically against the logo.
-- The banner background is a single diagonal two-stop gradient from white to a
-  soft purple. Do not add decorative motifs or additional vector details.
+- Preserve the original banner logo scale/placement and typography when changing
+  its decorative detail: logo at (74,70), scale .18; title Segoe UI/Arial 64px,
+  weight 650, tracking -2px, at (282,141); subtitle 23px at (285,188), with 31px
+  line spacing when wrapped. Keep the original text colors. The longer slogan
+  may wrap within its paragraph (for example after "Without"), never as a forced
+  new paragraph between the two sentences. Source: explicit correction rejecting
+  unsolicited logo/type changes, 2026-11-12.
+- Use a restrained minimal banner with a considered switching motif in its right
+  sector. Preserve the supplied logo, its purple identity, the title and complete
+  slogan. This redesign supersedes the earlier white/purple background-gradient
+  and no-decoration requirements. Source: explicit redesign request, 2026-11-12.
+  The first tiny two-line detail was rejected as too sparse. Develop the same
+  concept with stronger presence, deliberate proportions and refined execution
+  integrated with the overall composition. Preserve restraint and the continuous
+  slogan. Source: explicit design-review correction, 2026-11-12.
 - Use a transparent monochrome SVG for the VS Code Activity Bar, with the gear
   expressed as negative space. It replaces the original two-arrow symbol and
   follows the editor's icon color in both light and dark themes.
@@ -278,9 +297,16 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
 Source for cross-platform compatibility: explicit user request, 2026-11-11.
 Windows, macOS and Linux desktop use the same provider features. Preserve the
 Windows DPAPI format and existing keys; use macOS Keychain and Linux Secret
-Service via Python keyring 25.7.x, explicitly selecting secure backends only.
-Never fall back to plaintext. Keep the standalone Codex credential helper
-functional outside the extension host. Document OS credential-store prerequisites.
+Service directly, without requiring users to install Python keyring or configure
+a virtual environment. Bundle the small Linux D-Bus client with the extension
+and deploy it with the standalone auth helper. No runtime pip installation or
+dependency downloads. Preserve existing service/account identities and fail
+closed if the native secure store is unavailable; never use a plaintext fallback.
+Allow the OS to present normal unlock/authorization dialogs when needed. An OS
+without a functioning secure store cannot be silently treated as encrypted.
+Keep the standalone Codex credential helper functional outside the extension
+host. Source for automatic credential setup: explicit Mac failure report and
+Windows/macOS/Linux usability requirement, 2026-11-12.
 Use Python 3.11+, defaulting to python on Windows and python3 on macOS/Linux;
 allow codexSwitch.pythonPath to select a compatible virtual environment.
 Honor CODEX_HOME consistently. Keep extensionKind=ui: remote workspaces continue

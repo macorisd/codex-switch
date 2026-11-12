@@ -109,6 +109,13 @@ def verify_vsix(content, tag):
                      'extension/backend/credential_helper.py'):
             if name not in files:
                 raise ValueError('VSIX is missing its bundled connector')
+        if tuple(map(int, manifest['version'].split('.'))) >= (0, 4, 1):
+            for name in ('extension/backend/credential_native.py', 'extension/backend/credential_store.py',
+                         'extension/backend/vendor/NOTICE.md'):
+                if name not in files:
+                    raise ValueError('VSIX is missing native credential support')
+            if not any(name.startswith('extension/backend/vendor/jeepney-') and name.endswith('.whl') for name in files):
+                raise ValueError('VSIX is missing its bundled Linux credential client')
 
 
 def checksum(content, name):

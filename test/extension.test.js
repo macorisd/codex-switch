@@ -64,7 +64,7 @@ function harness(options = {}) {
       },
       showInputBox: async values => {
         inputBoxes.push(values);
-        return options.inputKey;
+        return values.password ? options.inputKey : values.value;
       },
     },
     workspace: {
@@ -217,6 +217,9 @@ test('each provider uses a native password dialog, validates, and keeps secrets 
     assert.equal(requests(h, 'refresh', p.id).length, 1);
     assert(!JSON.stringify(h.messages).includes('test-private-key'));
     assert.equal(h.messages.filter(m => m.type === 'apiState').at(-1).state.valid, true);
+    await h.receive(apiMessage(p.id,'endpoint'));
+    assert.equal(h.inputBoxes.at(-1).value,p.baseUrl);
+    assert.equal(requests(h,'endpoint',p.id).at(-1).url,p.baseUrl);
   }
 });
 

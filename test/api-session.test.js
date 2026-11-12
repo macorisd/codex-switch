@@ -72,3 +72,39 @@ test('a connection check without a saved key cannot produce successful feedback'
   assert.equal(h.api.sessions.get('openrouter').valid, false);
   assert.equal(h.api.sessions.get('openrouter').feedback, null);
 });
+
+test('regional and plan-specific key setup configures the endpoint before storing or validating credentials', async () => {
+  for (const provider of definitions.filter(p=>p.endpointSetup)) {
+    const inputs=[];
+    const url=provider.baseUrl;
+    const h=harness(m=>m.operation==='balance'?null:local, {
+      input:async options=>{inputs.push(options);return options.password?'test-key':url;},
+    });
+    h.visible.add(provider.id);
+    await h.api.run({provider:provider.id,operation:'endpoint'});
+    assert.equal(inputs.length,0,'unconfigured standalone endpoint action is unavailable');
+    await h.api.run({provider:provider.id,operation:'saveKey'});
+    assert.equal(inputs.length,2,provider.id);
+    assert.equal(inputs[1].value,provider.baseUrl);
+    assert.equal(h.calls[0].operation,'endpoint'); assert.equal(h.calls[0].url,url);
+    assert.equal(h.calls[1].operation,'saveKey'); assert.equal(h.calls[1].key,'test-key');
+    assert(h.api.sessions.get(provider.id).valid);
+    assert(!JSON.stringify(h.messages).includes('test-key'));
+  }
+});
+
+test('cancelling or hiding during initial endpoint setup never saves a key or starts validation', async () => {
+  for (const mode of ['cancel','hide','invalid']) {
+    let h;
+    h=harness(()=>{throw new Error('invalid endpoint');},{input:async options=>{
+      if (options.password) return 'test-key';
+      if (mode==='cancel') return undefined;
+      if (mode==='hide') {h.visible.clear();h.api.reconcile();}
+      return 'https://invalid.example/v1';
+    }});
+    h.visible.add('qwen');
+    await h.api.run({provider:'qwen',operation:'saveKey'});
+    assert(!h.calls.some(c=>['saveKey','refresh'].includes(c.operation)),mode);
+    if (mode==='invalid') assert.match(h.api.sessions.get('qwen').error,/Operation failed/);
+  }
+});

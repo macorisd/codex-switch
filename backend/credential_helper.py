@@ -15,5 +15,5 @@ if __name__ == '__main__':
         else:
             print('Open Codex Switch in the VS Code sidebar.')
     except Exception:
-        sys.stderr.write('Provider credential unavailable. Check the system keyring and Python dependencies.\n')
+        sys.stderr.write('Provider credential unavailable. Unlock the system keychain and try again.\n')
         sys.exit(1)

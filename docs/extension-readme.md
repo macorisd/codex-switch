@@ -33,9 +33,10 @@ the Codex executable bundled with the OpenAI extension, or Codex on PATH.
 
 Requires VS Code desktop on Windows, macOS or Linux (x64/ARM64), Python 3.11+
 and a compatible Codex installation. Set codexSwitch.pythonPath for a custom
-Python executable. macOS/Linux also require Python keyring 25.7.x in that
-interpreter. Linux requires an unlocked Secret Service keyring and D-Bus session.
-Windows preserves existing DPAPI keys; macOS uses Keychain. No plaintext fallback.
+Python executable. Credential storage needs no additional Python packages:
+Windows preserves DPAPI keys, macOS uses Keychain directly, and Linux includes
+its Secret Service connector. The OS may request keyring authorization or unlock.
+Linux needs its desktop secure vault; no plaintext fallback is used.
 Runtime paths honor CODEX_HOME. See the repository installation requirements.
 
 [Providers, version history and downloads](https://github.com/macorisd/codex-switch)

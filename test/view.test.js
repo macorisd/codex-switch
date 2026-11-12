@@ -91,7 +91,7 @@ test('each action keeps its own feedback slot and provider headers contain only 
       const slot = field(card, feedbackRole);
       const row = slot.parentElement;
       assert(row.classList.contains('action-row'));
-      assert.equal(field(card, buttonRole).parentElement, row);
+      assert.equal(field(card, buttonRole).closest('.action-row'), row);
       h.api(provider.id, { ...configured, feedback: { operation, origin, ok: true, stamp: h.timers.length + 1 } });
       assert.equal(slot.parentElement, row);
       assert.equal(slot.hidden, false);
@@ -99,6 +99,24 @@ test('each action keeps its own feedback slot and provider headers contain only 
       assert.equal(slot.parentElement, row);
       assert.equal(slot.hidden, true);
     }
+  }
+});
+
+test('endpoint actions follow connection checks and are absent until each API provider is configured', () => {
+  const h=harness({visible:providers.map(p=>p.id)});
+  for (const {id} of definitions) {
+    const card=h.card(id), endpoint=field(card,'endpoint');
+    const controls=card.querySelector('.connection-controls');
+    assert.equal(field(card,'refresh').parentElement,controls);
+    assert.equal(endpoint.parentElement,controls);
+    assert.equal(controls.children[0],field(card,'refresh'));
+    assert.equal(controls.children[1],endpoint);
+    assert(endpoint.hidden,`${id} initial`);
+    h.api(id,{...configured,valid:false}); assert(endpoint.hidden,`${id} not configured`);
+    h.api(id,configured); assert(!endpoint.hidden,`${id} configured`);
+    endpoint.click(); assert.equal(h.messages.at(-1).operation,'endpoint');
+    assert.equal(h.messages.at(-1).provider,id);
+    h.api(id,{...configured,valid:false,error:'Invalid key'}); assert(endpoint.hidden,`${id} failed validation`);
   }
 });
 

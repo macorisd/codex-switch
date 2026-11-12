@@ -122,6 +122,7 @@
   },
   {
     "id": "moonshot",
+    "endpointSetup": true,
     "name": "Moonshot AI (Kimi)",
     "subtitle": "API key",
     "baseUrl": "https://api.moonshot.ai/v1",
@@ -152,6 +153,7 @@
   },
   {
     "id": "qwen",
+    "endpointSetup": true,
     "name": "Alibaba Cloud (Qwen)",
     "subtitle": "API key",
     "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
@@ -201,6 +203,7 @@
   },
   {
     "id": "minimax",
+    "endpointSetup": true,
     "name": "MiniMax",
     "subtitle": "API key",
     "baseUrl": "https://api.minimax.io/v1",
@@ -236,6 +239,7 @@
   },
   {
     "id": "mimo",
+    "endpointSetup": true,
     "name": "Xiaomi MiMo",
     "subtitle": "API key",
     "baseUrl": "https://api.xiaomimimo.com/v1",

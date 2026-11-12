@@ -15,7 +15,10 @@ window.ApiCards = class {
       </header>
       <div class="credential-row"><div class="credential-status"><span class="status-dot loading" data-role="dot" aria-hidden="true"></span><span data-role="status">Loading...</span></div><button class="text-button" data-role="key">Set API key</button></div>
       <div class="action-row connection-action">
-        <button class="text-button" data-role="refresh">Check connection</button>
+        <div class="connection-controls">
+          <button class="text-button" data-role="refresh">Check connection</button>
+          <button class="text-button" data-role="endpoint" hidden>API endpoint</button>
+        </div>
         <span class="action-feedback" data-role="feedback" role="status" hidden></span>
       </div>
       <p class="api-error" data-role="error" role="status"></p>
@@ -41,7 +44,6 @@ window.ApiCards = class {
       <div class="usage" data-role="balance" hidden><h4>Available balance</h4><strong class="api-balance" data-role="amount"></strong></div>
       <div class="chatgpt-usage" data-role="windows" hidden></div>
       <div data-role="alerts" hidden><button class="text-button" data-role="alert-toggle">Balance alert</button><div class="balance-alert-editor" data-role="alert-panel" hidden><button class="balance-alert-close" data-role="alert-close" aria-label="Close balance alert">&times;</button><p data-role="alert-description"></p><input type="number" min="0" step="0.01" data-role="threshold" aria-label="Balance alert threshold"></div></div>
-      <button class="text-button" data-role="endpoint">API endpoint</button>
       <button class="primary" data-role="apply">Switch provider</button>`;
     card.querySelector('h3').textContent = provider.name;
     if (provider.id === 'deepseek') card.querySelector('.api-icon').classList.add('deepseek-icon');
@@ -163,6 +165,7 @@ window.ApiCards = class {
     const disabled = state.loading || state.working;
     for (const role of ['key', 'refresh', 'refresh-models', 'endpoint', 'model', 'test']) get(role).disabled = Boolean(disabled);
     get('refresh').disabled = Boolean(disabled || !state.hasKey);
+    get('endpoint').hidden = !state.valid;
     const current = entry.active && state.model === this.appliedModel;
     get('apply').disabled = Boolean(disabled || !state.valid || !state.model || current);
     get('apply').textContent = current ? 'Current Setting' : `Switch to ${provider.name}`;
