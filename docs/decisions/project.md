@@ -273,6 +273,13 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
   only the title and subtitle; omit platform labels, badges and extra copy.
 - The banner subtitle ends with a period and the title/subtitle block is
   optically centered vertically against the logo.
+- Preserve the original banner logo scale/placement and typography when changing
+  its decorative detail: logo at (74,70), scale .18; title Segoe UI/Arial 64px,
+  weight 650, tracking -2px, at (282,141); subtitle 23px at (285,188), with 31px
+  line spacing when wrapped. Keep the original text colors. The longer slogan
+  may wrap within its paragraph (for example after "Without"), never as a forced
+  new paragraph between the two sentences. Source: explicit correction rejecting
+  unsolicited logo/type changes, 2026-11-12.
 - Use a restrained minimal banner with a considered switching motif in its right
   sector. Preserve the supplied logo, its purple identity, the title and complete
   slogan. This redesign supersedes the earlier white/purple background-gradient

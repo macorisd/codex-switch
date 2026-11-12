@@ -8,6 +8,8 @@ const geometry = logo.match(/<path id="mark"[^>]*d="([^"]+)"/)[1];
 const defs = logo.match(/<defs>([\s\S]+?)<\/defs>/)[1];
 const title = 'Codex Switch';
 const subtitle = 'Switch AI providers in Codex with a click. Without ever leaving VS Code.';
+const wrapAt = subtitle.indexOf(' ever ') + 1;
+const subtitleLines = [subtitle.slice(0, wrapAt), subtitle.slice(wrapAt)];
 // Two continuous, evenly spaced ribbons. The foreground passes over the other
 // with a narrow paper-colored clearance, rather than an ambiguous intersection.
 const ribbon = (lane, reverse = false) => {
@@ -27,9 +29,9 @@ const banner = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320
   </defs>
   <g clip-path="url(#banner-bounds)">
     <rect width="1200" height="320" fill="#FAFAF8"/>
-    <path transform="translate(70 90) scale(.14) translate(-128 -128)" fill="url(#purple)" fill-rule="evenodd" d="${geometry}"/>
-    <text x="254" y="155" fill="#282632" font-family="Segoe UI,Arial,sans-serif" font-size="58" font-weight="600" letter-spacing="-1.8">${title}</text>
-    <text x="256" y="205" fill="#6B6874" font-family="Segoe UI,Arial,sans-serif" font-size="20">${subtitle}</text>
+    <path transform="translate(74 70) scale(.18) translate(-128 -128)" fill="url(#purple)" fill-rule="evenodd" d="${geometry}"/>
+    <text x="282" y="141" fill="#35364D" font-family="Segoe UI,Arial,sans-serif" font-size="64" font-weight="650" letter-spacing="-2">${title}</text>
+    <text x="285" y="188" fill="#69677F" font-family="Segoe UI,Arial,sans-serif" font-size="23" xml:space="preserve">${subtitleLines.map((line, index) => `<tspan x="285" dy="${index ? 31 : 0}">${line}</tspan>`).join('')}</text>
     <g fill="none" aria-hidden="true">
       ${contours(true, '#D5D1DE', 1.3)}
       <path d="${ribbon(3)}" stroke="#FAFAF8" stroke-width="63"/>
