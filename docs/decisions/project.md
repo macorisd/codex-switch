@@ -56,6 +56,9 @@ Source: explicit user instructions, 2026-11-08.
   decorative for screen readers because the adjacent name already labels it.
   Preserve the right-aligned DeepSeek connection action and narrow layouts.
   Source: explicit patch request, 2026-11-11.
+  Use the available brand-color variants for provider logos, preserving their
+  colors and gradients with a contrasting tile background. Source: user
+  correction about monochrome logos, 2026-11-12.
 - Highlight the active provider's card with a blue perimeter.
 - Show provider cards in one column below a 550px webview width and two equal
   columns from 550px onward. Allow the content to grow to 960px in the wide

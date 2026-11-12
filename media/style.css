@@ -334,6 +334,7 @@ h4 { margin: 0; font-size: 12px; font-weight: 600; }
 .provider-card > .primary { margin-top: 10px; }
 .api-icon { background: #fafafa; }
 .api-icon.deepseek-icon { background: #4d6bfe; }
+.provider-card[data-provider="openrouter"] .api-icon { background: #202020; }
 .api-error { color: var(--vscode-errorForeground); font-size: 11px; margin: 4px 0; }
 .api-error:empty { display: none; }
 .model-catalog-content { display: grid; gap: 8px; padding-top: 8px; }
