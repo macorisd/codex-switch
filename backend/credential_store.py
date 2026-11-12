@@ -20,7 +20,7 @@ def protect(raw, decrypt=False):
     target = Blob()
     crypt = ctypes.WinDLL('crypt32', use_last_error=True)
     function = crypt.CryptUnprotectData if decrypt else crypt.CryptProtectData
-    label = None if decrypt else 'Codex DeepSeek API key'
+    label = None if decrypt else 'Codex provider API key'
     if not function(ctypes.byref(source), label, None, None, None, 1, ctypes.byref(target)):
         raise RuntimeError('The encrypted credential is unavailable for this user.')
     try:
@@ -43,8 +43,12 @@ def native_store():
 
 
 def service(key_path):
-    identity = str(Path(key_path).resolve().parent).encode('utf-8')
-    return 'codex-switch.deepseek.' + hashlib.sha256(identity).hexdigest()
+    path = Path(key_path).resolve()
+    identity = str(path.parent).encode('utf-8')
+    provider = path.name.split('-key.')[0]
+    # Preserve the legacy DeepSeek service exactly while isolating every other
+    # provider. The runtime directory alone is not a sufficient keyring identity.
+    return 'codex-switch.' + provider + '.' + hashlib.sha256(identity).hexdigest()
 
 
 def save(key_path, value):

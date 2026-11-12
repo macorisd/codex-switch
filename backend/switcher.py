@@ -25,6 +25,7 @@ MANAGED = ('model', 'model_provider', 'preferred_auth_method', 'forced_login_met
            'show_raw_agent_reasoning', 'service_tier', 'model_context_window',
            'model_auto_compact_token_limit', 'model_reasoning_summary',
            'plan_mode_reasoning_effort')
+# Keep these ownership markers stable so existing managed blocks migrate safely.
 BEGIN = '# BEGIN local DeepSeek provider selector'
 END = '# END local DeepSeek provider selector'
 
@@ -83,13 +84,14 @@ def refresh_catalog():
     return models
 
 
-def provider_block():
-    args = [str(ROOT / 'switcher.py'), '--token']
-    return ('\n' + BEGIN + '\n[model_providers.deepseek]\nname = "DeepSeek"\n'
-            'base_url = "https://api.deepseek.com/"\nwire_api = "responses"\n'
-            '[model_providers.deepseek.auth]\ncommand = ' + json.dumps(str(PYTHON)) + '\n'
-            'args = ' + json.dumps(args) + '\ntimeout_ms = 10000\nrefresh_interval_ms = 0\n'
-            + END + '\n')
+def provider_block(provider='deepseek'):
+    import api_providers as api
+    p = api.definition(provider)
+    args = [str(ROOT / 'switcher.py'), '--token', provider]
+    return ('\n' + BEGIN + '\n[model_providers.' + provider + ']\nname = ' + json.dumps(p['name']) + '\n'
+            'base_url = ' + json.dumps(api.endpoint(provider)) + '\nwire_api = "responses"\n'
+            '[model_providers.' + provider + '.auth]\ncommand = ' + json.dumps(str(PYTHON)) + '\n'
+            'args = ' + json.dumps(args) + '\ntimeout_ms = 10000\nrefresh_interval_ms = 0\n' + END + '\n')
 
 
 def split_config(text):
@@ -108,9 +110,10 @@ def rewrite(text, values, add_provider):
     result = prefix + head + tail
     if add_provider:
         parsed = tomllib.loads(result)
-        if 'deepseek' in parsed.get('model_providers', {}):
-            raise RuntimeError('An unmanaged DeepSeek provider already exists; no changes made.')
-        result += provider_block()
+        provider = scalar_value(values, 'model_provider') or 'deepseek'
+        if provider in parsed.get('model_providers', {}):
+            raise RuntimeError('An unmanaged provider with this ID already exists; no changes made.')
+        result += provider_block(provider)
     tomllib.loads(result)
     return result
 
@@ -163,27 +166,30 @@ def normalized_chatgpt_values(values):
     return result
 
 
-def switch(model=None, effort='high'):
+def switch(model=None, effort='high', provider='deepseek'):
+    import api_providers as api
     original = CONFIG.read_text('utf-8-sig')
     current = tomllib.loads(original)
     if model:
-        if not KEY.exists():
+        if not api.key_path(provider).exists():
             raise RuntimeError('Save your API key first.')
-        token()  # Check secure credential access without printing the credential.
-        models = json.loads(CATALOG.read_text('utf-8'))['models']
+        credential_store.load(api.key_path(provider))
+        models = json.loads(api.catalog_path(provider).read_text('utf-8'))['models']
         selected = next(m for m in models if m['slug'] == model)
-        if effort not in [x['effort'] for x in selected['supported_reasoning_levels']]:
+        if effort and effort not in [x['effort'] for x in selected['supported_reasoning_levels']]:
             raise ValueError('Unsupported reasoning effort for this model.')
-        if current.get('model_provider', 'openai') != 'deepseek':
+        if current.get('model_provider', 'openai') not in api.PROVIDERS:
             atomic(STATE, json.dumps(normalized_chatgpt_values(captured_values(original)), indent=2))
         elif not STATE.exists():
             raise RuntimeError('The saved ChatGPT settings are missing; no changes made.')
-        values = {k: json.dumps(v) for k, v in dict(model=model, model_provider='deepseek',
-                  model_reasoning_effort=effort, model_catalog_json=str(CATALOG),
+        values = {k: json.dumps(v) for k, v in dict(model=model, model_provider=provider,
+                  model_catalog_json=str(api.catalog_path(provider)),
                   web_search='disabled').items()}
+        if effort:
+            values['model_reasoning_effort'] = json.dumps(effort)
         updated = rewrite(original, values, True)
     else:
-        if current.get('model_provider', 'openai') == 'deepseek':
+        if current.get('model_provider', 'openai') in api.PROVIDERS:
             if not STATE.exists():
                 raise RuntimeError('The saved ChatGPT settings are missing; no changes made.')
             values = json.loads(STATE.read_text('utf-8'))
