@@ -84,7 +84,7 @@ if __name__ == '__main__':
         result = handle(request)
         print(json.dumps({'ok': True, 'data': result}, ensure_ascii=True, allow_nan=False))
     except s.credential_store.StoreUnavailable:
-        print(json.dumps({'ok': False, 'error': 'System credential storage requires the Python keyring package. See the installation requirements and codexSwitch.pythonPath setting.'}))
+        print(json.dumps({'ok': False, 'error': 'Your system keychain is locked or unavailable. Unlock it and try again.'}))
         sys.exit(1)
     except Exception:
         # Do not expose exception text, request bodies, or upstream responses.

@@ -56,6 +56,17 @@ class HistoryTests(unittest.TestCase):
 
 
 class PackageTests(unittest.TestCase):
+    def test_automatic_credentials_require_the_native_connector_and_bundled_client(self):
+        extras = {'extension/backend/credential_native.py': b'native',
+                  'extension/backend/credential_store.py': b'store',
+                  'extension/backend/vendor/NOTICE.md': b'license notice',
+                  'extension/backend/vendor/jeepney-0.9.0-py3-none-any.whl': b'client'}
+        release.verify_vsix(package('0.4.1', extra=extras), 'v0.4.1')
+        for missing in extras:
+            incomplete = {k:v for k,v in extras.items() if k != missing}
+            with self.assertRaises(ValueError):
+                release.verify_vsix(package('0.4.1', extra=incomplete), 'v0.4.1')
+
     def test_manifest_identity_and_local_files_are_verified(self):
         release.verify_vsix(package(), TAG)
         for content in (package('0.1.1'), package(extra={'extension/.env': b'secret'}),

@@ -4,14 +4,11 @@ from ctypes import wintypes
 import hashlib
 from pathlib import Path
 import sys
+from credential_native import MacKeychain, LinuxSecretService, StoreUnavailable
 
 
 class Blob(ctypes.Structure):
     _fields_ = [('size', wintypes.DWORD), ('data', ctypes.POINTER(ctypes.c_ubyte))]
-
-
-class StoreUnavailable(RuntimeError):
-    pass
 
 
 def protect(raw, decrypt=False):
@@ -32,14 +29,13 @@ def protect(raw, decrypt=False):
 def native_store():
     try:
         if sys.platform == 'darwin':
-            from keyring.backends.macOS import Keyring
+            return MacKeychain()
         elif sys.platform.startswith('linux'):
-            from keyring.backends.SecretService import Keyring
+            return LinuxSecretService()
         else:
-            raise RuntimeError('Unsupported credential platform.')
-        return Keyring()
-    except ImportError:
-        raise StoreUnavailable('Install the Python keyring package to use the system credential store.') from None
+            raise StoreUnavailable('Unsupported credential platform.')
+    except (OSError, ImportError):
+        raise StoreUnavailable('The system credential store is unavailable.') from None
 
 
 def service(key_path):

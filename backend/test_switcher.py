@@ -41,7 +41,10 @@ with tempfile.TemporaryDirectory() as directory:
     s.save_key(fake)
     assert fake not in s.KEY.read_text()
     assert s.token() == fake
-    helper = subprocess.run([sys.executable, str(s.ROOT / 'switcher.py'), '--token'], capture_output=True, text=True, check=True)
+    s.save_key(fake + '-updated')
+    assert s.token() == fake + '-updated'
+    s.save_key(fake)
+    helper = subprocess.run([sys.executable, '-S', str(s.ROOT / 'switcher.py'), '--token'], capture_output=True, text=True, check=True)
     assert helper.stdout == fake
     import api_providers as api
     api_paths = []
@@ -51,7 +54,7 @@ with tempfile.TemporaryDirectory() as directory:
         value = 'offline-test-key-' + provider
         api.save_key(provider, value)
         api_paths.append(api.key_path(provider))
-        helper = subprocess.run([sys.executable, str(s.ROOT / 'switcher.py'), '--token', provider], capture_output=True, text=True, check=True)
+        helper = subprocess.run([sys.executable, '-S', str(s.ROOT / 'switcher.py'), '--token', provider], capture_output=True, text=True, check=True)
         assert helper.stdout == value
         assert s.token() == fake
     s.switch('deepseek-flash')

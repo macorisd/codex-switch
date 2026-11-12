@@ -160,6 +160,34 @@ controller or config writer. Verify effort/wire changes against official docs.
 
 ## Verification boundary
 
+### Credential storage without package setup
+
+Windows keeps the original DPAPI-encrypted files. macOS calls Apple's
+[Keychain Services](https://developer.apple.com/documentation/security/keychain-services)
+directly through Python's standard-library ctypes. Linux bundles the unmodified
+Jeepney 0.9.0 wheel (49 KB, MIT license) to access the desktop's native
+[Secret Service](https://specifications.freedesktop.org/secret-service/latest/).
+Its pinned hash is checked before import; attribution and the source are in
+`backend/vendor/NOTICE.md`. No pip, virtual environment or download is required
+for credential storage. Python 3.11+ remains the connector's runtime requirement.
+
+Existing Windows blobs, Keychain generic-password service/account attributes and
+Linux service/username lookup attributes are preserved. Existing vault items are
+updated in place. Runtime files on macOS/Linux contain only a non-secret presence
+marker. The standalone auth helper receives its bundled code/client automatically
+and continues working without the extension host or installed Python packages.
+
+The OS may present an authorization/unlock prompt; cancellation fails safely.
+On Linux the service is activated through the desktop's D-Bus session and a
+default collection can be created through the vault's own prompt. A desktop with
+no secure vault cannot be turned into one without OS facilities; the connector
+fails closed rather than fabricating encryption or writing a plaintext fallback.
+The standard `plain` session algorithm describes the local D-Bus transfer encoding,
+not file storage. Disk encryption remains the native vault's responsibility;
+the extension never writes a secret or master password into a local fallback.
+
+### Tests and real-key limits
+
 Mocks cover every API provider: credential isolation, discovery, fallback and
 401/403/429/500 failures, selection persistence, Responses tools/reasoning replay,
 API-to-API-to-ChatGPT restoration, currencies, absent metrics and host validation.

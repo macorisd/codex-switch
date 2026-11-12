@@ -34,9 +34,14 @@ def initialize():
     ROOT.mkdir(parents=True, exist_ok=True)
     if not CATALOG.exists():
         atomic(CATALOG, (SOURCE / 'catalog.json').read_text('utf-8'))
-    store = (SOURCE / 'credential_store.py').read_text('utf-8')
-    if not (ROOT / 'credential_store.py').exists() or (ROOT / 'credential_store.py').read_text('utf-8') != store:
-        atomic(ROOT / 'credential_store.py', store)
+    # Deploy dependencies before the facade so an existing auth command never
+    # observes a new credential_store with its native implementation missing.
+    (ROOT / 'vendor').mkdir(exist_ok=True)
+    for name in ('credential_native.py', 'vendor/jeepney-0.9.0-py3-none-any.whl', 'credential_store.py'):
+        content = (SOURCE / name).read_bytes()
+        target = ROOT / name
+        if not target.exists() or target.read_bytes() != content:
+            atomic(target, content)
     # Keep the existing auth-command path stable across extension/source updates.
     helper = (SOURCE / 'credential_helper.py').read_text('utf-8')
     if not (ROOT / 'switcher.py').exists() or (ROOT / 'switcher.py').read_text('utf-8') != helper:
@@ -47,7 +52,8 @@ def atomic(path, text):
     path = Path(path)
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=path.name + '.', suffix='.tmp')
     try:
-        with os.fdopen(fd, 'w', encoding='utf-8', newline='') as f:
+        binary = isinstance(text, bytes)
+        with os.fdopen(fd, 'wb' if binary else 'w', **({} if binary else {'encoding': 'utf-8', 'newline': ''})) as f:
             f.write(text)
         os.replace(tmp, path)
     finally:
@@ -91,7 +97,7 @@ def provider_block(provider='deepseek'):
     return ('\n' + BEGIN + '\n[model_providers.' + provider + ']\nname = ' + json.dumps(p['name']) + '\n'
             'base_url = ' + json.dumps(api.endpoint(provider)) + '\nwire_api = "responses"\n'
             '[model_providers.' + provider + '.auth]\ncommand = ' + json.dumps(str(PYTHON)) + '\n'
-            'args = ' + json.dumps(args) + '\ntimeout_ms = 10000\nrefresh_interval_ms = 0\n' + END + '\n')
+            'args = ' + json.dumps(args) + '\ntimeout_ms = 60000\nrefresh_interval_ms = 0\n' + END + '\n')
 
 
 def split_config(text):

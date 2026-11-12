@@ -290,9 +290,16 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
 Source for cross-platform compatibility: explicit user request, 2026-11-11.
 Windows, macOS and Linux desktop use the same provider features. Preserve the
 Windows DPAPI format and existing keys; use macOS Keychain and Linux Secret
-Service via Python keyring 25.7.x, explicitly selecting secure backends only.
-Never fall back to plaintext. Keep the standalone Codex credential helper
-functional outside the extension host. Document OS credential-store prerequisites.
+Service directly, without requiring users to install Python keyring or configure
+a virtual environment. Bundle the small Linux D-Bus client with the extension
+and deploy it with the standalone auth helper. No runtime pip installation or
+dependency downloads. Preserve existing service/account identities and fail
+closed if the native secure store is unavailable; never use a plaintext fallback.
+Allow the OS to present normal unlock/authorization dialogs when needed. An OS
+without a functioning secure store cannot be silently treated as encrypted.
+Keep the standalone Codex credential helper functional outside the extension
+host. Source for automatic credential setup: explicit Mac failure report and
+Windows/macOS/Linux usability requirement, 2026-11-12.
 Use Python 3.11+, defaulting to python on Windows and python3 on macOS/Linux;
 allow codexSwitch.pythonPath to select a compatible virtual environment.
 Honor CODEX_HOME consistently. Keep extensionKind=ui: remote workspaces continue
