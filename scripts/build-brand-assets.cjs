@@ -7,7 +7,8 @@ const logo = fs.readFileSync(path.join(root, 'media/logo.svg'), 'utf8');
 const geometry = logo.match(/<path id="mark"[^>]*d="([^"]+)"/)[1];
 const defs = logo.match(/<defs>([\s\S]+?)<\/defs>/)[1];
 const title = 'Codex Switch';
-const subtitle = 'Switch AI providers in Codex with a click.';
+const subtitleLines = ['Switch AI providers in Codex with a click.', 'Without ever leaving VS Code.'];
+const subtitle = subtitleLines.join(' ');
 const banner = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title description">
   <title id="title">${title}</title>
   <desc id="description">The purple Codex Switch rosette and gear beside the words: ${subtitle}</desc>
@@ -17,8 +18,8 @@ const banner = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320
   </defs>
   <rect width="1200" height="320" rx="32" fill="url(#background)"/>
   <path transform="translate(74 70) scale(.18) translate(-128 -128)" fill="url(#purple)" fill-rule="evenodd" d="${geometry}"/>
-  <text x="282" y="155" fill="#35364D" font-family="Segoe UI,Arial,sans-serif" font-size="64" font-weight="650" letter-spacing="-2">${title}</text>
-  <text x="285" y="205" fill="#69677F" font-family="Segoe UI,Arial,sans-serif" font-size="23">${subtitle}</text>
+  <text x="282" y="141" fill="#35364D" font-family="Segoe UI,Arial,sans-serif" font-size="64" font-weight="650" letter-spacing="-2">${title}</text>
+  ${subtitleLines.map((line, index) => `<text x="285" y="${188 + index * 31}" fill="#69677F" font-family="Segoe UI,Arial,sans-serif" font-size="23">${line}</text>`).join('\n  ')}
 </svg>
 `;
 const sidebar = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
