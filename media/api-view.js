@@ -6,17 +6,37 @@ window.ApiCards = class {
     if (this.entries.has(provider.id)) return this.entries.get(provider.id).card;
     const card = document.createElement('article');
     card.className = 'provider-card'; card.dataset.provider = provider.id;
-    card.innerHTML = `<header class="api-header"><div class="provider-identity"><span class="provider-icon api-icon"></span><div class="provider-title"><h3></h3><p>API key</p></div></div><button class="text-button connection-link" data-role="refresh">Check connection</button></header>
+    card.innerHTML = `<header class="provider-header">
+        <div class="provider-identity">
+          <span class="provider-icon api-icon"></span>
+          <div class="provider-title"><h3></h3><p>API key</p></div>
+        </div>
+      </header>
       <div class="credential-row"><div class="credential-status"><span class="status-dot loading" data-role="dot" aria-hidden="true"></span><span data-role="status">Loading...</span></div><button class="text-button" data-role="key">Set API key</button></div>
+      <div class="action-row connection-action">
+        <button class="text-button" data-role="refresh">Check connection</button>
+        <span class="action-feedback" data-role="feedback" role="status" hidden></span>
+      </div>
       <p class="api-error" data-role="error" role="status"></p>
       <details class="model-catalog" data-role="catalog" hidden><summary>Model catalog</summary><div class="model-catalog-content">
       <input type="search" data-role="search" aria-label="Search models" placeholder="Search models...">
       <select data-role="lab" aria-label="Filter laboratory" hidden></select>
       <select data-role="model" size="6" aria-label="Select model"></select>
-      <p class="usage-note" data-role="selected"></p>
+      <p class="usage-note model-selection" data-role="selected"></p>
       <label class="api-effort">Reasoning <select data-role="effort" aria-label="Reasoning effort"></select></label>
       <p class="usage-note" data-role="compatibility"></p>
-      <button class="text-button" data-role="refresh-models">Update model catalog</button></div></details>
+      <div class="action-row">
+        <button class="text-button" data-role="refresh-models">Update model catalog</button>
+        <span class="action-feedback" data-role="feedback-catalog" role="status" hidden></span>
+      </div>
+      <div class="model-test">
+        <div class="action-row">
+          <button class="text-button" data-role="test">Test model</button>
+          <span class="action-feedback" data-role="feedback-test" role="status" hidden></span>
+        </div>
+        <p class="usage-note">Uses API credits</p>
+      </div>
+      </div></details>
       <div class="usage" data-role="balance" hidden><h4>Available balance</h4><strong class="api-balance" data-role="amount"></strong></div>
       <div class="chatgpt-usage" data-role="windows" hidden></div>
       <div data-role="alerts" hidden><button class="text-button" data-role="alert-toggle">Balance alert</button><div class="balance-alert-editor" data-role="alert-panel" hidden><button class="balance-alert-close" data-role="alert-close" aria-label="Close balance alert">&times;</button><p>Notify below this USD balance. Set 0 to disable low-balance alerts.</p><input type="number" min="0" step="0.01" data-role="threshold" aria-label="Balance alert threshold"></div></div>
@@ -39,29 +59,36 @@ window.ApiCards = class {
     get('model').onchange = () => send('select', { model: get('model').value, effort: '' });
     get('effort').onchange = () => send('select', { model: entry.state.model, effort: get('effort').value });
     get('alerts').hidden = provider.id !== 'deepseek';
-    get('alert-toggle').onclick = () => { get('alert-panel').hidden = !get('alert-panel').hidden; };
-    get('alert-close').onclick = () => { get('alert-panel').hidden = true; };
+    get('alert-panel').id = `${provider.id}-balance-alert`;
+    get('alert-toggle').setAttribute('aria-controls', get('alert-panel').id);
+    get('alert-toggle').setAttribute('aria-expanded', 'false');
+    get('alert-toggle').onclick = () => {
+      get('alert-panel').hidden = !get('alert-panel').hidden;
+      get('alert-toggle').setAttribute('aria-expanded', String(!get('alert-panel').hidden));
+    };
+    get('alert-close').onclick = () => {
+      get('alert-panel').hidden = true;
+      get('alert-toggle').setAttribute('aria-expanded', 'false');
+    };
     get('threshold').value = '5';
     get('threshold').onchange = () => this.send({ action: 'saveBalanceAlert', threshold: Number(get('threshold').value) });
-    const feedback = document.createElement('span'); feedback.className = 'action-feedback'; feedback.dataset.role = 'feedback'; feedback.setAttribute('role', 'status');
-    feedback.hidden = true;
-    get('refresh').after(feedback);
-    const test = document.createElement('button'); test.type = 'button'; test.className = 'text-button'; test.dataset.role = 'test';
-    test.textContent = 'Test selected model (uses API credits)'; test.onclick = () => send('test');
-    get('catalog').querySelector('.model-catalog-content').append(test);
+    get('test').onclick = () => send('test');
     this.update(provider.id, this.buffer.get(provider.id) || entry.state);
     return card;
   }
-  models(entry) {
+  models(entry, preserveScroll = false) {
     const { get, state, provider } = entry;
     const search = get('search').value.toLowerCase();
     const lab = get('lab').value;
+    const scrollTop = preserveScroll ? get('model').scrollTop : 0;
     const models = (state.models || []).filter(m => (!lab || m.id.split('/')[0] === lab) && `${m.id} ${m.name}`.toLowerCase().includes(search));
     get('model').replaceChildren(...models.map(m => {
       const option = document.createElement('option'); option.value = m.id; option.textContent = m.name === m.id ? m.id : `${m.name} (${m.id})`; option.selected = m.id === state.model; return option;
     }));
+    get('model').scrollTop = scrollTop;
     const selected = state.models?.find(m => m.id === state.model);
     get('selected').textContent = selected ? `Selected: ${selected.id}` : '';
+    get('selected').title = selected?.id || '';
     get('effort').replaceChildren(...['', ...(selected?.efforts || [])].map(value => {
       const option = document.createElement('option'); option.value = value; option.textContent = value || 'Provider default'; option.selected = value === state.effort; return option;
     }));
@@ -70,20 +97,30 @@ window.ApiCards = class {
     if (provider.id === 'openrouter' && !state.tested) get('compatibility').textContent = 'Text/tool-capable models only. Function tools are used; custom tools are disabled. Test the selected model to check Responses and reasoning replay.';
     get('effort').parentElement.hidden = !selected?.efforts.length;
   }
+  clearFeedback(entry) {
+    clearTimeout(entry.feedbackTimer);
+    for (const role of ['feedback', 'feedback-catalog', 'feedback-test']) {
+      entry.get(role).hidden = true;
+      entry.get(role).textContent = '';
+    }
+  }
   update(id, state) {
     const entry = this.entries.get(id); if (!entry) { this.buffer.set(id, state); return; }
     const { get, provider } = entry;
     entry.state = state;
-    if (typeof state.feedback?.ok === 'boolean' && state.feedback.stamp && state.feedback.stamp !== entry.feedbackStamp) {
+    if (!state.hasKey) this.clearFeedback(entry);
+    if (state.hasKey && typeof state.feedback?.ok === 'boolean' && state.feedback.stamp && state.feedback.stamp !== entry.feedbackStamp) {
       entry.feedbackStamp = state.feedback.stamp;
-      clearTimeout(entry.feedbackTimer);
-      get(state.feedback.operation === 'test' ? 'test' : state.feedback.origin || 'refresh').after(get('feedback'));
-      get('feedback').textContent = state.feedback.ok ? 'Success' : 'Failed';
-      get('feedback').className = 'action-feedback ' + (state.feedback.ok ? 'success' : 'error');
-      get('feedback').hidden = false;
+      this.clearFeedback(entry);
+      const feedbackRole = state.feedback.operation === 'test' ? 'feedback-test'
+        : state.feedback.origin === 'refresh-models' ? 'feedback-catalog' : 'feedback';
+      const feedback = get(feedbackRole);
+      feedback.textContent = state.feedback.ok ? 'Success' : 'Failed';
+      feedback.className = 'action-feedback ' + (state.feedback.ok ? 'success' : 'error');
+      feedback.hidden = false;
       entry.feedbackTimer = setTimeout(() => {
-        get('feedback').hidden = true;
-        get('feedback').textContent = '';
+        feedback.hidden = true;
+        feedback.textContent = '';
       }, 5000);
     }
     get('status').textContent = state.loading ? 'Loading...' : state.valid ? 'Configured' : 'Not configured';
@@ -105,6 +142,7 @@ window.ApiCards = class {
     get('amount').classList.toggle('balance-zero', state.balance?.total <= 0);
     const disabled = state.loading || state.working;
     for (const role of ['key', 'refresh', 'refresh-models', 'endpoint', 'model', 'effort', 'test']) get(role).disabled = Boolean(disabled);
+    get('refresh').disabled = Boolean(disabled || !state.hasKey);
     const current = entry.active && state.model === this.appliedModel && (!state.effort || state.effort === this.appliedEffort);
     get('apply').disabled = Boolean(disabled || !state.valid || !state.model || current);
     get('apply').textContent = current ? 'Current Setting' : `Switch to ${provider.name}`;
@@ -117,7 +155,7 @@ window.ApiCards = class {
         const option = document.createElement('option'); option.value = lab; option.textContent = lab || 'All laboratories'; option.selected = lab === previous; return option;
       }));
     }
-    this.models(entry);
+    this.models(entry, true);
   }
   alert(value) {
     if (!value) return;
@@ -125,7 +163,15 @@ window.ApiCards = class {
     const entry = this.entries.get('deepseek');
     if (entry && document.activeElement !== entry.get('threshold')) entry.get('threshold').value = String(value.threshold);
   }
+  closePanels() {
+    for (const entry of this.entries.values()) {
+      entry.get('alert-panel').hidden = true;
+      entry.get('alert-toggle').setAttribute('aria-expanded', 'false');
+    }
+  }
   active(provider, model, effort) {
+    if (this.activeProvider === provider && this.appliedModel === model && this.appliedEffort === effort) return;
+    this.activeProvider = provider;
     this.appliedModel = model; this.appliedEffort = effort;
     for (const [id, entry] of this.entries) { entry.active = id === provider; entry.card.classList.toggle('current-provider', entry.active); this.update(id, entry.state); }
   }

@@ -62,3 +62,13 @@ test('a failed refresh cannot regain Configured from stale persisted status on t
  await h.api.refresh('openrouter',false);assert.equal(h.api.sessions.get('openrouter').valid,false);
  assert.equal(h.calls.filter(c=>c.operation==='refresh').length,2);
 });
+
+test('a connection check without a saved key cannot produce successful feedback', async () => {
+  const h = harness(() => ({ hasKey: false, valid: false, models: [] }));
+  await h.api.refresh('openrouter', true);
+  const before = h.calls.length;
+  await h.api.run({ provider: 'openrouter', operation: 'refresh' });
+  assert.equal(h.calls.length, before);
+  assert.equal(h.api.sessions.get('openrouter').valid, false);
+  assert.equal(h.api.sessions.get('openrouter').feedback, null);
+});

@@ -54,7 +54,7 @@ Source: explicit user instructions, 2026-11-08.
   to the left of its name and subtitle, aligned as one header identity group.
   Bundle the logo assets locally, retain their attribution, and make the image
   decorative for screen readers because the adjacent name already labels it.
-  Preserve the right-aligned DeepSeek connection action and narrow layouts.
+  Preserve identity alignment and narrow layouts.
   Source: explicit patch request, 2026-11-11.
   Use the available brand-color variants for provider logos, preserving their
   colors and gradients with a contrasting tile background. Source: user
@@ -87,8 +87,11 @@ Source: explicit user instructions, 2026-11-08.
   **Switch to DeepSeek** button, or a disabled **Current Setting** button when
   it is active. Green **Configured** means the key has been validated, not only
   saved.
-- **Check connection** is a discreet blue text link aligned to the right of the
-  **API key** subtitle rather than a full-width button.
+- **Check connection** is a discreet text link in its own action row below the
+  credential status. Keep provider headers dedicated to logo, name and subtitle.
+  Long names must not move credential controls into different rows.
+  Source: full responsive-interface review requested on 2026-11-12, superseding
+  the previous placement beside the API key subtitle.
 - **Set API key** opens VS Code's native password dialog. The key is not entered,
   displayed or retained in the sidebar GUI.
 - Model catalog and Available balance remain absent while DeepSeek has no
@@ -109,9 +112,16 @@ Source: explicit user instructions, 2026-11-08.
 - **Update model catalog** and **Check connection** show green success or red
   error feedback next to the action that produced it. The feedback has no icon
   or emoji, remains visible for exactly 5 seconds, then disappears.
-  Keep the feedback element hidden before an action result and after expiry,
-  including its border, background and layout space. Source: user-reported empty
-  red boxes on API-provider cards, 2026-11-12.
+  Use plain colored text in a fixed result column beside each action, with no
+  badge border, background or padding. Reserve the result column in the action
+  row so feedback cannot move neighboring controls or alter card height. Keep
+  empty/expired messages hidden. Source: full responsive-interface review,
+  2026-11-12, refining the earlier empty-feedback correction.
+- Give all cards the same header, spacing, control sizing and section alignment.
+  Keep titles, model identifiers, errors and secondary controls contained at
+  narrow widths. Model updates must retain picker scroll position and focus.
+  Connection checks require a saved key and never report success for a missing
+  key. Source: full responsive-interface review, 2026-11-12.
 - A **Manage Providers** action next to the Provider heading opens the complete
   provider list, with an X control that closes the panel. Each provider is labeled
   as **Provider (subtitle)**, has a checkbox and controls to move it up or down;
@@ -266,6 +276,11 @@ from platform detection tests; do not claim untested systems are verified.
   instruction, 2026-11-11. Use terminal, tests and supported non-UI APIs for
   development, installation and verification. This supersedes earlier directions
   to automate inspection of the VS Code sidebar.
+  Exception: on 2026-11-12 the user explicitly authorized computer use for the
+  current responsive-interface review. Scope it to this extension's interface
+  and visual fixtures, with capture cleanup after the review. The default rule
+  remains applicable to subsequent work without another authorization.
+  The resumed review explicitly excludes Chrome and uses VS Code instead.
 - Verify backend/configuration behavior and extension tests when code changes.
   For visible changes, report the automated checks and any pending user visual
   review separately; automated tests do not establish visual verification.

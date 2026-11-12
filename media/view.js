@@ -12,6 +12,7 @@
   let syncLoading = false;
   let account = { loading: true };
   let countdownTimer = null;
+  let manageListKey = '';
   const send = message => vscode.postMessage(message);
   const isActive = provider => state?.provider === provider;
   const providerInfo = id => {
@@ -42,6 +43,11 @@
   }
 
   function renderManageList() {
+    const nextKey = JSON.stringify(providerLayout.map(entry => [
+      entry.id, entry.visible, isActive(entry.id), providerInfo(entry.id)?.name, providerInfo(entry.id)?.subtitle,
+    ]));
+    if (nextKey === manageListKey) return;
+    manageListKey = nextKey;
     $('manage-list').replaceChildren(...providerLayout.map((entry, index) => {
       const info = providerInfo(entry.id);
       const item = document.createElement('li');
@@ -99,8 +105,13 @@
       .filter(({ card }) => card);
     const visible = ({ entry }) => entry.visible || isActive(entry.id);
     for (const { entry, card } of orderedCards) card.hidden = !visible({ entry });
-    $('provider-list').replaceChildren(...orderedCards.filter(visible).map(({ card }) => card));
-    $('provider-list').hidden = false;
+    const list = $('provider-list');
+    const nextCards = orderedCards.filter(visible).map(({ card }) => card);
+    const currentCards = [...list.children];
+    if (nextCards.length !== currentCards.length || nextCards.some((card, index) => card !== currentCards[index])) {
+      list.replaceChildren(...nextCards);
+    }
+    list.hidden = false;
   }
 
   function renderAccount() {
@@ -168,7 +179,7 @@
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
     if (!$('manage-panel').hidden) setManageOpen(false);
-
+    apiCards.closePanels();
   });
   $('openai').addEventListener('click', () => send({ action: 'apply', provider: 'openai' }));
   $('sync-all').addEventListener('click', () => {

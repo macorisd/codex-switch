@@ -42,7 +42,7 @@ class ApiSessions {
       await this.publish(id);
       try { await work({ state, request, live }); }
       catch {
-        if (live()) { if (state.loading) state.valid = false; state.error = 'Operation failed. Check the key, endpoint, model access and connection. Codex sign-in was preserved.'; }
+        if (live()) { if (state.loading) state.valid = false; state.error = 'Operation failed. Check the key, endpoint, model access and connection.'; }
       } finally {
         state.working = false; state.loading = false;
         if (state.feedback) state.feedback.ok = !state.error;
@@ -91,7 +91,9 @@ class ApiSessions {
         Object.assign(state, await request(operation, isKey ? { key: value } : { url: value }));
         state.valid = false; await this.load(id, args, true);
       } else if (operation === 'refresh') {
+        if (!state.hasKey) { state.feedback = null; return; }
         state.valid = false; await this.load(id, args, true);
+        if (!state.valid) state.feedback = null;
       } else if (operation === 'test' && state.hasKey && state.model) {
         state.tested = null;
         Object.assign(state, await request('test'));

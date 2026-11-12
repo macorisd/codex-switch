@@ -78,6 +78,57 @@ test('API feedback stays hidden until a completed action and disappears fully af
   }
 });
 
+test('each action keeps its own feedback slot and provider headers contain only identity', () => {
+  const h = harness({ visible: providers.map(provider => provider.id) });
+  for (const provider of definitions) {
+    const card = h.card(provider.id);
+    assert.equal(card.querySelector('header button'), null);
+    for (const [operation, origin, buttonRole, feedbackRole] of [
+      ['refresh', 'refresh', 'refresh', 'feedback'],
+      ['refresh', 'refresh-models', 'refresh-models', 'feedback-catalog'],
+      ['test', undefined, 'test', 'feedback-test'],
+    ]) {
+      const slot = field(card, feedbackRole);
+      const row = slot.parentElement;
+      assert(row.classList.contains('action-row'));
+      assert.equal(field(card, buttonRole).parentElement, row);
+      h.api(provider.id, { ...configured, feedback: { operation, origin, ok: true, stamp: h.timers.length + 1 } });
+      assert.equal(slot.parentElement, row);
+      assert.equal(slot.hidden, false);
+      h.timers.at(-1).fn();
+      assert.equal(slot.parentElement, row);
+      assert.equal(slot.hidden, true);
+    }
+  }
+});
+
+test('missing keys disable connection checks and account refreshes preserve model browsing', () => {
+  const h = harness({ visible: ['openai', 'openrouter'] });
+  const card = h.card('openrouter');
+  h.api('openrouter', { hasKey: false, valid: false, loading: false, models: [] });
+  assert.equal(field(card, 'refresh').disabled, true);
+  assert.equal(field(card, 'key').disabled, false);
+  h.api('openrouter', { hasKey: false, valid: false, loading: false, models: [], feedback: { ok: true, stamp: 1 } });
+  assert.equal(field(card, 'feedback').hidden, true);
+  h.api('openrouter', configured);
+  const model = field(card, 'model');
+  model.scrollTop = 100;
+  const option = model.firstChild;
+  let listReplacements = 0;
+  const replaceProviders = h.$('provider-list').replaceChildren.bind(h.$('provider-list'));
+  h.$('provider-list').replaceChildren = (...nodes) => { listReplacements++; replaceProviders(...nodes); };
+  h.receive({ type: 'chatgpt', account: { configured: true, loading: false, plan: 'Plus' } });
+  assert.equal(model.firstChild, option);
+  assert.equal(model.scrollTop, 100);
+  h.receive({ type: 'chatgpt', account: { configured: true, loading: false, plan: 'Plus', bankedResets: 2 } });
+  const stableChoice = h.$('manage-list').querySelector('input');
+  h.receive({ type: 'chatgpt', account: { configured: true, loading: false, plan: 'Plus', bankedResets: 3 } });
+  assert.equal(h.$('manage-list').querySelector('input'), stableChoice);
+  assert.equal(listReplacements, 0);
+  h.api('openrouter', { ...configured, balance: { total: 3, currency: 'USD' } });
+  assert.equal(model.scrollTop, 100);
+});
+
 test('OpenRouter search/lab filters retain one card and render upstream names as text',()=>{
   const h=harness({visible:['openai','openrouter']});
   const card=h.card('openrouter');
@@ -91,7 +142,7 @@ test('OpenRouter search/lab filters retain one card and render upstream names as
   field(card,'lab').dispatchEvent(new h.window.Event('change'));
   assert.equal(field(card,'model').firstChild.value,'anthropic/claude');
   field(card,'test').click(); assert.equal(h.messages.at(-1).operation,'test');
-  assert.match(field(card,'test').textContent,/credits/);
+  assert.match(field(card,'test').closest('.model-test').textContent,/credits/);
 });
 
 test('selection sends model/effort; active provider can apply a changed model',()=>{
@@ -122,6 +173,11 @@ test('balance currency, alert preferences and five-second feedback remain consis
   assert.equal(field(card,'feedback').textContent,'Success'); assert.equal(h.timers.at(-1).delay,5000);
   h.timers.at(-1).fn(); assert.equal(field(card,'feedback').textContent,'');
   field(card,'alert-toggle').click(); assert(!field(card,'alert-panel').hidden);
+  assert.equal(field(card,'alert-toggle').getAttribute('aria-expanded'),'true');
+  const escape = new h.window.Event('keydown'); escape.key = 'Escape'; h.document.dispatchEvent(escape);
+  assert(field(card,'alert-panel').hidden);
+  assert.equal(field(card,'alert-toggle').getAttribute('aria-expanded'),'false');
+  field(card,'alert-toggle').click();
   field(card,'threshold').value='2'; field(card,'threshold').dispatchEvent(new h.window.Event('change'));
   assert.equal(h.messages.at(-1).threshold,2);
   h.receive({type:'balanceAlert',balanceAlert:{threshold:3}}); assert.equal(field(card,'threshold').value,'3');
