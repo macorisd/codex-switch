@@ -2,14 +2,26 @@
   <img src="docs/banner.svg" alt="Codex Switch: Switch AI providers in Codex with a click." width="100%">
 </p>
 
-Codex Switch is a VS Code sidebar extension that moves Codex between your existing ChatGPT subscription and DeepSeek API providers.
-ChatGPT plan and usage limits, the DeepSeek model catalog and balance stay in one focused panel.
-DeepSeek credentials use your operating system secure storage and provider switches reload VS Code automatically.
+Codex Switch is a VS Code sidebar extension that switches Codex between your ChatGPT subscription and nine API-key providers.
+Keep account usage, searchable models, reasoning settings and supported balances in one panel.
+Keys use your operating system secure storage; switching preserves ChatGPT sign-in and reloads VS Code automatically.
 
 | Provider | Access | Available models |
 | --- | --- | --- |
 | ChatGPT | Existing ChatGPT subscription and sign-in | Models available to your account |
-| DeepSeek | Encrypted DeepSeek API key | `deepseek-flash`, `deepseek-v4-pro` |
+| DeepSeek | API key | Refreshed official Codex catalog |
+| OpenRouter | API key | Discover text/tool-capable models; search and filter laboratories |
+| OpenAI API | API key, separate billing | Discover Responses model candidates |
+| Z.AI (GLM) | Coding Plan API key | Discover models; documented GLM fallback |
+| Moonshot AI (Kimi) | Regional API key | Discover native Responses models |
+| Alibaba Cloud (Qwen) | Token Plan or workspace PAYG key | Discover models; documented plan-specific fallback |
+| xAI (Grok) | API key | Discover Grok models |
+| MiniMax | M Plan or PAYG API key | Discover native Responses M-series models |
+| Xiaomi MiMo | PAYG or Token Plan API key | Discover native Responses models |
+
+See [provider setup, official sources and compatibility limits](docs/providers.md).
+Catalog validation is separate from inference. **Test selected model (uses API credits)**
+checks a synthetic function-tool round-trip; it does not certify a full Codex session.
 
 ## Install
 
@@ -19,7 +31,7 @@ DeepSeek credentials use your operating system secure storage and provider switc
 3. In VS Code, open **Extensions**, choose **Install from VSIX...**, and select
    the downloaded file.
 4. Reload VS Code, open **Codex Switch** from the Activity Bar, configure
-   DeepSeek if needed, and switch providers.
+   an API key if needed, and switch providers.
 
 Codex Switch supports VS Code desktop on Windows, macOS and Linux (x64/ARM64),
 with Python 3.11+ and a compatible Codex installation. Windows uses `python`;
@@ -44,6 +56,7 @@ the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
+| 0.4.0 | Add eight API-key providers through a shared engine, searchable model/reasoning selection, OpenRouter laboratory filtering and explicit model tests, and supported balance/quota information. |
 | [0.3.3](https://github.com/macorisd/codex-switch/releases/tag/v0.3.3) | Arrange providers in two columns from a panel width of 550px with equal card heights and aligned bottom buttons, retaining natural heights on narrower panels and full width for a single visible provider. |
 | [0.3.2](https://github.com/macorisd/codex-switch/releases/tag/v0.3.2) | Add rounded app-style ChatGPT and DeepSeek logos beside each provider name and subtitle. |
 | [0.3.1](https://github.com/macorisd/codex-switch/releases/tag/v0.3.1) | Support Windows, macOS and Linux with native credential stores, portable Python paths, configurable interpreter, CODEX_HOME support and cross-platform CI. |

@@ -23,7 +23,7 @@ Source: explicit user instructions and initialization answers, 2026-11-07.
 - The product is **codex-switch**, a VS Code extension accessible from the
   sidebar. Its UI is minimal and follows the editor's theme.
 - Support convenient switching between an existing ChatGPT subscription and
-  DeepSeek API models. Provider-specific history and tools can differ; switching
+  the supported API-key providers. Provider-specific history and tools can differ; switching
   requires the appropriate Codex client reload and a new conversation. After a
   successful **Switch to ChatGPT** or **Switch to DeepSeek** action, reload VS
   Code automatically without an additional confirmation prompt.
@@ -48,8 +48,8 @@ Source: explicit user instructions, 2026-11-08.
 - Show only **Current Configuration** and **Provider**. Current Configuration
   names the active provider and its subtitle, such as **ChatGPT (Your Plan)** or
   **DeepSeek (API key)**, and never exposes a concrete model.
-- Under Provider, show one section for **ChatGPT** with its detected plan
-  subtitle (see ChatGPT Usage), and one for **DeepSeek** with **API key**.
+- Show ChatGPT with its detected plan subtitle (see ChatGPT Usage) and all nine
+  API providers with **API key**, respecting Manage Providers visibility/order.
 - Place each provider's recognizable logo in a compact rounded app-icon tile
   to the left of its name and subtitle, aligned as one header identity group.
   Bundle the logo assets locally, retain their attribution, and make the image
@@ -89,7 +89,9 @@ Source: explicit user instructions, 2026-11-08.
 - **Set API key** opens VS Code's native password dialog. The key is not entered,
   displayed or retained in the sidebar GUI.
 - Model catalog and Available balance remain absent while DeepSeek has no
-  validated API key. Saving a key triggers validation automatically; only a
+  validated API key. A new provider without a catalog endpoint may reveal its
+  documented fallback models for an explicit validation test; switching stays
+  disabled until credentials have been validated. Saving a key triggers validation automatically; only a
   successful validation reveals those sections. The provider switch button
   remains visible directly below the credential controls whether or not the key
   is configured, and becomes enabled only after successful validation.
@@ -114,15 +116,39 @@ Source: explicit user instructions, 2026-11-08.
   Configuration and the Provider section; repair any persisted layout that hides
   it. Keep the provider section hidden until the persisted filter and order have
   been applied so a window reload never flashes the complete provider list.
-- Do not add introductory, explanatory, footer or other informational copy to
-  the sidebar. Do not add model selectors or reasoning-effort controls.
-- Use the first available model from the refreshed catalog when switching to
-  DeepSeek because model choice is internal to the provider action.
+- Keep the sidebar compact. API-key providers now expose searchable model and
+  supported reasoning-effort selection inside their collapsed catalog; persist
+  each provider's selection. This supersedes the previous first-model-only rule.
+  Source: explicit eight-provider implementation request, 2026-11-12.
 - Providers with API-key credentials show the model catalog in a disclosure that
-  is collapsed by default. Expanding it shows both the fixed model list and
+  is collapsed by default. Expanding it shows model selection and
   **Update model catalog**. The collapsed disclosure has a single bottom divider,
   never both top and bottom borders. The following Available balance section
   must not add a second top divider.
+
+## API provider architecture
+
+Source: explicit implementation request, 2026-11-12.
+
+- Support ten provider cards: ChatGPT subscription, DeepSeek, OpenRouter,
+  OpenAI API, Z.AI (GLM), Moonshot AI (Kimi), Alibaba Cloud (Qwen), xAI (Grok),
+  MiniMax and Xiaomi MiMo. ChatGPT authentication remains a separate case.
+- Share declarative definitions, encrypted credential storage, lifecycle,
+  model discovery, validation, selection, switching and card rendering across
+  API providers. Preserve the existing DeepSeek key and ChatGPT restore path.
+- Connect directly using native OpenAI Responses endpoints. Never introduce
+  local protocol converters or proxies for Anthropic or Google models.
+- Discover catalogs and capabilities from official APIs where available;
+  documented model-specific overrides and bounded fallbacks cover missing
+  metadata. Do not label catalog discovery as a successful inference test.
+- OpenRouter remains one provider with search and laboratory filtering. Filter
+  out models without text output and tool support. Explain remaining tool and
+  reasoning compatibility limits and provide an explicit model test.
+- Show only reliable published balance/usage metrics; hide unsupported metrics.
+  Ordinary keys must not require organization-admin billing credentials.
+- Tests use mocked APIs because the user has no keys for the eight new services.
+  Record official sources and distinguish documentation, mocks and real-key
+  verification. Never claim actual inference was verified without executing it.
 
 ## ChatGPT Usage
 

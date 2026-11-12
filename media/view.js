@@ -7,11 +7,8 @@
   );
   let state;
   let busy = false;
-  let pendingAction = null;
   let providerLayout = [];
   let layoutRevision = 0;
-  const feedbackTimers = new Map();
-  let balance = null;
   let syncLoading = false;
   let account = { loading: true };
   let countdownTimer = null;
@@ -21,17 +18,12 @@
     const info = state?.providers.find(provider => provider.id === id);
     return info && id === 'openai' ? { ...info, subtitle: account.configured && account.plan ? `Your ${account.plan} Plan` : 'Your Plan' } : info;
   };
-  const hasDeepSeekKey = () => Boolean(state?.hasKey);
-  const hasValidDeepSeekKey = () => Boolean(state?.hasValidKey);
-  const isCheckingDeepSeekKey = () => Boolean(state?.keyChecking);
-
+  const apiCards = new window.ApiCards(send);
   function actionButton(id, text, disabled) {
-    const button = $(id);
-    button.textContent = text;
-    button.disabled = disabled;
-    button.classList.toggle('current-setting', disabled && text === 'Current Setting');
+    $(id).textContent = text;
+    $(id).disabled = disabled;
+    $(id).classList.toggle('current-setting', isActive(id));
   }
-
   function sendLayout() {
     layoutRevision += 1;
     send({
@@ -111,46 +103,6 @@
     $('provider-list').hidden = false;
   }
 
-  function showFeedback(containerId, textId, ok, message) {
-    clearTimeout(feedbackTimers.get(containerId));
-    const container = $(containerId);
-    container.hidden = false;
-    container.classList.toggle('success', ok);
-    container.classList.toggle('error', !ok);
-    $(textId).textContent = message;
-    feedbackTimers.set(containerId, setTimeout(() => {
-      container.hidden = true;
-      $(textId).textContent = '';
-    }, 5000));
-  }
-
-  function clearFeedback(containerId, textId) {
-    clearTimeout(feedbackTimers.get(containerId));
-    $(containerId).hidden = true;
-    $(textId).textContent = '';
-  }
-
-  function renderBalance() {
-    const threshold = state?.balanceAlert?.threshold ?? 5;
-    const level = state?.balanceAlert?.level || 'ok';
-    const total = Number.isFinite(balance?.total) ? balance.total : null;
-    $('balance-value').classList.toggle('low', level === 'low');
-    $('balance-value').classList.toggle('zero', level === 'zero');
-    $('balance-value').textContent = total === null
-      ? (balance ? 'Unavailable' : '--')
-      : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(total);
-    $('balance-alert-toggle').disabled = busy || !hasValidDeepSeekKey();
-
-    const input = $('balance-threshold');
-    if (document.activeElement !== input) {
-      input.value = String(threshold);
-    }
-    $('balance-threshold-copy').textContent = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(threshold);
-  }
-
   function renderAccount() {
     $('chatgpt-plan').textContent = providerInfo('openai')?.subtitle || 'Your Plan';
     $('chatgpt-dot').classList.toggle('configured', account.configured === true);
@@ -194,46 +146,17 @@
 
   function render() {
     if (!state) return;
+    for (const provider of state.providers.filter(p => p.id !== 'openai')) cards.set(provider.id, apiCards.card(provider));
     const active = providerInfo(state.provider);
     $('current').textContent = active ? `${active.name} (${active.subtitle})` : state.provider;
-    $('sync-all').classList.toggle('loading', syncLoading);
-    $('sync-all').disabled = busy || syncLoading;
-
-    for (const [id, card] of cards) card.classList.toggle('current-provider', isActive(id));
+    cards.get('openai').classList.toggle('current-provider', isActive('openai'));
     actionButton('openai', isActive('openai') ? 'Current Setting' : 'Switch to ChatGPT', busy || isActive('openai'));
-    actionButton(
-      'deepseek-switch',
-      isActive('deepseek') ? 'Current Setting' : 'Switch to DeepSeek',
-      busy || isActive('deepseek') || !hasValidDeepSeekKey(),
-    );
-
-    const keyChecking = isCheckingDeepSeekKey();
-    const hasValidKey = hasValidDeepSeekKey();
-    $('key-dot').classList.toggle('configured', hasValidKey && !keyChecking);
-    $('key-dot').classList.toggle('not-configured', !hasValidKey && !keyChecking);
-    $('key-dot').classList.toggle('loading', keyChecking);
-    $('key-status').textContent = keyChecking
-      ? 'Loading...'
-      : hasValidKey ? 'Configured' : 'Not configured';
-    $('set-key').disabled = busy || keyChecking;
-    $('model-catalog').hidden = !hasValidDeepSeekKey();
-    $('usage').hidden = !hasValidDeepSeekKey();
-
-    $('models').replaceChildren(...state.models.map(model => {
-      const item = document.createElement('li');
-      item.textContent = model.name;
-      return item;
-    }));
-    $('refresh').textContent = pendingAction === 'refresh' && busy ? 'Updating...' : 'Update model catalog';
-    $('refresh').disabled = busy;
-    $('verify').disabled = busy || keyChecking || !hasDeepSeekKey();
-    renderBalance();
-    renderAccount();
-
-    renderManageList();
-    renderProviderOrder();
+    $('sync-all').classList.toggle('loading', syncLoading);
+    $('sync-all').disabled = syncLoading || busy;
+    apiCards.active(state.provider, state.model, state.effort);
+    apiCards.alert(state.balanceAlert);
+    renderAccount(); renderManageList(); renderProviderOrder();
   }
-
   function setManageOpen(open) {
     const panel = $('manage-panel');
     panel.hidden = !open;
@@ -245,100 +168,26 @@
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
     if (!$('manage-panel').hidden) setManageOpen(false);
-    if (!$('balance-alert-editor').hidden) {
-      $('balance-alert-editor').hidden = true;
-      $('balance-alert-toggle').setAttribute('aria-expanded', 'false');
-    }
+
   });
-  $('set-key').addEventListener('click', () => send({ action: 'saveKey' }));
   $('openai').addEventListener('click', () => send({ action: 'apply', provider: 'openai' }));
-  $('deepseek-switch').addEventListener('click', () => send({ action: 'apply', provider: 'deepseek' }));
-  $('refresh').addEventListener('click', () => {
-    pendingAction = 'refresh';
-    clearFeedback('catalog-feedback', 'catalog-feedback-text');
-    send({ action: 'refresh' });
-  });
-  $('verify').addEventListener('click', () => {
-    pendingAction = 'verify';
-    clearFeedback('connection-feedback', 'connection-feedback-text');
-    send({ action: 'verify' });
-  });
   $('sync-all').addEventListener('click', () => {
     if (syncLoading || busy) return;
-    syncLoading = true;
-    clearFeedback('balance-feedback', 'balance-feedback-text');
-    render();
-    send({ action: 'syncAll' });
+    syncLoading = true; render(); send({ action: 'syncAll' });
   });
-  $('balance-alert-toggle').addEventListener('click', () => {
-    const editor = $('balance-alert-editor');
-    editor.hidden = !editor.hidden;
-    $('balance-alert-toggle').setAttribute('aria-expanded', String(!editor.hidden));
-    if (!editor.hidden) $('balance-threshold').focus();
-  });
-  $('balance-alert-close').addEventListener('click', () => {
-    $('balance-alert-editor').hidden = true;
-    $('balance-alert-toggle').setAttribute('aria-expanded', 'false');
-  });
-  $('balance-threshold').addEventListener('keydown', event => {
-    if (event.key === 'Enter') $('balance-threshold').blur();
-  });
-  $('balance-threshold').addEventListener('change', event => {
-    const value = event.target.value.trim();
-    send({ action: 'saveBalanceAlert', threshold: value === '' ? 0 : Number(value) });
-  });
-
   window.addEventListener('message', ({ data }) => {
     if (data.type === 'state') {
-      const wasValid = hasValidDeepSeekKey();
-      state = data.state;
-      account = state.chatgpt || account;
-      if (wasValid && !hasValidDeepSeekKey()) balance = null;
-      busy = data.busy;
-      if ((state.providerLayoutRevision || 0) >= layoutRevision) {
-        adoptProviderLayout(state.providerLayout, state.providerLayoutRevision || 0);
-      }
-      render();
-    } else if (data.type === 'chatgpt') {
-      account = data.account;
-      render();
-    } else if (data.type === 'busy') {
-      busy = data.busy;
-      if (!busy) pendingAction = null;
-      render();
-    } else if (data.type === 'actionResult') {
-      const action = data.action || pendingAction;
-      pendingAction = null;
-      if (action === 'verify') {
-        showFeedback('connection-feedback', 'connection-feedback-text', data.ok, data.message);
-      } else if (action === 'refresh') {
-        showFeedback('catalog-feedback', 'catalog-feedback-text', data.ok, data.message);
-      }
-      render();
-    } else if (data.type === 'balance') {
-      balance = data.balance;
-      state.balanceAlert = data.balanceAlert;
-      renderBalance();
+      state = data.state; account = state.chatgpt || account; busy = data.busy;
+      adoptProviderLayout(state.providerLayout, state.providerLayoutRevision || 0); render();
+    } else if (data.type === 'apiState') {
+      apiCards.update(data.provider, data.state);
     } else if (data.type === 'balanceAlert') {
-      state.balanceAlert = data.balanceAlert;
-      renderBalance();
-    } else if (data.type === 'syncLoading') {
-      syncLoading = data.loading;
-      render();
-    } else if (data.type === 'balanceError') {
-      balance = null;
-      showFeedback('balance-feedback', 'balance-feedback-text', false, data.message);
-      renderBalance();
-    } else if (data.type === 'providerLayout') {
-      adoptProviderLayout(data.layout, data.revision);
-      renderManageList();
-      renderProviderOrder();
-    } else if (data.type === 'providerLayoutError') {
-      adoptProviderLayout(data.layout, data.revision);
-      renderManageList();
-      renderProviderOrder();
+      apiCards.alert(data.balanceAlert);
+    } else if (data.type === 'chatgpt') { account = data.account; render();
+    } else if (data.type === 'syncLoading') { syncLoading = data.loading; render();
+    } else if (data.type === 'providerLayout' || data.type === 'providerLayoutError') {
+      adoptProviderLayout(data.layout, data.revision); render();
     }
   });
-
   send({ action: 'ready' });
 })();

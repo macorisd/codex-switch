@@ -4,409 +4,130 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-
-const extensionRoot = path.dirname(__dirname);
-
-class ClassList {
-  constructor() {
-    this.values = new Set();
-  }
-
-  toggle(name, force) {
-    if (force) this.values.add(name);
-    else this.values.delete(name);
-  }
-
-  contains(name) {
-    return this.values.has(name);
-  }
+const { parseHTML } = require('linkedom');
+const definitions = require('../backend/providers.json');
+const root = path.dirname(__dirname);
+const providers = [{id:'openai',name:'ChatGPT',subtitle:'Your Plan'}, ...definitions.map(p=>({...p,iconUri:`local/${p.icon}`}))];
+const layout = visible => providers.map(p=>({id:p.id,visible:visible.includes(p.id)}));
+function harness({provider='openai',visible=['openai','deepseek'],chatgpt={loading:true}}={}) {
+  const {window,document}=parseHTML(fs.readFileSync(path.join(root,'media/index.html'),'utf8'));
+  const messages=[],timers=[];
+  const sandbox={window,document,acquireVsCodeApi:()=>({postMessage:m=>messages.push(m)}),setInterval:()=>1,clearInterval(){},setTimeout:(fn,delay)=>{timers.push({fn,delay});return timers.length;},clearTimeout(){}};
+  const context=vm.createContext(sandbox);
+  for(const file of ['api-view.js','view.js']) vm.runInContext(fs.readFileSync(path.join(root,'media',file),'utf8'),context);
+  const receive=data=>{const event=new window.Event('message');event.data=data;window.dispatchEvent(event);};
+  receive({type:'state',busy:false,state:{provider,model:'test-model',effort:'high',providers,providerLayout:layout(visible),providerLayoutRevision:0,chatgpt,balanceAlert:{threshold:5}}});
+  return {window,document,messages,timers,receive,$:id=>document.getElementById(id),card:id=>document.querySelector(`article[data-provider="${id}"]`),api:(id,state)=>receive({type:'apiState',provider:id,state})};
 }
+const configured={loading:false,hasKey:true,valid:true,model:'test-model',effort:'high',models:[{id:'test-model',name:'Test model',efforts:['low','high']}],balance:{total:8,currency:'USD'}};
+const field=(card,role)=>card.querySelector(`[data-role="${role}"]`);
 
-class Element {
-  constructor(tagName = 'div', id = '') {
-    this.tagName = tagName.toUpperCase();
-    this.id = id;
-    this.children = [];
-    this.listeners = new Map();
-    this.attributes = new Map();
-    this.dataset = {};
-    this.classList = new ClassList();
-    this.hidden = false;
-    this.disabled = false;
-    this.checked = false;
-    this.value = '';
-    this.textContent = '';
+test('real HTML and shared card template apply filtering before revealing providers',()=>{
+  const h=harness({visible:['openai','openrouter','mimo']});
+  assert.equal(h.$('provider-list').hidden,false);
+  assert.deepEqual([...h.$('provider-list').children].map(c=>c.dataset.provider),['openai','openrouter','mimo']);
+  assert.equal(h.document.querySelectorAll('.provider-card').length,3);
+  assert.equal(h.messages[0].action,'ready');
+  for(const id of ['openrouter','mimo']) {
+    assert(field(h.card(id),'catalog').hidden);
+    assert.equal(field(h.card(id),'status').textContent,'Loading...');
+    assert(field(h.card(id),'key').disabled);
+    assert(h.card(id).querySelector('.provider-icon img').src.startsWith('local/'));
   }
+});
 
-  append(...children) {
-    this.children.push(...children);
+test('all nine API cards share configuration, errors, model and reasoning controls',()=>{
+  const h=harness({visible:providers.map(p=>p.id)});
+  for(const p of definitions){
+    const card=h.card(p.id); h.api(p.id,configured);
+    assert.equal(field(card,'status').textContent,'Configured'); assert(!field(card,'catalog').hidden);
+    assert(!field(card,'catalog').hasAttribute('open'));
+    assert.equal(field(card,'model').children.length,1);
+    field(card,'key').click(); assert.equal(h.messages.at(-1).provider,p.id);
+    h.api(p.id,{...configured,valid:false,error:'Invalid key'});
+    assert.equal(field(card,'status').textContent,'Not configured'); assert(!field(card,'key').disabled);
+    assert(field(card,'apply').disabled);
   }
-
-  replaceChildren(...children) {
-    this.children = [...children];
-  }
-
-  addEventListener(type, listener) {
-    this.listeners.set(type, listener);
-  }
-
-  dispatch(type) {
-    this.listeners.get(type)?.({ target: this });
-  }
-
-  setAttribute(name, value) {
-    this.attributes.set(name, String(value));
-  }
-
-  getAttribute(name) {
-    return this.attributes.get(name);
-  }
-
-  focus() {}
-}
-
-function webviewHarness(state) {
-  const elements = new Map();
-  const add = (id, tag = 'div') => {
-    const element = new Element(tag, id);
-    elements.set(id, element);
-    return element;
-  };
-  for (const id of [
-    'manage-providers', 'manage-panel', 'manage-list', 'provider-list', 'close-manage',
-    'set-key', 'openai', 'deepseek-switch', 'current', 'key-dot', 'key-status',
-    'model-catalog', 'usage',
-    'chatgpt-plan', 'chatgpt-dot', 'chatgpt-status', 'chatgpt-usage', 'chatgpt-stale',
-    'five-hour-value', 'five-hour-bar', 'five-hour-reset', 'five-hour-countdown',
-    'weekly-value', 'weekly-bar', 'weekly-reset', 'weekly-countdown', 'banked-resets',
-    'models', 'refresh', 'verify', 'connection-feedback', 'connection-feedback-text',
-    'catalog-feedback', 'catalog-feedback-text',
-    'balance-feedback', 'balance-feedback-text',
-    'balance-value', 'sync-all', 'balance-alert-toggle', 'balance-alert-editor',
-    'balance-alert-close', 'balance-threshold', 'balance-threshold-copy',
-  ]) add(id);
-  elements.get('provider-list').hidden = true;
-  elements.get('balance-alert-editor').hidden = true;
-
-  const openaiCard = add('openai-card', 'article');
-  openaiCard.dataset.provider = 'openai';
-  const deepseekCard = add('deepseek-card', 'article');
-  deepseekCard.dataset.provider = 'deepseek';
-  const cards = [openaiCard, deepseekCard];
-
-  const windowListeners = new Map();
-  const messages = [];
-  const timers = [];
-  const document = {
-    getElementById: id => elements.get(id),
-    querySelectorAll: selector => selector === '.provider-card' ? cards : [],
-    createElement: tag => new Element(tag),
-    addEventListener() {},
-  };
-  const window = {
-    addEventListener(type, listener) {
-      windowListeners.set(type, listener);
-    },
-  };
-  const sandbox = {
-    document,
-    window,
-    acquireVsCodeApi: () => ({
-      postMessage: message => messages.push(JSON.parse(JSON.stringify(message))),
-    }),
-    setTimeout: (listener, delay) => {
-      timers.push({ listener, delay });
-      return timers.length;
-    },
-    clearTimeout() {},
-    setInterval() { return 1; },
-    clearInterval() {},
-  };
-  vm.runInNewContext(
-    fs.readFileSync(path.join(extensionRoot, 'media', 'view.js'), 'utf8'),
-    sandbox,
-  );
-  const receive = data => windowListeners.get('message')({ data });
-  if (state) receive({ type: 'state', state, busy: false });
-  return { elements, cards, messages, timers, receive };
-}
-
-function initialState(providerLayout = [
-  { id: 'openai', visible: true },
-  { id: 'deepseek', visible: true },
-], provider = 'openai') {
-  return {
-    provider,
-    hasKey: true,
-    hasValidKey: true,
-    keyChecking: false,
-    models: [{ id: 'deepseek-flash', name: 'DeepSeek-Flash' }],
-    providers: [
-      { id: 'openai', name: 'ChatGPT', subtitle: 'Your Plan' },
-      { id: 'deepseek', name: 'DeepSeek', subtitle: 'API key' },
-    ],
-    providerLayout,
-    providerLayoutRevision: 0,
-    balanceAlert: { threshold: 5, level: 'ok' },
-  };
-}
-
-function manageItem(element, provider) {
-  return element.children.find(item => item.dataset.provider === provider);
-}
-
-test('webview applies provider filtering before revealing the section', () => {
-  const h = webviewHarness(null);
-  assert.equal(h.elements.get('provider-list').hidden, true);
-  h.receive({
-    type: 'state',
-    busy: false,
-    state: initialState([
-      { id: 'deepseek', visible: true },
-      { id: 'openai', visible: false },
-    ], 'deepseek'),
-  });
-  assert.equal(h.elements.get('provider-list').hidden, false);
-  assert.deepEqual(h.elements.get('provider-list').children, [h.cards[1]]);
 });
 
-test('webview keeps the active card visible and formats provider labels', () => {
-  const h = webviewHarness(initialState([
-    { id: 'deepseek', visible: true },
-    { id: 'openai', visible: false },
-  ]));
-  assert.equal(h.elements.get('current').textContent, 'ChatGPT (Your Plan)');
-  assert.equal(h.elements.get('provider-list').children.includes(h.cards[0]), true);
-  const openaiItem = manageItem(h.elements.get('manage-list'), 'openai');
-  const deepseekItem = manageItem(h.elements.get('manage-list'), 'deepseek');
-  assert.equal(openaiItem.children[0].children[0].disabled, true);
-  assert.equal(openaiItem.children[0].children[1].textContent, 'ChatGPT (Your Plan)');
-  assert.equal(deepseekItem.children[0].children[1].textContent, 'DeepSeek (API key)');
+test('OpenRouter search/lab filters retain one card and render upstream names as text',()=>{
+  const h=harness({visible:['openai','openrouter']});
+  const card=h.card('openrouter');
+  h.api('openrouter',{...configured,model:'anthropic/claude',models:[{id:'anthropic/claude',name:'Claude',efforts:['high']},{id:'google/gemini',name:'Gemini',efforts:[]},{id:'openai/gpt',name:'<img src=x onerror=attack()>',efforts:[]}]});
+  assert.equal(field(card,'model').children.length,3); assert.equal(card.querySelectorAll('img').length,1);
+  assert.equal(field(card,'lab').children.length,4);
+  field(card,'search').value='gem'; field(card,'search').dispatchEvent(new h.window.Event('input'));
+  assert.equal(field(card,'model').children.length,1); assert.equal(field(card,'model').firstChild.value,'google/gemini');
+  field(card,'search').value='';
+  [...field(card,'lab').children].find(o=>o.value==='anthropic').selected=true;
+  field(card,'lab').dispatchEvent(new h.window.Event('change'));
+  assert.equal(field(card,'model').firstChild.value,'anthropic/claude');
+  field(card,'test').click(); assert.equal(h.messages.at(-1).operation,'test');
+  assert.match(field(card,'test').textContent,/credits/);
 });
 
-test('webview hides API-only sections until the DeepSeek key is valid', () => {
-  const state = initialState();
-  state.hasKey = true;
-  state.hasValidKey = false;
-  const h = webviewHarness(state);
-  assert.equal(h.elements.get('model-catalog').hidden, true);
-  assert.equal(h.elements.get('usage').hidden, true);
-  assert.equal(h.elements.get('deepseek-switch').hidden, false);
-  assert.equal(h.elements.get('deepseek-switch').disabled, true);
-  assert.equal(h.elements.get('key-status').textContent, 'Not configured');
-
-  h.receive({ type: 'state', busy: false, state: initialState() });
-  assert.equal(h.elements.get('model-catalog').hidden, false);
-  assert.equal(h.elements.get('usage').hidden, false);
-  assert.equal(h.elements.get('deepseek-switch').disabled, false);
-  assert.equal(h.elements.get('key-status').textContent, 'Configured');
+test('selection sends model/effort; active provider can apply a changed model',()=>{
+  const h=harness({provider:'openrouter',visible:['openai','openrouter']});
+  h.api('openrouter',configured); const card=h.card('openrouter');
+  assert.equal(field(card,'apply').textContent,'Current Setting'); assert(field(card,'apply').disabled);
+  field(card,'model').dispatchEvent(new h.window.Event('change'));
+  assert.equal(h.messages.at(-1).operation,'select'); assert.equal(h.messages.at(-1).model,'test-model');
+  h.api('openrouter',{...configured,model:'other',models:[{id:'other',name:'Other',efforts:[]}]});
+  assert(!field(card,'apply').disabled); assert(field(card,'effort').parentElement.hidden);
 });
 
-test('webview shows Loading instead of Not configured during the initial key check', () => {
-  const checkingState = initialState();
-  checkingState.hasValidKey = false;
-  checkingState.keyChecking = true;
-  const h = webviewHarness(checkingState);
-  assert.equal(h.elements.get('key-status').textContent, 'Loading...');
-  assert.equal(h.elements.get('key-dot').classList.contains('loading'), true);
-  assert.equal(h.elements.get('key-dot').classList.contains('configured'), false);
-  assert.equal(h.elements.get('key-dot').classList.contains('not-configured'), false);
-  assert.equal(h.elements.get('set-key').disabled, true);
-  assert.equal(h.elements.get('verify').disabled, true);
-
-  const settledState = initialState();
-  settledState.hasValidKey = false;
-  settledState.keyChecking = false;
-  h.receive({ type: 'state', busy: false, state: settledState });
-  assert.equal(h.elements.get('key-status').textContent, 'Not configured');
-  assert.equal(h.elements.get('key-dot').classList.contains('loading'), false);
-  assert.equal(h.elements.get('set-key').disabled, false);
+test('provider manager reliably hides, reenables and reorders without hiding the active provider',()=>{
+  const h=harness(); h.$('manage-providers').click(); assert(!h.$('manage-panel').hidden);
+  const checks=()=>[...h.$('manage-list').querySelectorAll('input')];
+  assert(checks()[0].disabled);
+  checks()[1].checked=false; checks()[1].dispatchEvent(new h.window.Event('change'));
+  assert.deepEqual([...h.$('provider-list').children].map(c=>c.dataset.provider),['openai']);
+  checks()[1].checked=true; checks()[1].dispatchEvent(new h.window.Event('change'));
+  assert.deepEqual([...h.$('provider-list').children].map(c=>c.dataset.provider),['openai','deepseek']);
+  h.$('close-manage').click(); assert(h.$('manage-panel').hidden);
 });
 
-test('webview re-enables Set API key after a failed validation releases busy', () => {
-  const h = webviewHarness(initialState());
-  h.receive({ type: 'busy', busy: true });
-  assert.equal(h.elements.get('set-key').disabled, true);
-
-  h.receive({ type: 'busy', busy: false });
-  assert.equal(h.elements.get('set-key').disabled, false);
+test('balance currency, alert preferences and five-second feedback remain consistent',()=>{
+  const h=harness(); const card=h.card('deepseek');
+  h.api('deepseek',{...configured,balance:{total:2,currency:'USD'},feedback:{stamp:1,ok:true}});
+  assert.match(field(card,'amount').textContent,/USD/); assert(field(card,'amount').classList.contains('balance-low'));
+  assert.equal(field(card,'feedback').textContent,'Success'); assert.equal(h.timers.at(-1).delay,5000);
+  h.timers.at(-1).fn(); assert.equal(field(card,'feedback').textContent,'');
+  field(card,'alert-toggle').click(); assert(!field(card,'alert-panel').hidden);
+  field(card,'threshold').value='2'; field(card,'threshold').dispatchEvent(new h.window.Event('change'));
+  assert.equal(h.messages.at(-1).threshold,2);
+  h.receive({type:'balanceAlert',balanceAlert:{threshold:3}}); assert.equal(field(card,'threshold').value,'3');
+  field(card,'alert-close').click(); assert(field(card,'alert-panel').hidden);
+  h.api('deepseek',{...configured,balance:null,balanceError:'Balance unavailable.'}); assert(field(card,'balance').hidden);
 });
 
-test('webview can uncheck and then reliably check a provider again', () => {
-  const h = webviewHarness(initialState());
-  const deepseekItem = manageItem(h.elements.get('manage-list'), 'deepseek');
-  const checkbox = deepseekItem.children[0].children[0];
-
-  checkbox.checked = false;
-  checkbox.dispatch('change');
-  assert.equal(h.elements.get('provider-list').children.includes(h.cards[1]), false);
-  assert.equal(h.messages.at(-1).layout.find(entry => entry.id === 'deepseek').visible, false);
-
-  checkbox.checked = true;
-  checkbox.dispatch('change');
-  assert.equal(h.elements.get('provider-list').children.includes(h.cards[1]), true);
-  assert.equal(h.messages.at(-1).layout.find(entry => entry.id === 'deepseek').visible, true);
+test('ChatGPT keeps plan/usage independent, omits timezone suffix and zero countdown units',()=>{
+  const seconds=Math.floor(Date.now()/1000);
+  const h=harness({provider:'deepseek',chatgpt:{configured:true,plan:'Pro',loading:false,fiveHour:{remaining:72,resetsAt:seconds+7260},weekly:{remaining:45,resetsAt:seconds+90060},bankedResets:3}});
+  assert.equal(h.$('chatgpt-plan').textContent,'Your Pro Plan');
+  assert.equal(h.$('five-hour-value').textContent,'72%'); assert.equal(h.$('banked-resets').textContent,'3');
+  assert.doesNotMatch(h.$('weekly-reset').textContent,/GMT|UTC/);
+  assert.match(h.$('weekly-countdown').textContent,/Resets in 1d 1h/);
+  h.receive({type:'chatgpt',account:{configured:true,plan:'Business',loading:false,fiveHour:{remaining:0,resetsAt:seconds+25},weekly:{remaining:100,resetsAt:seconds+3600}}});
+  assert.equal(h.$('five-hour-value').textContent,'0%'); assert.match(h.$('five-hour-countdown').textContent,/Blink/);
+  assert.doesNotMatch(h.$('weekly-countdown').textContent,/0d|0h|0m/);
+  assert.equal(h.$('banked-resets').textContent,'Unavailable');
+  assert(h.$('manage-list').textContent.includes('Your Business Plan'));
+  h.receive({type:'chatgpt',account:{loading:false,stale:true}}); assert.equal(h.$('chatgpt-status').textContent,'Unavailable');
 });
 
-test('webview ignores attempts to hide the active provider and closes with X', () => {
-  const h = webviewHarness(initialState());
-  const openaiItem = manageItem(h.elements.get('manage-list'), 'openai');
-  const checkbox = openaiItem.children[0].children[0];
-  const before = h.messages.length;
-  checkbox.checked = false;
-  checkbox.dispatch('change');
-  assert.equal(h.messages.length, before);
-  assert.equal(h.elements.get('provider-list').children.includes(h.cards[0]), true);
-
-  h.elements.get('manage-panel').hidden = false;
-  h.elements.get('close-manage').dispatch('click');
-  assert.equal(h.elements.get('manage-panel').hidden, true);
+test('global sync is deduplicated and re-enabled after errors',()=>{
+  const h=harness(); h.$('sync-all').click(); h.$('sync-all').click();
+  assert.equal(h.messages.filter(m=>m.action==='syncAll').length,1);
+  h.receive({type:'syncLoading',loading:false}); assert(!h.$('sync-all').disabled);
 });
 
-test('webview hides action feedback after 5000 ms without an icon', () => {
-  const h = webviewHarness(initialState());
-  h.receive({
-    type: 'actionResult',
-    action: 'verify',
-    ok: true,
-    message: 'Connection successful.',
-  });
-  assert.equal(h.elements.get('connection-feedback').hidden, false);
-  assert.equal(h.elements.get('connection-feedback-text').textContent, 'Connection successful.');
-  assert.equal(h.timers.at(-1).delay, 5000);
-  h.timers.at(-1).listener();
-  assert.equal(h.elements.get('connection-feedback').hidden, true);
-});
-
-test('webview renders balance states and saves the alert threshold', () => {
-  const h = webviewHarness(initialState());
-  h.receive({
-    type: 'balance',
-    balance: { available: true, currency: 'USD', total: 4.25, totalText: '4.25' },
-    balanceAlert: { threshold: 5, level: 'low' },
-  });
-  assert.equal(h.elements.get('balance-value').textContent, '$4.25');
-  assert.equal(h.elements.get('balance-value').classList.contains('low'), true);
-  assert.equal(h.elements.get('balance-value').classList.contains('zero'), false);
-
-  h.elements.get('balance-alert-toggle').dispatch('click');
-  assert.equal(h.elements.get('balance-alert-editor').hidden, false);
-  assert.equal(h.elements.get('balance-threshold').value, '5');
-  assert.equal(h.elements.get('balance-threshold-copy').textContent, '$5.00');
-  h.elements.get('balance-threshold').value = '2.50';
-  h.elements.get('balance-threshold').dispatch('change');
-  assert.deepEqual(h.messages.at(-1), { action: 'saveBalanceAlert', threshold: 2.5 });
-  h.elements.get('balance-alert-close').dispatch('click');
-  assert.equal(h.elements.get('balance-alert-editor').hidden, true);
-
-  h.receive({
-    type: 'balance',
-    balance: { available: true, currency: 'USD', total: 0, totalText: '0.00' },
-    balanceAlert: { threshold: 5, level: 'zero' },
-  });
-  assert.equal(h.elements.get('balance-value').textContent, '$0.00');
-  assert.equal(h.elements.get('balance-value').classList.contains('zero'), true);
-  assert.equal(h.elements.get('balance-value').classList.contains('low'), false);
-});
-
-test('webview stops and re-enables the global spinner when all loading ends', () => {
-  const h = webviewHarness(initialState());
-  h.receive({ type: 'syncLoading', loading: true });
-  assert.equal(h.elements.get('sync-all').classList.contains('loading'), true);
-  assert.equal(h.elements.get('sync-all').disabled, true);
-
-  h.receive({ type: 'syncLoading', loading: false });
-  assert.equal(h.elements.get('sync-all').classList.contains('loading'), false);
-  assert.equal(h.elements.get('sync-all').disabled, false);
-});
-
-test('ChatGPT plan subtitles update everywhere and usage shows remaining values', () => {
-  const h = webviewHarness(initialState());
-  const resetsAt = Math.floor(Date.now() / 1000) + 2 * 3600 + 15 * 60 + 30;
-  h.receive({ type: 'chatgpt', account: {
-    configured: true, plan: 'Business', usageAvailable: true,
-    fiveHour: { remaining: 82, resetsAt }, weekly: { remaining: 0, resetsAt: resetsAt + 7 * 86400 }, bankedResets: 1,
-  } });
-  assert.equal(h.elements.get('current').textContent, 'ChatGPT (Your Business Plan)');
-  assert.equal(h.elements.get('chatgpt-plan').textContent, 'Your Business Plan');
-  assert.equal(h.elements.get('manage-list').children[0].children[0].children[1].textContent, 'ChatGPT (Your Business Plan)');
-  assert.equal(h.elements.get('chatgpt-status').textContent, 'Configured');
-  assert.equal(h.elements.get('chatgpt-usage').hidden, false);
-  assert.equal(h.elements.get('five-hour-bar').value, 82);
-  assert.equal(h.elements.get('five-hour-value').textContent, '82%');
-  assert.equal(h.elements.get('weekly-bar').value, 0);
-  assert.equal(h.elements.get('weekly-bar').hidden, false);
-  assert.equal(h.elements.get('five-hour-countdown').textContent, 'Resets in 2h 15m');
-  assert.equal(h.elements.get('weekly-countdown').textContent, 'Resets in 7d 2h 15m');
-  assert.match(h.elements.get('five-hour-reset').textContent, /^Resets /);
-  assert(!/GMT|UTC/.test(h.elements.get('five-hour-reset').textContent));
-  assert.equal(h.elements.get('banked-resets').textContent, '1');
-});
-
-test('ChatGPT distinguishes zero, missing values, stale data, and an absent account', () => {
-  const h = webviewHarness(initialState());
-  assert.equal(h.elements.get('chatgpt-status').textContent, 'Loading...');
-  h.receive({ type: 'chatgpt', account: { configured: true, plan: 'Plus', usageAvailable: true, bankedResets: 0, fiveHour: { remaining: 100, resetsAt: 1 } } });
-  assert.equal(h.elements.get('banked-resets').textContent, '0');
-  assert.equal(h.elements.get('five-hour-countdown').textContent, "Resets in a few seconds. Blink and you'll miss it!");
-  assert.equal(h.elements.get('weekly-value').textContent, 'Unavailable');
-  assert.equal(h.elements.get('weekly-bar').hidden, true);
-  assert.equal(h.elements.get('weekly-reset').textContent, 'Reset: Unavailable');
-  h.receive({ type: 'chatgpt', account: { configured: true, stale: true } });
-  assert.equal(h.elements.get('chatgpt-stale').hidden, false);
-  assert.equal(h.elements.get('chatgpt-status').textContent, 'Configured (out of date)');
-  assert.equal(h.elements.get('banked-resets').textContent, 'Unavailable');
-  h.receive({ type: 'chatgpt', account: { configured: false } });
-  assert.equal(h.elements.get('chatgpt-status').textContent, 'Not configured');
-  assert.equal(h.elements.get('chatgpt-usage').hidden, true);
-  assert.equal(h.elements.get('chatgpt-plan').textContent, 'Your Plan');
-  h.receive({ type: 'chatgpt', account: { stale: true } });
-  assert.equal(h.elements.get('chatgpt-status').textContent, 'Unavailable');
-});
-
-test('ChatGPT account details remain available when DeepSeek is the active provider', () => {
-  const h = webviewHarness(initialState(undefined, 'deepseek'));
-  h.receive({ type: 'chatgpt', account: { configured: true, plan: 'Go', bankedResets: 2 } });
-  assert.equal(h.elements.get('current').textContent, 'DeepSeek (API key)');
-  assert.equal(h.elements.get('chatgpt-plan').textContent, 'Your Go Plan');
-  assert.equal(h.elements.get('chatgpt-usage').hidden, false);
-  assert.equal(h.elements.get('banked-resets').textContent, '2');
-});
-
-test('both countdowns omit zero units and use a playful message below one minute', () => {
-  const h = webviewHarness(initialState());
-  const now = Math.floor(Date.now() / 1000);
-  for (const [offset, expected] of [
-    [2 * 3600 + 30, 'Resets in 2h'],
-    [15 * 60 + 30, 'Resets in 15m'],
-    [2 * 3600 + 15 * 60 + 30, 'Resets in 2h 15m'],
-    [30, "Resets in a few seconds. Blink and you'll miss it!"],
-    [-1, "Resets in a few seconds. Blink and you'll miss it!"],
-  ]) {
-    h.receive({ type: 'chatgpt', account: { configured: true,
-      fiveHour: { resetsAt: now + offset }, weekly: { resetsAt: now + offset },
-    } });
-    assert.equal(h.elements.get('five-hour-countdown').textContent, expected);
-    assert.equal(h.elements.get('weekly-countdown').textContent, expected);
-  }
-  h.receive({ type: 'chatgpt', account: { configured: true, weekly: { resetsAt: now + 2 * 86400 + 30 } } });
-  assert.equal(h.elements.get('weekly-countdown').textContent, 'Resets in 2d');
-});
-
-test('global sync button is available without DeepSeek credentials and ignores repeat clicks', () => {
-  const state = initialState();
-  state.hasKey = false;
-  state.hasValidKey = false;
-  const h = webviewHarness(state);
-  const button = h.elements.get('sync-all');
-  assert.equal(button.disabled, false);
-  button.dispatch('click');
-  button.dispatch('click');
-  assert.equal(h.messages.filter(m => m.action === 'syncAll').length, 1);
-  assert.equal(button.classList.contains('loading'), true);
-  h.receive({ type: 'balanceError', message: 'Balance unavailable.' });
-  assert.equal(button.classList.contains('loading'), true);
-  h.receive({ type: 'syncLoading', loading: false });
-  assert.equal(button.classList.contains('loading'), false);
-  assert.equal(button.disabled, false);
+test('responsive styles retain 550px columns, equal row heights and narrow natural heights',()=>{
+  const css=fs.readFileSync(path.join(root,'media/style.css'),'utf8');
+  assert.match(css,/@media \(min-width: 550px\)/);
+  const wide=css.slice(css.indexOf('@media (min-width: 550px)'));
+  assert.match(wide,/grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(wide,/align-items: stretch/); assert.match(wide,/flex: 1 0 0/);
+  assert.match(wide,/\.provider-card > \.primary.*order: 2/s);
+  assert.match(css,/\[hidden\] \{ display: none !important/);
 });

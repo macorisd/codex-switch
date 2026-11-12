@@ -124,7 +124,7 @@ h2 { font-size: 12px; font-weight: 600; }
 .provider-icon img { display: block; width: 24px; height: 24px; }
 .chatgpt-icon { background: #fff; }
 .deepseek-icon { background: #4d6bfe; }
-.deepseek-header {
+.api-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -236,7 +236,7 @@ button {
   font-size: 11px;
   animation: feedback-in 140ms ease-out;
 }
-.deepseek-header + .action-feedback {
+.api-header + .action-feedback {
   margin: -5px 0 8px;
 }
 .model-catalog-content .action-feedback {
@@ -331,7 +331,30 @@ h4 { margin: 0; font-size: 12px; font-weight: 600; }
   border: 1px solid var(--vscode-input-border, #8885);
   border-radius: 4px;
 }
-#deepseek-switch { margin-top: 10px; }
+.provider-card > .primary { margin-top: 10px; }
+.api-icon { background: #fafafa; }
+.api-icon.deepseek-icon { background: #4d6bfe; }
+.api-error { color: var(--vscode-errorForeground); font-size: 11px; margin: 4px 0; }
+.api-error:empty { display: none; }
+.model-catalog-content { display: grid; gap: 8px; padding-top: 8px; }
+.model-catalog-content input, .model-catalog-content select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border, #8885);
+  border-radius: 4px;
+  padding: 5px;
+  font: inherit;
+}
+.model-catalog-content select[size] { height: 135px; }
+.api-effort { display: flex; align-items: center; gap: 8px; }
+.api-effort select { flex: 1; }
+.api-balance { font-size: 20px; }
+.balance-low { color: var(--vscode-editorWarning-foreground); }
+.balance-zero { color: var(--vscode-errorForeground); }
+[data-role="endpoint"] { align-self: flex-start; margin-top: 8px; }
 .primary {
   display: block;
   width: 100%;
