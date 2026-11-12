@@ -5,19 +5,17 @@ const path = require('node:path');
 const os = require('node:os');
 const fs = require('node:fs');
 const crypto = require('node:crypto');
-const codexAccount = require('./codex-account');
 const process = require('node:process');
-
+const codexAccount = require('./codex-account');
+const { ApiSessions } = require('./api-session');
+const balanceAlerts = require('./media/balance-alerts');
+const DEFINITIONS = require('./backend/providers.json');
+const PROVIDERS = [{ id: 'openai', name: 'ChatGPT', subtitle: 'Your Plan' }, ...DEFINITIONS];
+const PROVIDER_LAYOUT_KEY = 'providerLayout';
+const BALANCE_ALERT_KEY = 'apiBalanceAlerts';
 const codexHome = (process.env.CODEX_HOME || '.codex').replace(/^~(?=$|[/\\])/, os.homedir());
 const root = path.join(path.resolve(os.homedir(), codexHome), 'provider-switcher');
 const python = process.platform === 'win32' ? 'python' : 'python3';
-const PROVIDERS = Object.freeze([
-  Object.freeze({ id: 'openai', name: 'ChatGPT', subtitle: 'Your Plan' }),
-  Object.freeze({ id: 'deepseek', name: 'DeepSeek', subtitle: 'API key' }),
-]);
-const PROVIDER_LAYOUT_KEY = 'providerLayout';
-const BALANCE_ALERT_KEY = 'deepseekBalanceAlert';
-const BALANCE_POLL_MS = 60_000;
 
 function backend(request, signal) {
   return new Promise((resolve, reject) => {
@@ -32,10 +30,10 @@ function backend(request, signal) {
     const timer = setTimeout(() => {
       child.kill();
       reject(new Error('The operation took too long. Please try again.'));
-    }, 35000);
+    }, 65000);
     child.stdout.on('data', chunk => {
       stdout += chunk;
-      if (stdout.length > 100000) child.kill();
+      if (stdout.length > 4_000_000) child.kill();
     });
     // Never log process output or the request: it may contain credentials.
     child.stderr.resume();
@@ -65,27 +63,18 @@ class Selector {
     this.layoutRevision = 0;
     this.layoutUpdate = Promise.resolve();
     this.activeProvider = null;
-    this.hasKey = false;
-    this.hasValidKey = false;
-    this.keyChecking = false;
     this.viewVisible = false;
-    this.balanceTimer = null;
-    this.balanceRequest = null;
     this.chatgpt = { loading: true };
-    this.accountTimer = null;
-    this.accountRequest = null;
-    this.accountAbort = null;
-    this.deepseekAbort = null;
-    this.deepseekRefresh = null;
-    this.syncRequest = null;
-    const savedAlert = context.globalState.get(BALANCE_ALERT_KEY, {});
-    this.balanceAlert = {
-      threshold: typeof savedAlert.threshold === 'number' && Number.isFinite(savedAlert.threshold)
-        && savedAlert.threshold >= 0 ? savedAlert.threshold : 5,
-      level: ['ok', 'low', 'zero'].includes(savedAlert.level) ? savedAlert.level : 'ok',
-    };
+    const savedAlerts = context.globalState.get(BALANCE_ALERT_KEY, {});
+    this.balanceAlerts = Object.fromEntries(DEFINITIONS.map(p => [p.id, { threshold: balanceAlerts.threshold(savedAlerts?.[p.id]?.threshold) }]));
+    this.alertTracker = new balanceAlerts.Tracker();
+    this.api = new ApiSessions({ definitions: DEFINITIONS, request: backend,
+      visible: id => this.canLoad(id), post: value => this.view?.webview.postMessage(value),
+      input: options => vscode.window.showInputBox(options),
+      apply: work => this.applyProvider(work), timers: { setInterval, clearInterval },
+      alerts: (id, balance) => this.checkBalance(id, balance) });
   }
-
+  canLoad(id) { return this.viewVisible && this.providerLayout().some(p => p.id === id && p.visible); }
   resolveWebviewView(view) {
     this.view = view;
     this.viewVisible = view.visible !== false;
@@ -93,103 +82,96 @@ class Selector {
     view.webview.options = { enableScripts: true, localResourceRoots: [media] };
     const nonce = crypto.randomBytes(24).toString('base64');
     let html = fs.readFileSync(path.join(this.context.extensionPath, 'media', 'index.html'), 'utf8');
-    const replacements = {
-      '{{NONCE}}': nonce,
-      '{{CSP}}': view.webview.cspSource,
-      '{{STYLE}}': view.webview.asWebviewUri(vscode.Uri.joinPath(media, 'style.css')).toString(),
-      '{{SCRIPT}}': view.webview.asWebviewUri(vscode.Uri.joinPath(media, 'view.js')).toString(),
-      '{{CHATGPT_ICON}}': view.webview.asWebviewUri(vscode.Uri.joinPath(media, 'providers', 'openai.svg')).toString(),
-      '{{DEEPSEEK_ICON}}': view.webview.asWebviewUri(vscode.Uri.joinPath(media, 'providers', 'deepseek.svg')).toString(),
-    };
+    const replacements = { '{{NONCE}}': nonce, '{{CSP}}': view.webview.cspSource };
+    for (const [name, file] of Object.entries({ STYLE: 'style.css', SCRIPT: 'view.js', API_SCRIPT: 'api-view.js', ALERT_SCRIPT: 'balance-alerts.js', CHATGPT_ICON: 'providers/openai.svg', DEEPSEEK_ICON: 'providers/deepseek.svg' })) {
+      replacements[`{{${name}}}`] = view.webview.asWebviewUri(vscode.Uri.joinPath(media, ...file.split('/'))).toString();
+    }
     for (const [key, value] of Object.entries(replacements)) html = html.split(key).join(value);
     view.webview.html = html;
-    this.context.subscriptions.push(view.webview.onDidReceiveMessage(message => this.run(message)));
-    this.context.subscriptions.push(view.onDidChangeVisibility(() => {
-      this.viewVisible = view.visible;
-      if (view.visible) {
-        void this.ready();
-      } else {
-        this.suspendDeepSeek();
-        this.stopAccountPolling();
-      }
+    this.context.subscriptions.push(view.webview.onDidReceiveMessage(m => this.run(m)),
+      view.onDidChangeVisibility(() => {
+        this.viewVisible = view.visible;
+        if (this.viewVisible) void this.ready();
+        else { this.api.reconcile(); this.stopAccountPolling(); }
+      }), { dispose: () => { this.viewVisible = false; this.api.dispose(); this.stopAccountPolling(); } });
+    if (view.onDidDispose) this.context.subscriptions.push(view.onDidDispose(() => {
+      this.viewVisible = false; this.api.dispose(); this.stopAccountPolling();
     }));
-    if (typeof view.onDidDispose === 'function') {
-      this.context.subscriptions.push(view.onDidDispose(() => {
-        this.viewVisible = false;
-        this.suspendDeepSeek();
-        this.stopAccountPolling();
-      }));
-    }
-    this.context.subscriptions.push({ dispose: () => this.suspendDeepSeek() });
-    this.context.subscriptions.push({ dispose: () => this.stopAccountPolling() });
   }
-
-  canLoad(id) {
-    return this.viewVisible && this.providerLayout().some(entry => entry.id === id && entry.visible);
+  async update() {
+    try {
+      const local = await backend({ action: 'status', includeDeepSeek: false });
+      this.activeProvider = local.provider;
+      await this.view?.webview.postMessage({ type: 'state', busy: this.busy, state: { ...local,
+        providers: PROVIDERS.map(p => ({ ...p, iconUri: p.icon ? this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'providers', p.icon)).toString() : undefined })), providerLayout: this.providerLayout(), providerLayoutRevision: this.layoutRevision,
+        chatgpt: this.chatgpt, balanceAlerts: this.balanceAlerts } });
+      this.api.reconcile();
+      if (!this.canLoad('openai')) this.stopAccountPolling();
+    } catch { void vscode.window.showErrorMessage('The local Codex configuration could not be read.'); }
   }
-
-  suspendDeepSeek() {
-    this.stopBalancePolling();
-    this.deepseekAbort?.abort();
+  async ready() {
+    await this.update();
+    await Promise.allSettled([this.syncAccount(), this.api.refreshAll(true)]);
   }
-
-  deepseekSignal() {
-    if (!this.deepseekAbort || this.deepseekAbort.signal.aborted) this.deepseekAbort = new AbortController();
-    return this.deepseekAbort.signal;
-  }
-
-  stopAccountPolling() {
-    clearInterval(this.accountTimer);
-    this.accountTimer = null;
-    this.accountAbort?.abort();
-  }
-
+  stopAccountPolling() { clearInterval(this.accountTimer); this.accountTimer = null; this.accountAbort?.abort(); }
   syncAccount() {
     if (!this.canLoad('openai')) return Promise.resolve();
-    if (!this.accountTimer) this.accountTimer = setInterval(() => this.syncAccount(), 60_000);
-    if (this.accountRequest) return this.accountAbort?.signal.aborted
-      ? this.accountRequest.then(() => this.syncAccount()) : this.accountRequest;
+    if (!this.accountTimer) this.accountTimer = setInterval(() => this.syncAccount(), 60000);
+    if (this.accountRequest) return this.accountAbort?.signal.aborted ? this.accountRequest.then(() => this.syncAccount()) : this.accountRequest;
     this.accountAbort = new AbortController();
+    const controller = this.accountAbort;
     this.accountRequest = (async () => {
       try {
-        const account = await codexAccount.readAccount(codexAccount.executable(vscode), { signal: this.accountAbort.signal });
-        if (this.canLoad('openai')) this.chatgpt = { ...account, loading: false, stale: false };
-      } catch {
-        if (this.canLoad('openai')) this.chatgpt = { ...this.chatgpt, loading: false, stale: true };
-      }
-      if (this.canLoad('openai')) await this.view?.webview.postMessage({ type: 'chatgpt', account: this.chatgpt });
+        const account = await codexAccount.readAccount(codexAccount.executable(vscode), { signal: controller.signal });
+        if (this.canLoad('openai') && !controller.signal.aborted) this.chatgpt = { ...account, loading: false, stale: false };
+      } catch { if (this.canLoad('openai') && !controller.signal.aborted) this.chatgpt = { ...this.chatgpt, loading: false, stale: true }; }
+      if (this.canLoad('openai') && !controller.signal.aborted) await this.view?.webview.postMessage({ type: 'chatgpt', account: this.chatgpt });
     })().finally(() => { this.accountRequest = null; });
     return this.accountRequest;
   }
-
-  async update(keyChecking = this.keyChecking) {
-    if (!this.view) return;
-    try {
-      const state = await backend({ action: 'status', includeDeepSeek: this.canLoad('deepseek') });
-      this.activeProvider = state.provider;
-      this.hasKey = Boolean(state.hasKey);
-      if (!this.hasKey) {
-        this.hasValidKey = false;
-        keyChecking = false;
-      }
-      this.keyChecking = Boolean(this.hasKey && keyChecking);
-      const webviewState = {
-        ...state,
-        hasValidKey: this.hasKey && this.hasValidKey,
-        keyChecking: this.keyChecking,
-        providers: PROVIDERS,
-        providerLayout: this.providerLayout(state.provider),
-        providerLayoutRevision: this.layoutRevision,
-        balanceAlert: { ...this.balanceAlert },
-        chatgpt: this.chatgpt,
-      };
-      await this.view.webview.postMessage({ type: 'state', state: webviewState, busy: this.busy });
-      if (this.canLoad('deepseek') && this.hasValidKey) this.startBalancePolling();
-      else this.stopBalancePolling();
-      if (!this.canLoad('deepseek')) this.suspendDeepSeek();
-      if (!this.canLoad('openai')) this.stopAccountPolling();
-    } catch (error) {
-      void vscode.window.showErrorMessage(error.message);
+  checkBalance(id, balance) {
+    if (!balance) { this.alertTracker.reset(id); return; }
+    const warning = this.alertTracker.observe(id, balance, this.balanceAlerts[id].threshold);
+    if (!warning) return;
+    const name = DEFINITIONS.find(p => p.id === id).name;
+    const remaining = warning.unit === '%' ? `${warning.value.toFixed(1)}%`
+      : new Intl.NumberFormat('en-US', { style: 'currency', currency: warning.unit, currencyDisplay: 'code' }).format(warning.value);
+    void vscode.window.showWarningMessage(warning.level === 'zero'
+      ? `${name} ${warning.unit === '%' ? 'quota' : 'credits'} exhausted.`
+      : `${name} ${warning.unit === '%' ? 'quota' : 'balance'} is low: ${remaining} remaining.`);
+  }
+  async applyProvider(work) {
+    if (this.busy) return;
+    this.busy = true;
+    try { await work(); await vscode.commands.executeCommand('workbench.action.reloadWindow'); }
+    finally { this.busy = false; }
+  }
+  async run(message) {
+    if (!message || typeof message.action !== 'string') return;
+    if (message.action === 'ready') return this.ready();
+    if (message.action === 'saveProviderLayout') return this.saveProviderLayout(message.layout, message.revision);
+    if (message.action === 'api') return this.api.run(message);
+    if (message.action === 'saveBalanceAlert') {
+      const id = message.provider;
+      if (!DEFINITIONS.some(p => p.id === id) || !this.canLoad(id) || !Number.isFinite(Number(message.threshold))) return;
+      const value = balanceAlerts.threshold(message.threshold);
+      this.balanceAlerts[id] = { threshold: value };
+      this.alertTracker.reset(id);
+      this.alertTracker.observe(id, this.api.sessions.get(id).balance, value);
+      await this.context.globalState.update(BALANCE_ALERT_KEY, this.balanceAlerts);
+      await this.view?.webview.postMessage({ type: 'balanceAlerts', balanceAlerts: this.balanceAlerts });
+      return;
+    }
+    if (message.action === 'syncAll') {
+      if (this.busy || !this.viewVisible) return;
+      this.busy = true;
+      await this.view?.webview.postMessage({ type: 'syncLoading', loading: true });
+      try { await this.update(); await Promise.allSettled([this.syncAccount(), this.api.refreshAll(true)]); }
+      finally { this.busy = false; await this.update(); await this.view?.webview.postMessage({ type: 'syncLoading', loading: false }); }
+    }
+    if (message.action === 'apply' && message.provider === 'openai' && !this.busy) {
+      try { await this.applyProvider(() => backend({ action: 'apply', provider: 'openai' })); }
+      catch { void vscode.window.showErrorMessage('Could not restore the ChatGPT configuration.'); }
     }
   }
 
@@ -236,7 +218,7 @@ class Selector {
         const previous = this.providerLayout();
         await this.context.globalState.update(PROVIDER_LAYOUT_KEY, layout);
         if (!this.canLoad('openai')) this.stopAccountPolling();
-        if (!this.canLoad('deepseek')) this.suspendDeepSeek();
+        this.api.reconcile();
         await this.view?.webview.postMessage({
           type: 'providerLayout',
           layout,
@@ -245,7 +227,7 @@ class Selector {
         for (const entry of layout) {
           if (!entry.visible || previous.find(item => item.id === entry.id)?.visible) continue;
           if (entry.id === 'openai') void this.syncAccount();
-          else void this.refreshDeepSeek();
+          else void this.api.refresh(entry.id, true);
         }
       } catch (error) {
         await this.view?.webview.postMessage({
@@ -259,215 +241,7 @@ class Selector {
     return this.layoutUpdate;
   }
 
-  startBalancePolling() {
-    if (!this.canLoad('deepseek') || !this.hasValidKey || this.balanceTimer) return;
-    this.balanceTimer = setInterval(() => this.syncBalance(), BALANCE_POLL_MS);
-  }
 
-  stopBalancePolling() {
-    if (!this.balanceTimer) return;
-    clearInterval(this.balanceTimer);
-    this.balanceTimer = null;
-  }
-
-  async setBalanceAlert(value) {
-    const threshold = value === null || value === undefined || value === '' ? 0 : Number(value);
-    if (!Number.isFinite(threshold) || threshold < 0) {
-      throw new Error('Balance alert must be a non-negative dollar amount.');
-    }
-    this.balanceAlert = { threshold, level: 'ok' };
-    await this.context.globalState.update(BALANCE_ALERT_KEY, this.balanceAlert);
-    await this.view?.webview.postMessage({ type: 'balanceAlert', balanceAlert: { ...this.balanceAlert } });
-    await this.syncBalance(true);
-  }
-
-  async syncBalance(manual = false) {
-    if (!this.view || !this.canLoad('deepseek') || !this.hasValidKey) {
-      if (manual) await this.view?.webview.postMessage({ type: 'balanceError', message: 'Balance unavailable.' });
-      return;
-    }
-    if (this.balanceRequest) return this.deepseekAbort?.signal.aborted
-      ? this.balanceRequest.then(() => this.syncBalance(manual)) : this.balanceRequest;
-    this.balanceRequest = backend({ action: 'balance' }, this.deepseekSignal())
-      .then(async balance => {
-        if (!this.canLoad('deepseek')) return;
-        const total = Number.isFinite(balance.total) ? balance.total : null;
-        const level = total !== null && total <= 0
-          ? 'zero'
-          : total !== null && this.balanceAlert.threshold !== null && total < this.balanceAlert.threshold
-            ? 'low'
-            : 'ok';
-        const previous = this.balanceAlert.level;
-        this.balanceAlert.level = level;
-        await this.context.globalState.update(BALANCE_ALERT_KEY, { ...this.balanceAlert });
-        await this.view?.webview.postMessage({
-          type: 'balance',
-          balance,
-          balanceAlert: { ...this.balanceAlert },
-        });
-        if (this.viewVisible && level === 'zero' && previous !== 'zero') {
-          void vscode.window.showWarningMessage('DeepSeek credits are exhausted.');
-        } else if (this.viewVisible && level === 'low' && previous !== 'low') {
-          void vscode.window.showWarningMessage(`DeepSeek balance is low: $${total.toFixed(2)} remaining.`);
-        }
-      })
-      .catch(async error => {
-        if (manual && this.canLoad('deepseek')) {
-          await this.view?.webview.postMessage({ type: 'balanceError', message: error.message });
-        }
-      })
-      .finally(() => {
-        this.balanceRequest = null;
-      });
-    return this.balanceRequest;
-  }
-
-  async promptForApiKey() {
-    const key = await vscode.window.showInputBox({
-      title: 'DeepSeek API key',
-      prompt: 'The key is stored securely for your OS user and is not shown in the sidebar.',
-      password: true,
-      ignoreFocusOut: true,
-      placeHolder: 'sk-...',
-      validateInput: value => /^sk-[A-Za-z0-9_-]{12,}$/.test(value.trim())
-        ? undefined
-        : 'Enter a valid API key that starts with sk-.',
-    });
-    if (key === undefined) return false;
-    const value = key.trim();
-    if (!/^sk-[A-Za-z0-9_-]{12,}$/.test(value)) {
-      throw new Error('The API key must start with sk- and contain no spaces.');
-    }
-    await backend({ action: 'saveKey', key: value });
-    return true;
-  }
-
-  async validateApiKey() {
-    if (!this.canLoad('deepseek')) return;
-    this.hasValidKey = false;
-    this.keyChecking = true;
-    await this.update(true);
-    try {
-      if (!this.canLoad('deepseek')) return;
-      await backend({ action: 'verify' }, this.deepseekSignal());
-      if (this.canLoad('deepseek')) this.hasValidKey = true;
-    } finally {
-      this.keyChecking = false;
-      await this.update(false);
-    }
-  }
-
-  async ready() {
-    await this.update(!this.hasValidKey && this.canLoad('deepseek'));
-    await Promise.allSettled([this.syncAccount(), this.refreshDeepSeek()]);
-  }
-
-  refreshDeepSeek(manual = false) {
-    if (!this.canLoad('deepseek')) return Promise.resolve();
-    if (this.deepseekRefresh) return this.deepseekAbort?.signal.aborted
-      ? this.deepseekRefresh.then(() => this.refreshDeepSeek(manual)) : this.deepseekRefresh;
-    this.deepseekRefresh = (async () => {
-      try {
-        if (this.hasKey && (manual || !this.hasValidKey)) await this.validateApiKey();
-        if (!this.canLoad('deepseek') || !this.hasValidKey) return;
-        if (manual) {
-          try { await backend({ action: 'refresh' }, this.deepseekSignal()); }
-          catch { if (this.canLoad('deepseek')) await this.view?.webview.postMessage({ type: 'actionResult', action: 'refresh', ok: false, message: 'Model catalog unavailable.' }); }
-        }
-        await this.syncBalance(manual);
-      } catch {
-        if (this.canLoad('deepseek')) await this.view?.webview.postMessage({ type: 'actionResult', action: 'verify', ok: false, message: 'Connection unavailable.' });
-      }
-    })().finally(() => { this.deepseekRefresh = null; });
-    return this.deepseekRefresh;
-  }
-
-  syncAll() {
-    if (this.syncRequest) return this.syncRequest;
-    if (this.busy || !this.viewVisible) return Promise.resolve();
-    this.busy = true;
-    this.syncRequest = (async () => {
-      await this.view?.webview.postMessage({ type: 'syncLoading', loading: true });
-      await this.view?.webview.postMessage({ type: 'busy', busy: true });
-      try {
-        await this.update();
-        await Promise.allSettled([this.syncAccount(), this.refreshDeepSeek(true)]);
-      } finally {
-        this.busy = false;
-        await this.update();
-        await this.view?.webview.postMessage({ type: 'syncLoading', loading: false });
-      }
-    })().finally(() => { this.syncRequest = null; });
-    return this.syncRequest;
-  }
-
-  async run(message) {
-    if (!message || typeof message.action !== 'string') return;
-    if (message.action === 'ready') return this.ready();
-    if (message.action === 'syncAll') return this.syncAll();
-    if (message.action === 'saveProviderLayout') return this.saveProviderLayout(message.layout, message.revision);
-    if (message.action === 'saveBalanceAlert') {
-      try {
-        await this.setBalanceAlert(message.threshold);
-      } catch (error) {
-        await this.view?.webview.postMessage({ type: 'balanceError', message: error.message });
-      }
-      return;
-    }
-    if (!['saveKey', 'verify', 'refresh', 'apply'].includes(message.action) || this.busy) return;
-    if (['saveKey', 'verify', 'refresh'].includes(message.action) && !this.canLoad('deepseek')) return;
-
-    this.busy = true;
-    await this.view?.webview.postMessage({ type: 'busy', busy: true });
-    try {
-      if (message.action === 'saveKey') {
-        const saved = await this.promptForApiKey();
-        if (saved) {
-          this.hasValidKey = false;
-          await this.update(true);
-          await this.validateApiKey();
-        }
-      } else if (message.action === 'verify') {
-        await this.validateApiKey();
-        await this.view?.webview.postMessage({
-          type: 'actionResult',
-          action: message.action,
-          ok: true,
-          message: 'Connection successful.',
-        });
-      } else if (message.action === 'refresh') {
-        await backend({ action: 'refresh' }, this.deepseekSignal());
-        await this.view?.webview.postMessage({
-          type: 'actionResult',
-          action: message.action,
-          ok: true,
-          message: 'Model catalog updated.',
-        });
-      } else if (message.action === 'apply') {
-        if (!['openai', 'deepseek'].includes(message.provider)) throw new Error('Unsupported provider.');
-        if (message.provider === 'deepseek' && !this.hasValidKey) {
-          throw new Error('Validate the DeepSeek API key before switching providers.');
-        }
-        await backend({ action: 'apply', provider: message.provider });
-        await vscode.commands.executeCommand('workbench.action.reloadWindow');
-      }
-    } catch (error) {
-      if (['saveKey', 'verify', 'refresh'].includes(message.action)) {
-        await this.view?.webview.postMessage({
-          type: 'actionResult',
-          action: message.action === 'saveKey' ? 'verify' : message.action,
-          ok: false,
-          message: error.message,
-        });
-      } else {
-        void vscode.window.showErrorMessage(error.message);
-      }
-    } finally {
-      this.busy = false;
-      await this.update();
-      if (['saveKey', 'verify'].includes(message.action) && this.hasValidKey) await this.syncBalance();
-    }
-  }
 }
 
 function activate(context) {

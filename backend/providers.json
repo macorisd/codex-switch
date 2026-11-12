@@ -1,0 +1,270 @@
+[
+  {
+    "id": "deepseek",
+    "name": "DeepSeek",
+    "subtitle": "API key",
+    "baseUrl": "https://api.deepseek.com",
+    "documentation": "https://api-docs.deepseek.com/guides/responses_api/",
+    "fallbackModels": [],
+    "useResponsesLite": false,
+    "icon": "deepseek.svg",
+    "usage": true
+  },
+  {
+    "id": "openrouter",
+    "modelFilters": { "laboratory": true, "free": true },
+    "freeModelSuffix": ":free",
+    "freeModelIds": ["openrouter/free"],
+    "name": "OpenRouter",
+    "subtitle": "API key",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "documentation": "https://openrouter.ai/docs/api/api-reference/responses/create-a-response",
+    "fallbackModels": [],
+    "useResponsesLite": false,
+    "icon": "openrouter.svg",
+    "usage": true
+  },
+  {
+    "id": "openai-api",
+    "name": "OpenAI API",
+    "subtitle": "API key",
+    "baseUrl": "https://api.openai.com/v1",
+    "documentation": "https://platform.openai.com/docs/api-reference/responses",
+    "fallbackModels": [],
+    "useResponsesLite": false,
+    "modelPattern": "(?:gpt-(?:4\\.1|4o|[5-9]).*|o[134](?:-.*)?)",
+    "capabilities": [
+      {
+        "pattern": "gpt-4\\.1.*",
+        "context": 1047576,
+        "image": true
+      },
+      {
+        "pattern": "gpt-4o.*",
+        "context": 128000,
+        "image": true
+      },
+      {
+        "pattern": "(?:o[134](?:-mini)?(?:-\\d{4}-\\d{2}-\\d{2})?)",
+        "efforts": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "context": 200000,
+        "image": true
+      },
+      {
+        "pattern": "gpt-5(?:-mini|-nano)?(?:-\\d{4}-\\d{2}-\\d{2})?",
+        "efforts": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ],
+        "context": 400000,
+        "image": true
+      },
+      {
+        "pattern": "gpt-5\\.1(?:-\\d{4}-\\d{2}-\\d{2})?",
+        "efforts": [
+          "none",
+          "low",
+          "medium",
+          "high"
+        ],
+        "context": 400000,
+        "image": true
+      },
+      {
+        "pattern": "gpt-5\\.2(?:-\\d{4}-\\d{2}-\\d{2})?",
+        "efforts": [
+          "none",
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "context": 400000,
+        "image": true
+      }
+    ],
+    "icon": "openai.svg",
+    "usage": false
+  },
+  {
+    "id": "zai",
+    "name": "Z.AI (GLM)",
+    "subtitle": "API key",
+    "baseUrl": "https://api.z.ai/api/v1",
+    "documentation": "https://docs.z.ai/devpack/tool/codex",
+    "fallbackModels": [
+      "glm-5.3"
+    ],
+    "useResponsesLite": false,
+    "modelPattern": "glm-.*",
+    "capabilities": [
+      {
+        "pattern": "glm-5\\.3",
+        "efforts": [
+          "low",
+          "high",
+          "max"
+        ],
+        "defaultEffort": "max",
+        "context": 1048576,
+        "parallel": true,
+        "freeform": true
+      }
+    ],
+    "icon": "zai.svg",
+    "usage": false
+  },
+  {
+    "id": "moonshot",
+    "name": "Moonshot AI (Kimi)",
+    "subtitle": "API key",
+    "baseUrl": "https://api.moonshot.ai/v1",
+    "documentation": "https://platform.kimi.com/docs/guide/codex-kimi",
+    "fallbackModels": [
+      "kimi-k3.1-pro"
+    ],
+    "useResponsesLite": false,
+    "alternateHosts": [
+      "api.moonshot.cn"
+    ],
+    "modelPattern": "kimi-k3.*",
+    "capabilities": [
+      {
+        "pattern": "kimi-k3(?:\\.1-pro)?",
+        "efforts": [
+          "low",
+          "high",
+          "max"
+        ],
+        "context": 1048576,
+        "image": true,
+        "parallel": true
+      }
+    ],
+    "icon": "moonshot.svg",
+    "usage": true
+  },
+  {
+    "id": "qwen",
+    "name": "Alibaba Cloud (Qwen)",
+    "subtitle": "API key",
+    "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+    "documentation": "https://www.alibabacloud.com/help/en/model-studio/codex",
+    "fallbackModels": [
+      "auto"
+    ],
+    "useResponsesLite": false,
+    "modelPattern": "(?:auto|qwen.*)",
+    "capabilities": [],
+    "icon": "qwen.svg",
+    "usage": false,
+    "fallbackVariants": [
+      {
+        "hostPattern": "(?!token-plan\\.).+",
+        "models": [
+          "qwen3.7-max"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "xai",
+    "name": "xAI (Grok)",
+    "subtitle": "API key",
+    "baseUrl": "https://api.x.ai/v1",
+    "documentation": "https://docs.x.ai/developers/rest-api-reference/inference/responses",
+    "fallbackModels": [],
+    "useResponsesLite": false,
+    "modelPattern": "grok-.*",
+    "capabilities": [
+      {
+        "pattern": "grok-4\\.[567].*",
+        "efforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh"
+        ],
+        "context": 500000,
+        "image": true,
+        "parallel": true
+      }
+    ],
+    "icon": "xai.svg",
+    "usage": false
+  },
+  {
+    "id": "minimax",
+    "name": "MiniMax",
+    "subtitle": "API key",
+    "baseUrl": "https://api.minimax.io/v1",
+    "documentation": "https://platform.minimax.io/docs/m-plan/codex",
+    "fallbackModels": [
+      "MiniMax-M3.1-Flash"
+    ],
+    "useResponsesLite": false,
+    "modelPattern": "MiniMax-M3.*",
+    "alternateHosts": [
+      "api.minimaxi.com"
+    ],
+    "capabilities": [
+      {
+        "pattern": "MiniMax-M3(?:\\.1-Flash)?",
+        "efforts": [
+          "low",
+          "medium",
+          "high",
+          "xhigh",
+          "max"
+        ],
+        "defaultEffort": "max",
+        "context": 524288,
+        "image": true,
+        "parallel": true,
+        "freeform": true,
+        "toolMode": "code_mode_only"
+      }
+    ],
+    "icon": "minimax.svg",
+    "usage": true
+  },
+  {
+    "id": "mimo",
+    "name": "Xiaomi MiMo",
+    "subtitle": "API key",
+    "baseUrl": "https://api.xiaomimimo.com/v1",
+    "documentation": "https://mimo.mi.com/docs/en-US/tokenplan/integration/codex-configuration",
+    "fallbackModels": [
+      "mimo-v2.6-pro",
+      "mimo-v2.6-flash"
+    ],
+    "useResponsesLite": true,
+    "modelPattern": "mimo-v2\\.6-.*",
+    "alternateHosts": [
+      "token-plan-cn.xiaomimimo.com"
+    ],
+    "capabilities": [
+      {
+        "pattern": "mimo-v2\\.6-(?:pro|flash)",
+        "efforts": [
+          "none",
+          "low",
+          "medium",
+          "high"
+        ],
+        "defaultEffort": "low",
+        "context": 1048576,
+        "image": true,
+        "freeform": true
+      }
+    ],
+    "icon": "mimo.svg",
+    "usage": false
+  }
+]

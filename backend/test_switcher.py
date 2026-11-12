@@ -43,6 +43,17 @@ with tempfile.TemporaryDirectory() as directory:
     assert s.token() == fake
     helper = subprocess.run([sys.executable, str(s.ROOT / 'switcher.py'), '--token'], capture_output=True, text=True, check=True)
     assert helper.stdout == fake
+    import api_providers as api
+    api_paths = []
+    for provider in api.PROVIDERS:
+        if provider == 'deepseek':
+            continue
+        value = 'offline-test-key-' + provider
+        api.save_key(provider, value)
+        api_paths.append(api.key_path(provider))
+        helper = subprocess.run([sys.executable, str(s.ROOT / 'switcher.py'), '--token', provider], capture_output=True, text=True, check=True)
+        assert helper.stdout == value
+        assert s.token() == fake
     s.switch('deepseek-flash')
     first = tomllib.loads(s.CONFIG.read_text())
     assert first['model_provider'] == 'deepseek'
@@ -143,4 +154,6 @@ with tempfile.TemporaryDirectory() as directory:
     assert cny_only['availableCurrencies'] == ['CNY']
     if sys.platform != 'win32':
         s.credential_store.native_store().delete_password(s.credential_store.service(s.KEY), 'api-key')
+        for path in api_paths:
+            s.credential_store.native_store().delete_password(s.credential_store.service(path), 'api-key')
     print('PASS: native credential round trip, missing-key protection, model switching, CC Switch repair, ChatGPT restoration, balance parsing, unrelated-setting preservation, secret-free backups.')

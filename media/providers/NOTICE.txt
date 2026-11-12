@@ -1,7 +1,10 @@
 Provider logo vectors from LobeHub Icons.
 https://github.com/lobehub/lobe-icons
-Source: packages/static-svg/icons/openai.svg and deepseek.svg
-Changes: fixed foreground colors for the app icon backgrounds.
+Source: packages/static-svg/icons/{openai,deepseek,zai,grok,xiaomimimo}.svg
+Color variants: packages/static-svg/icons/{openrouter,kimi,qwen,minimax}-color.svg
+Color source revision: a177c1e817204f8ddc0c8993610ca674fc6d9767
+Changes: fixed neutral foreground colors for standalone SVG rendering;
+preserved the color variants' brand colors and gradients.
 Provider trademarks belong to their respective owners.
 
 MIT License
