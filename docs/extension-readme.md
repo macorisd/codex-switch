@@ -7,12 +7,15 @@ start a new Codex conversation afterward.
 
 The rosette-and-gear icon opens the selector. Your existing encrypted key is
 reused; **Set API key** opens VS Code's native password dialog. No keys are
-saved in workspace settings. DeepSeek API usage is billed separately.
+saved in workspace settings. When a key already exists, that dialog includes a
+trash button that removes only the selected provider's credential. DeepSeek API
+usage is billed separately.
 
 Select a model inside the collapsed **Model catalog**; set reasoning in Codex's
 chat. OpenRouter spans a full row in wide panels and includes search, laboratory
-and free-model filtering. **Test model** (uses API credits) checks a synthetic
-function call and its result via two Responses
+and free-model filtering. Its model list shows readable provider/model names
+without model IDs, adding **(free)** only to verified free models. **Test model**
+(uses API credits) checks a synthetic function call and its result via two Responses
 requests. Catalog discovery alone does not establish inference compatibility.
 No local protocol proxy is used.
 

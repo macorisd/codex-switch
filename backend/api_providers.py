@@ -88,6 +88,15 @@ def save_key(provider, value):
     s.atomic(cache_path(provider), json.dumps(data))
 
 
+def remove_key(provider):
+    s.credential_store.remove(key_path(provider))
+    data = saved(provider)
+    for field in ('validatedAt', 'tested', 'needsTest'):
+        data.pop(field, None)
+    s.atomic(cache_path(provider), json.dumps(data))
+    return state(provider)
+
+
 def free_model(p, item):
     """Explicit zero pricing, or documented free IDs when pricing is absent.
 
@@ -245,9 +254,10 @@ def refresh(provider):
 
 def state(provider):
     data = saved(provider)
-    return {'hasKey': key_path(provider).exists(), 'models': data.get('models', []),
+    has_key = key_path(provider).exists()
+    return {'hasKey': has_key, 'models': data.get('models', []),
         'model': data.get('model', ''), 'effort': data.get('effort', ''), 'baseUrl': endpoint(provider),
-        'valid': bool(data.get('validatedAt')), 'needsTest': data.get('needsTest', False), 'tested': data.get('tested')}
+        'valid': has_key and bool(data.get('validatedAt')), 'needsTest': data.get('needsTest', False), 'tested': data.get('tested')}
 
 
 def select(provider, model, effort):
