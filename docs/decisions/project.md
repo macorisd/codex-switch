@@ -84,6 +84,14 @@ Source: explicit user instructions, 2026-11-08.
   configuration and all visible providers' account/credential status, catalog
   and usage/balance; keep catalog and connection actions available separately.
   Spin counter-clockwise until all refresh work settles, including failures.
+- Preserve the existing initial extension-loading behavior. Subsequent periodic
+  refreshes retain all displayed provider/account/configuration data and control
+  appearance until every request settles, then publish the completed results
+  together. Never flash Loading, hide sections or dim buttons during polling.
+  Block conflicting actions without changing their appearance; keep independent
+  browsing and provider management available. The global sync wheel is the only
+  refresh indicator and spins counter-clockwise throughout the periodic refresh,
+  including failures. Source: explicit refinement, 2026-11-13.
 - A provider unchecked in Manage Providers must never load or refresh its data:
   skip initial, automatic and global/manual requests; stop its timers and cancel
   pending requests when hidden. Re-enabling it loads fresh data and resumes
@@ -120,7 +128,8 @@ Source: explicit user instructions, 2026-11-08.
   **Set API key** available for another attempt. Show that validation failure in
   the local connection feedback rather than waiting for a native notification
   to be dismissed.
-- While a stored or newly entered API key is being read and validated, show
+- During initial loading or explicit credential actions, while a stored or newly
+  entered API key is being read and validated, show
   **Loading...** with a neutral status indicator. Do not show a transient
   **Not configured** state before that check completes, and disable credential
   actions until it resolves to **Configured** or **Not configured**.

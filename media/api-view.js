@@ -52,7 +52,19 @@ window.ApiCards = class {
     const get = role => card.querySelector(`[data-role="${role}"]`);
     const entry = { provider, card, get, state: { loading: true, models: [] }, active: false };
     this.entries.set(provider.id, entry);
-    const send = (operation, extra = {}) => this.send({ action: 'api', provider: provider.id, operation, ...extra });
+    for (const role of ['key', 'refresh', 'refresh-models', 'endpoint', 'model', 'test', 'apply']) {
+      for (const type of ['click', 'keydown', 'pointerdown', 'mousedown', 'change']) {
+        get(role).addEventListener(type, event => {
+          if (!this.refreshing) return;
+          if (type === 'keydown' && (['Tab', 'Escape'].includes(event.key)
+            || (role !== 'model' && !['Enter', ' '].includes(event.key)))) return;
+          event.preventDefault(); event.stopImmediatePropagation();
+        }, true);
+      }
+    }
+    const send = (operation, extra = {}) => {
+      if (!this.refreshing) this.send({ action: 'api', provider: provider.id, operation, ...extra });
+    };
     get('key').onclick = () => send('saveKey');
     for (const role of ['refresh', 'refresh-models']) get(role).onclick = () => send('refresh', { origin: role });
     get('endpoint').onclick = () => send('endpoint');
@@ -86,7 +98,20 @@ window.ApiCards = class {
     get('threshold').onblur = saveThreshold;
     get('test').onclick = () => send('test');
     this.update(provider.id, this.buffer.get(provider.id) || entry.state);
+    this.lock(entry);
     return card;
+  }
+  lock(entry) {
+    for (const role of ['key', 'refresh', 'refresh-models', 'endpoint', 'model', 'test', 'apply']) {
+      const control = entry.get(role);
+      // Keep native disabled/focus styling unchanged while rejecting activation.
+      if (this.refreshing) control.setAttribute('aria-disabled', 'true');
+      else control.removeAttribute('aria-disabled');
+    }
+  }
+  setRefreshing(value) {
+    this.refreshing = value;
+    for (const entry of this.entries.values()) this.lock(entry);
   }
   models(entry, preserveScroll = false) {
     const { get, state, provider } = entry;

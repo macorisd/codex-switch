@@ -10,6 +10,7 @@
   let providerLayout = [];
   let layoutRevision = 0;
   let syncLoading = false;
+  let quietSync = false;
   let account = { loading: true };
   let countdownTimer = null;
   let manageListKey = '';
@@ -118,6 +119,7 @@
   }
 
   function renderAccount() {
+    if (quietSync) return;
     $('chatgpt-plan').textContent = providerInfo('openai')?.subtitle || 'Your Plan';
     $('chatgpt-dot').classList.toggle('configured', account.configured === true);
     $('chatgpt-dot').classList.toggle('not-configured', account.configured === false);
@@ -166,7 +168,7 @@
     cards.get('openai').classList.toggle('current-provider', isActive('openai'));
     actionButton('openai', isActive('openai') ? 'Current Setting' : 'Switch to ChatGPT', busy || isActive('openai'));
     $('sync-all').classList.toggle('loading', syncLoading);
-    $('sync-all').disabled = syncLoading || busy;
+    if (!quietSync) $('sync-all').disabled = syncLoading || busy;
     apiCards.active(state.provider, state.model);
     apiCards.alert(state.balanceAlerts);
     renderAccount(); renderManageList(); renderProviderOrder();
@@ -184,12 +186,14 @@
     if (!$('manage-panel').hidden) setManageOpen(false);
     apiCards.closePanels();
   });
-  $('openai').addEventListener('click', () => send({ action: 'apply', provider: 'openai' }));
+  $('openai').addEventListener('click', () => {
+    if (!quietSync) send({ action: 'apply', provider: 'openai' });
+  });
   $('sync-all').addEventListener('click', () => {
     if (syncLoading || busy) return;
     syncLoading = true; render(); send({ action: 'syncAll' });
   });
-  window.addEventListener('message', ({ data }) => {
+  function receive(data) {
     if (data.type === 'state') {
       state = data.state; account = state.chatgpt || account; busy = data.busy;
       adoptProviderLayout(state.providerLayout, state.providerLayoutRevision || 0); render();
@@ -199,10 +203,21 @@
       if (state) state.balanceAlerts = data.balanceAlerts;
       apiCards.alert(data.balanceAlerts);
     } else if (data.type === 'chatgpt') { account = data.account; render();
-    } else if (data.type === 'syncLoading') { syncLoading = data.loading; render();
+    } else if (data.type === 'syncLoading') {
+      syncLoading = data.loading;
+      quietSync = Boolean(data.loading && data.quiet);
+      apiCards.setRefreshing(quietSync);
+      for (const id of ['openai', 'sync-all']) {
+        if (quietSync) $(id).setAttribute('aria-disabled', 'true');
+        else $(id).removeAttribute('aria-disabled');
+      }
+      // All completed data is applied in the same message turn, before paint.
+      for (const update of data.updates || []) receive(update);
+      render();
     } else if (data.type === 'providerLayout' || data.type === 'providerLayoutError') {
       adoptProviderLayout(data.layout, data.revision); render();
     }
-  });
+  }
+  window.addEventListener('message', ({ data }) => receive(data));
   send({ action: 'ready' });
 })();
