@@ -69,12 +69,25 @@ class Selector {
     this.balanceAlerts = Object.fromEntries(DEFINITIONS.map(p => [p.id, { threshold: balanceAlerts.threshold(savedAlerts?.[p.id]?.threshold) }]));
     this.alertTracker = new balanceAlerts.Tracker();
     this.api = new ApiSessions({ definitions: DEFINITIONS, request: backend,
-      visible: id => this.canLoad(id), post: value => this.view?.webview.postMessage(value),
+      visible: id => this.canLoad(id), post: value => this.post(value),
       input: options => vscode.window.showInputBox(options),
-      apply: work => this.applyProvider(work), timers: { setInterval, clearInterval },
+      apply: work => this.applyProvider(work),
       alerts: (id, balance) => this.checkBalance(id, balance) });
   }
   canLoad(id) { return this.viewVisible && this.providerLayout().some(p => p.id === id && p.visible); }
+  post(value) {
+    // Polling publishes one completed snapshot, never intermediate loading data.
+    if (this.refreshMessages && ['state', 'apiState', 'chatgpt'].includes(value.type)) {
+      this.refreshMessages.set(`${value.type}:${value.provider || ''}`, value);
+      return Promise.resolve();
+    }
+    return this.view?.webview.postMessage(value);
+  }
+  reconcilePolling() {
+    if (this.viewVisible && this.providerLayout().some(p => p.visible)) {
+      if (!this.refreshTimer) this.refreshTimer = setInterval(() => this.syncAll(false), 60000);
+    } else { clearInterval(this.refreshTimer); this.refreshTimer = null; }
+  }
   resolveWebviewView(view) {
     this.view = view;
     this.viewVisible = view.visible !== false;
@@ -92,20 +105,21 @@ class Selector {
       view.onDidChangeVisibility(() => {
         this.viewVisible = view.visible;
         if (this.viewVisible) void this.ready();
-        else { this.api.reconcile(); this.stopAccountPolling(); }
-      }), { dispose: () => { this.viewVisible = false; this.api.dispose(); this.stopAccountPolling(); } });
+        else { this.api.reconcile(); this.stopAccountPolling(); this.reconcilePolling(); }
+      }), { dispose: () => { this.viewVisible = false; this.api.dispose(); this.stopAccountPolling(); this.reconcilePolling(); } });
     if (view.onDidDispose) this.context.subscriptions.push(view.onDidDispose(() => {
-      this.viewVisible = false; this.api.dispose(); this.stopAccountPolling();
+      this.viewVisible = false; this.api.dispose(); this.stopAccountPolling(); this.reconcilePolling();
     }));
   }
-  async update() {
+  async update(busy = this.busy) {
     try {
       const local = await backend({ action: 'status', includeDeepSeek: false });
       this.activeProvider = local.provider;
-      await this.view?.webview.postMessage({ type: 'state', busy: this.busy, state: { ...local,
+      await this.post({ type: 'state', busy, state: { ...local,
         providers: PROVIDERS.map(p => ({ ...p, iconUri: p.icon ? this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'providers', p.icon)).toString() : undefined })), providerLayout: this.providerLayout(), providerLayoutRevision: this.layoutRevision,
         chatgpt: this.chatgpt, balanceAlerts: this.balanceAlerts } });
       this.api.reconcile();
+      this.reconcilePolling();
       if (!this.canLoad('openai')) this.stopAccountPolling();
     } catch { void vscode.window.showErrorMessage('The local Codex configuration could not be read.'); }
   }
@@ -113,10 +127,9 @@ class Selector {
     await this.update();
     await Promise.allSettled([this.syncAccount(), this.api.refreshAll(true)]);
   }
-  stopAccountPolling() { clearInterval(this.accountTimer); this.accountTimer = null; this.accountAbort?.abort(); }
+  stopAccountPolling() { this.accountAbort?.abort(); }
   syncAccount() {
     if (!this.canLoad('openai')) return Promise.resolve();
-    if (!this.accountTimer) this.accountTimer = setInterval(() => this.syncAccount(), 60000);
     if (this.accountRequest) return this.accountAbort?.signal.aborted ? this.accountRequest.then(() => this.syncAccount()) : this.accountRequest;
     this.accountAbort = new AbortController();
     const controller = this.accountAbort;
@@ -125,7 +138,7 @@ class Selector {
         const account = await codexAccount.readAccount(codexAccount.executable(vscode), { signal: controller.signal });
         if (this.canLoad('openai') && !controller.signal.aborted) this.chatgpt = { ...account, loading: false, stale: false };
       } catch { if (this.canLoad('openai') && !controller.signal.aborted) this.chatgpt = { ...this.chatgpt, loading: false, stale: true }; }
-      if (this.canLoad('openai') && !controller.signal.aborted) await this.view?.webview.postMessage({ type: 'chatgpt', account: this.chatgpt });
+      if (this.canLoad('openai') && !controller.signal.aborted) await this.post({ type: 'chatgpt', account: this.chatgpt });
     })().finally(() => { this.accountRequest = null; });
     return this.accountRequest;
   }
@@ -146,11 +159,33 @@ class Selector {
     try { await work(); await vscode.commands.executeCommand('workbench.action.reloadWindow'); }
     finally { this.busy = false; }
   }
+  async syncAll(manual = true) {
+    if (this.busy || !this.viewVisible) return;
+    // Do not start a poll over startup or an explicit credential/model action.
+    if (!manual && (this.accountRequest || this.api.pending.size)) return;
+    this.busy = true;
+    if (!manual) this.refreshMessages = new Map();
+    try {
+      await this.post({ type: 'syncLoading', loading: true, quiet: !manual });
+      await this.update();
+      await Promise.allSettled([this.syncAccount(), this.api.refreshAll(manual)]);
+      // Provider management stays available; include any newly enabled provider.
+      while (this.accountRequest || this.api.pending.size) {
+        await Promise.allSettled([this.accountRequest, ...this.api.pending.values()]);
+      }
+    } finally {
+      await this.update(false);
+      const updates = this.refreshMessages ? [...this.refreshMessages.values()] : undefined;
+      this.refreshMessages = null;
+      this.busy = false;
+      await this.post({ type: 'syncLoading', loading: false, updates });
+    }
+  }
   async run(message) {
     if (!message || typeof message.action !== 'string') return;
     if (message.action === 'ready') return this.ready();
     if (message.action === 'saveProviderLayout') return this.saveProviderLayout(message.layout, message.revision);
-    if (message.action === 'api') return this.api.run(message);
+    if (message.action === 'api') return this.busy ? undefined : this.api.run(message);
     if (message.action === 'saveBalanceAlert') {
       const id = message.provider;
       if (!DEFINITIONS.some(p => p.id === id) || !this.canLoad(id) || !Number.isFinite(Number(message.threshold))) return;
@@ -163,11 +198,7 @@ class Selector {
       return;
     }
     if (message.action === 'syncAll') {
-      if (this.busy || !this.viewVisible) return;
-      this.busy = true;
-      await this.view?.webview.postMessage({ type: 'syncLoading', loading: true });
-      try { await this.update(); await Promise.allSettled([this.syncAccount(), this.api.refreshAll(true)]); }
-      finally { this.busy = false; await this.update(); await this.view?.webview.postMessage({ type: 'syncLoading', loading: false }); }
+      return this.syncAll();
     }
     if (message.action === 'apply' && message.provider === 'openai' && !this.busy) {
       try { await this.applyProvider(() => backend({ action: 'apply', provider: 'openai' })); }

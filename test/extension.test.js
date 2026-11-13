@@ -181,6 +181,7 @@ function harness(options = {}) {
     accountCalls,
     pendingBackend,
     backendSignals,
+    backendState: state,
     view,
     setVisible: visible => {
       view.visible = visible;
@@ -296,6 +297,107 @@ test('global sync deduplicates clicks and settles after independent failures', a
   assert.equal(h.accountCalls.length,before+1);
   assert.deepEqual(h.messages.filter(m=>m.type==='syncLoading').map(m=>m.loading),[true,false]);
   assert.equal(h.messages.filter(m=>m.type==='state').at(-1).busy,false);
+});
+
+test('periodic refresh preserves startup and publishes all results only after the last provider settles', async () => {
+  let finishAccount;
+  let polling = false;
+  const h = harness({ globalValues: { providerLayout: layout(['deepseek', 'openrouter']) },
+    accountRead: () => polling ? new Promise(resolve => { finishAccount = resolve; })
+      : Promise.resolve({ configured: true, plan: 'Plus' }) });
+  await h.receive({ action: 'ready' });
+  assert(h.messages.some(m => m.type === 'apiState' && m.state.loading), 'initial loading is unchanged');
+  assert(!h.messages.some(m => m.type === 'syncLoading'), 'startup does not become a quiet poll');
+  assert.equal(h.intervals.length, 1, 'one timer coordinates all visible providers');
+  assert.equal(h.intervals[0].delay, 60000);
+  polling = true;
+  h.backendState.hasKey = false;
+  const start = h.messages.length;
+  const refresh = h.intervals[0].listener();
+  await tick();
+  assert.deepEqual(h.messages.slice(start), [{ type: 'syncLoading', loading: true, quiet: true }]);
+  const calls = h.calls.length;
+  await h.receive(apiMessage('deepseek', 'saveKey'));
+  await h.receive({ action: 'apply', provider: 'openai' });
+  await h.receive({ action: 'syncAll' });
+  await h.intervals[0].listener();
+  assert.equal(h.calls.length, calls, 'conflicting actions and duplicate polls cannot run');
+  finishAccount({ configured: false });
+  await refresh;
+  const completed = h.messages.at(-1);
+  assert.equal(completed.type, 'syncLoading');
+  assert.equal(completed.loading, false);
+  assert.equal(h.messages.length - start, 2, 'one start and one completed transaction');
+  assert.equal(completed.updates.find(m => m.type === 'chatgpt').account.configured, false);
+  const api = completed.updates.filter(m => m.type === 'apiState');
+  assert.deepEqual(api.map(m => m.provider).sort(), ['deepseek', 'openrouter']);
+  assert(api.every(m => !m.state.loading && !m.state.working && !m.state.valid));
+  assert.equal(completed.updates.find(m => m.type === 'state').busy, false);
+  assert.equal(requests(h, 'status', 'mimo').length, 0, 'hidden providers remain idle');
+  h.setVisible(false);
+  const after = h.calls.length;
+  await h.intervals[0].listener();
+  assert.equal(h.calls.length, after);
+  assert(h.clearedIntervals.includes(h.intervals[0]));
+});
+
+test('periodic errors release the spinner and publish settled failure states together', async () => {
+  const failures = [];
+  let failAccount = false;
+  const h = harness({ globalValues: { providerLayout: layout(['deepseek']) }, failActions: failures,
+    accountRead: async () => { if (failAccount) throw new Error('offline'); return { configured: true, plan: 'Plus' }; } });
+  await h.receive({ action: 'ready' });
+  failures.push('status'); failAccount = true;
+  await h.intervals[0].listener();
+  const result = h.messages.at(-1);
+  assert.equal(result.loading, false);
+  const account = result.updates.find(m => m.type === 'chatgpt').account;
+  assert(account.configured && account.stale, 'ChatGPT failure retains its last known account');
+  const api = result.updates.find(m => m.type === 'apiState').state;
+  assert(!api.valid && !api.loading && !api.working);
+  assert.match(api.error, /Operation failed/);
+  failures.length = 0; failAccount = false;
+  await h.intervals[0].listener();
+  assert(h.messages.at(-1).updates.find(m => m.type === 'apiState').state.valid, 'next poll recovers');
+});
+
+test('polling skips unfinished startup and keeps spinning until the last API balance completes', async () => {
+  const h = harness({globalValues:{providerLayout:layout(['deepseek'])}, hangActions:['balance']});
+  const startup = h.receive({action:'ready'});
+  await tick();
+  const count = h.calls.length;
+  await h.intervals[0].listener();
+  assert.equal(h.calls.length, count);
+  assert(!h.messages.some(m => m.type === 'syncLoading'));
+  h.pendingBackend.shift().respond(); await startup;
+  const start = h.messages.length;
+  const poll = h.intervals[0].listener(); await tick();
+  assert.deepEqual(h.messages.slice(start), [{type:'syncLoading', loading:true, quiet:true}]);
+  h.pendingBackend.shift().respond(); await poll;
+  assert.equal(h.messages.at(-1).loading, false);
+  assert.equal(h.messages.at(-1).updates.find(m => m.type === 'apiState').state.balance.total, 12.34);
+});
+
+test('providers enabled during a quiet poll join the completed snapshot before the spinner stops', async () => {
+  let finishAccount;
+  let polling = false;
+  const hang = [];
+  const h = harness({globalValues:{providerLayout:layout(['deepseek'])}, hangActions:hang,
+    accountRead: () => polling ? new Promise(resolve => { finishAccount = resolve; })
+      : Promise.resolve({configured:true})});
+  await h.receive({action:'ready'});
+  polling = true; hang.push('refresh');
+  const poll = h.intervals[0].listener(); await tick();
+  await h.receive({action:'saveProviderLayout', layout:layout(['deepseek', 'openrouter']), revision:1});
+  await tick();
+  finishAccount({configured:true}); await tick();
+  assert.equal(h.messages.filter(m => m.type === 'syncLoading').at(-1).loading, true);
+  assert.equal(h.pendingBackend[0].provider, 'openrouter');
+  h.pendingBackend.shift().respond(); await poll;
+  const result = h.messages.at(-1);
+  assert.equal(result.loading, false);
+  const provider = result.updates.find(m => m.type === 'apiState' && m.provider === 'openrouter').state;
+  assert(provider.valid && !provider.loading && !provider.working);
 });
 
 test('ChatGPT remains independent and global sync waits for its last request', async () => {

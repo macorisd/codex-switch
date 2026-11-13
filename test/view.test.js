@@ -316,6 +316,50 @@ test('global sync is deduplicated and re-enabled after errors',()=>{
   h.receive({type:'syncLoading',loading:false}); assert(!h.$('sync-all').disabled);
 });
 
+test('quiet polling keeps provider content and control appearance static while blocking actions', () => {
+  const h = harness({provider:'deepseek', chatgpt:{configured:true, loading:false, plan:'Plus'}});
+  h.api('deepseek', configured);
+  const card = h.card('deepseek');
+  const before = card.innerHTML;
+  const disabled = [...card.querySelectorAll('button, input, select')].map(control => control.disabled);
+  const messages = h.messages.length;
+  h.receive({type:'syncLoading', loading:true, quiet:true});
+  assert(h.$('sync-all').classList.contains('loading'));
+  assert.equal(h.$('sync-all').disabled, false, 'spinner keeps its normal appearance');
+  assert.deepEqual([...card.querySelectorAll('button, input, select')].map(control => control.disabled), disabled);
+  for (const role of ['key', 'refresh', 'endpoint', 'model', 'test', 'apply']) {
+    assert.equal(field(card, role).getAttribute('aria-disabled'), 'true');
+    field(card, role).click();
+  }
+  h.$('openai').click(); h.$('sync-all').click();
+  assert.equal(h.messages.length, messages, 'guarded handlers also reject programmatic activation');
+  const tab = new h.window.Event('keydown', {cancelable:true}); tab.key = 'Tab';
+  field(card, 'model').dispatchEvent(tab);
+  assert(!tab.defaultPrevented, 'interaction locks preserve keyboard navigation');
+  const arrow = new h.window.Event('keydown', {cancelable:true}); arrow.key = 'ArrowDown';
+  field(card, 'model').dispatchEvent(arrow);
+  assert(arrow.defaultPrevented, 'native model selection is blocked during refresh');
+  const withoutLocks = card.cloneNode(true);
+  for (const control of withoutLocks.querySelectorAll('[aria-disabled]')) {
+    control.removeAttribute('aria-disabled');
+  }
+  assert.equal(withoutLocks.innerHTML, before, 'only invisible interaction locks change');
+  field(card, 'catalog').open = true;
+  field(card, 'search').value = 'test'; field(card, 'search').oninput();
+  assert.equal(field(card, 'model').children.length, 1, 'independent model browsing stays available');
+  h.$('manage-providers').click(); assert(!h.$('manage-panel').hidden);
+  h.receive({type:'syncLoading', loading:false, updates:[
+    {type:'apiState', provider:'deepseek', state:{loading:false, working:false, valid:false, hasKey:false, models:[]}},
+    {type:'chatgpt', account:{configured:false, loading:false}},
+  ]});
+  assert.equal(field(card, 'status').textContent, 'Not configured');
+  assert.equal(h.$('chatgpt-status').textContent, 'Not configured');
+  assert(field(card, 'catalog').hidden); assert(field(card, 'balance').hidden);
+  assert(!field(card, 'key').disabled && !field(card, 'key').hasAttribute('aria-disabled'));
+  assert(!h.$('sync-all').disabled && !h.$('sync-all').classList.contains('loading'));
+  field(card, 'key').click(); assert.equal(h.messages.at(-1).operation, 'saveKey');
+});
+
 test('responsive styles retain 550px columns, equal row heights and narrow natural heights',()=>{
   const css=fs.readFileSync(path.join(root,'media/style.css'),'utf8');
   assert.match(css,/@media \(min-width: 550px\)/);

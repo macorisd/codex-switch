@@ -2,10 +2,10 @@
 
 // One lifecycle for all API keys. Hidden providers cannot start/continue requests.
 class ApiSessions {
-  constructor({ definitions, request, visible, post, input, apply, alerts, timers = globalThis }) {
-    Object.assign(this, { definitions, request, visible, post, input, apply, alerts, timers });
+  constructor({ definitions, request, visible, post, input, apply, alerts }) {
+    Object.assign(this, { definitions, request, visible, post, input, apply, alerts });
     this.sessions = new Map(definitions.map(p => [p.id, { loading: true, valid: false, models: [] }]));
-    this.pending = new Map(); this.controllers = new Map(); this.timer = null;
+    this.pending = new Map(); this.controllers = new Map();
   }
   async publish(id) {
     if (this.visible(id)) await this.post({ type: 'apiState', provider: id, state: this.sessions.get(id) });
@@ -13,13 +13,9 @@ class ApiSessions {
   stop(id) { this.controllers.get(id)?.abort(); }
   reconcile() {
     for (const p of this.definitions) if (!this.visible(p.id)) this.stop(p.id);
-    if ([...this.sessions.keys()].some(id => this.visible(id))) {
-      if (!this.timer) this.timer = this.timers.setInterval(() => { void this.refreshAll(false); }, 60000);
-    } else { this.timers.clearInterval(this.timer); this.timer = null; }
   }
   dispose() {
     for (const id of this.sessions.keys()) this.stop(id);
-    this.timers.clearInterval(this.timer);
   }
   refreshAll(manual = true) {
     this.reconcile();
