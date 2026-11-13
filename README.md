@@ -56,7 +56,7 @@ the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
-| 0.4.3 | Remove parenthesized model IDs from OpenRouter model labels while retaining the free-model marker, and add a native Remove API key action with a trash button to the existing-key dialog. |
+| [0.4.3](https://github.com/macorisd/codex-switch/releases/tag/v0.4.3) | Remove parenthesized model IDs from OpenRouter model labels while retaining the free-model marker, and add a native Remove API key action with a trash button to the existing-key dialog. |
 | [0.4.2](https://github.com/macorisd/codex-switch/releases/tag/v0.4.2) | Keep periodic provider refreshes visually quiet, retain the displayed data until all requests finish, and spin the sync wheel throughout. Initial loading remains unchanged. |
 | [0.4.1](https://github.com/macorisd/codex-switch/releases/tag/v0.4.1) | Make secure credential storage ready to use without Python package setup, refine the banner and provider controls, and simplify the provider table. |
 | [0.4.0](https://github.com/macorisd/codex-switch/releases/tag/v0.4.0) | Add eight API-key providers through a shared engine, searchable model selection, full-width OpenRouter with laboratory/free-model filtering, explicit model tests, and supported balance/quota information with opt-in alerts. |
