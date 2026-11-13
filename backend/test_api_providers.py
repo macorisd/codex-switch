@@ -24,9 +24,15 @@ class ProvidersTest(unittest.TestCase):
         self.auth = root.parent / (root.name + '-auth.json')
         self.auth.write_text('UNCHANGED-CHATGPT-AUTH', encoding='utf-8')
         self.keys = {}
+        self.removed = []
         def save(path, value): self.keys[str(path)] = value; return 'encrypted-marker'
+        def remove(path):
+            self.removed.append(str(path))
+            self.keys.pop(str(path), None)
+            Path(path).unlink(missing_ok=True)
         self.stores = [patch.object(s.credential_store, 'save', side_effect=save),
-                       patch.object(s.credential_store, 'load', side_effect=lambda p: self.keys[str(p)])]
+                       patch.object(s.credential_store, 'load', side_effect=lambda p: self.keys[str(p)]),
+                       patch.object(s.credential_store, 'remove', side_effect=remove)]
         for mock in self.stores: mock.start()
         self.addCleanup(self.temp.cleanup); self.addCleanup(self.paths.stop)
         for mock in self.stores: self.addCleanup(mock.stop)
@@ -105,6 +111,27 @@ class ProvidersTest(unittest.TestCase):
         mock.side_effect=self.mock_api
         value=self.action('zai','test'); self.assertTrue(value['valid'])
         self.action('zai','apply')
+
+    @patch('urllib.request.OpenerDirector.open')
+    def test_remove_key_clears_only_one_provider_and_preserves_selection(self, mock):
+        mock.side_effect=self.mock_api
+        self.action('openrouter','saveKey',key='test-key-openrouter')
+        refreshed=self.action('openrouter','refresh')
+        model=refreshed['models'][0]['id']
+        effort=refreshed['models'][0]['efforts'][-1] if refreshed['models'][0]['efforts'] else ''
+        self.action('openrouter','select',model=model,effort=effort)
+        endpoint=api.endpoint('openrouter')
+        self.action('xai','saveKey',key='test-key-xai')
+        openrouter_path=str(api.key_path('openrouter'))
+        xai_path=str(api.key_path('xai'))
+
+        removed=self.action('openrouter','removeKey')
+        self.assertFalse(removed['hasKey']); self.assertFalse(removed['valid'])
+        self.assertEqual(removed['model'],model); self.assertEqual(removed['baseUrl'],endpoint)
+        self.assertEqual(self.removed,[openrouter_path])
+        self.assertNotIn(openrouter_path,self.keys); self.assertIn(xai_path,self.keys)
+        self.assertEqual(s.CONFIG.read_text(),self.original)
+        with self.assertRaises(ValueError): self.action('openrouter','apply')
 
     @patch('urllib.request.OpenerDirector.open')
     def test_auth_failures_never_use_fallback_or_expose_private_response(self,mock):

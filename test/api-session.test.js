@@ -56,6 +56,31 @@ test('duplicate credential actions cannot open overlapping dialogs',async()=>{
  finish(undefined);await first;assert.equal(h.calls.length,0);
 });
 
+test('the native key dialog offers removal only for a saved key', async () => {
+  const inputs=[];
+  const h=harness(m=>{
+    if(m.operation==='balance')return null;
+    if(m.operation==='removeKey')return {...local,hasKey:false,valid:false};
+    return local;
+  },{input:async options=>{inputs.push(options);return options.allowRemove?{remove:true}:'replacement-key';}});
+
+  await h.api.run({provider:'openrouter',operation:'saveKey'});
+  assert.equal(inputs[0].allowRemove,false);
+  assert(!h.calls.some(c=>c.operation==='removeKey'));
+
+  await h.api.refresh('openrouter',true);
+  const savesBeforeRemoval=h.calls.filter(c=>c.operation==='saveKey').length;
+  await h.api.run({provider:'openrouter',operation:'saveKey'});
+  assert.equal(inputs[1].allowRemove,true);
+  assert.equal(h.calls.filter(c=>c.operation==='removeKey').length,1);
+  assert.equal(h.calls.filter(c=>c.operation==='saveKey').length,savesBeforeRemoval);
+  const state=h.api.sessions.get('openrouter');
+  assert.equal(state.hasKey,false);
+  assert.equal(state.valid,false);
+  assert.equal(state.balance,null);
+  assert.equal(state.model,'lab/model');
+});
+
 test('a failed refresh cannot regain Configured from stale persisted status on the next poll',async()=>{
  const h=harness(m=>{if(m.operation==='refresh')throw new Error('revoked');return local;});
  await h.api.refresh('openrouter',true);assert.equal(h.api.sessions.get('openrouter').valid,false);

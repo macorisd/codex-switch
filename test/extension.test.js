@@ -16,6 +16,7 @@ function harness(options = {}) {
   const infos = [];
   const warnings = [];
   const inputBoxes = [];
+  const customInputBoxes = [];
   const intervals = [];
   const clearedIntervals = [];
   const accountCalls = [];
@@ -44,6 +45,11 @@ function harness(options = {}) {
   };
   const vscode = {
     Uri: { joinPath: (base, ...parts) => path.join(base, ...parts) },
+    ThemeIcon: class {
+      constructor(id) {
+        this.id = id;
+      }
+    },
     RelativePattern: class {},
     window: {
       registerWebviewViewProvider: (id, value) => {
@@ -65,6 +71,47 @@ function harness(options = {}) {
       showInputBox: async values => {
         inputBoxes.push(values);
         return values.password ? options.inputKey : values.value;
+      },
+      createInputBox: () => {
+        const box = {
+          value: '',
+          buttons: [],
+          hidden: false,
+          disposed: false,
+          dispose() {
+            this.disposed = true;
+          },
+          hide() {
+            this.hidden = true;
+            this.hideListener?.();
+          },
+          show() {
+            queueMicrotask(() => {
+              if (options.removeOnInputBox) this.triggerListener?.(this.buttons[0]);
+              else if (options.inputKey !== undefined) {
+                this.value = options.inputKey;
+                this.acceptListener?.();
+              } else {
+                this.hide();
+              }
+            });
+          },
+          onDidAccept: listener => {
+            box.acceptListener = listener;
+            return { dispose() { if (box.acceptListener === listener) box.acceptListener = null; } };
+          },
+          onDidTriggerButton: listener => {
+            box.triggerListener = listener;
+            return { dispose() { if (box.triggerListener === listener) box.triggerListener = null; } };
+          },
+          onDidHide: listener => {
+            box.hideListener = listener;
+            return { dispose() { if (box.hideListener === listener) box.hideListener = null; } };
+          },
+        };
+        customInputBoxes.push(box);
+        inputBoxes.push(box);
+        return box;
       },
     },
     workspace: {
@@ -94,11 +141,16 @@ function harness(options = {}) {
         calls.push(request);
         const operation = request.operation || request.action;
         if (operation === 'saveKey' && options.inputKey) state.hasKey = true;
+        if (operation === 'removeKey') state.hasKey = false;
         const respond = () => {
           if ((options.failActions || []).includes(operation)) {
             child.stdout.emit('data', JSON.stringify({ ok: false, error: 'Connection failed safely.' }));
           } else {
-            let result = request.action === 'api' ? { ...state, valid: true, model: 'model-a', models: [{id:'model-a',name:'A',efforts:['high']}] } : state;
+            let result = request.action === 'api'
+              ? operation === 'removeKey'
+                ? { ...state, valid: false, model: 'model-a', models: [{id:'model-a',name:'A',efforts:['high']}] }
+                : { ...state, valid: true, model: 'model-a', models: [{id:'model-a',name:'A',efforts:['high']}] }
+              : state;
             if (operation === 'balance') {
               const balances = options.balances || [{ available: true, currency: 'USD', total: 12.34, totalText: '12.34' }];
               const index = calls.filter(call => (call.operation || call.action) === 'balance').length - 1;
@@ -175,6 +227,7 @@ function harness(options = {}) {
     infos,
     warnings,
     inputBoxes,
+    customInputBoxes,
     globalValues,
     intervals,
     clearedIntervals,
@@ -228,6 +281,26 @@ test('cancelled key entry does not overwrite credentials', async () => {
   const h = harness(); await h.receive({ action: 'ready' });
   await h.receive(apiMessage('openrouter', 'saveKey'));
   assert.equal(requests(h, 'saveKey').length, 0);
+});
+
+test('saved API key dialog exposes a native Remove API key button', async () => {
+  const h = harness({ removeOnInputBox: true });
+  await h.receive({ action: 'ready' });
+  await h.receive(apiMessage('openrouter', 'saveKey'));
+
+  const box = h.customInputBoxes.at(-1);
+  assert.equal(box.title, 'OpenRouter API key');
+  assert.equal(box.password, true);
+  assert.equal(box.buttons.length, 1);
+  assert.equal(box.buttons[0].iconPath.id, 'trash');
+  assert.equal(box.buttons[0].tooltip, 'Remove API key');
+  assert.equal(requests(h, 'saveKey', 'openrouter').length, 0);
+  assert.equal(requests(h, 'removeKey', 'openrouter').length, 1);
+  const state = h.messages.filter(m => m.type === 'apiState' && m.provider === 'openrouter').at(-1).state;
+  assert.equal(state.hasKey, false);
+  assert.equal(state.valid, false);
+  assert.equal(state.working, false);
+  assert.equal(state.model, 'model-a');
 });
 
 test('invalid keys release controls immediately without blocking on a notification', async () => {

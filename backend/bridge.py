@@ -31,6 +31,7 @@ def handle(request):
         if operation == 'saveKey':
             api.save_key(provider, request.get('key', ''))
             return api.state(provider)
+        if operation == 'removeKey': return api.remove_key(provider)
         if operation == 'endpoint':
             api.configure_endpoint(provider, request.get('url', ''))
             return api.state(provider)
@@ -41,7 +42,7 @@ def handle(request):
         if operation == 'select': return api.select(provider, request.get('model'), request.get('effort', ''))
         if operation == 'apply':
             selected = api.saved(provider)
-            if not selected.get('validatedAt'):
+            if not api.state(provider)['valid']:
                 raise ValueError('Validate this provider before switching.')
             api.select(provider, selected.get('model'), selected.get('effort', ''))
             s.switch(selected['model'], selected.get('effort', ''), provider)

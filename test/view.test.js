@@ -205,6 +205,28 @@ test('aggregators combine free, laboratory and search filters without changing s
   assert.deepEqual([...h.$('provider-list').children].map(c=>c.dataset.provider),['openai','openrouter','deepseek'], 'narrow layout retains the managed order; wide CSS fills gaps');
 });
 
+test('OpenRouter model labels omit IDs and mark only verified free models', () => {
+  const h = harness({visible:['openai','openrouter','deepseek']});
+  const openrouter = h.card('openrouter');
+  h.api('openrouter', {...configured, models:[
+    {id:'anthropic/claude',name:'Anthropic: Claude',free:false},
+    {id:'google/gemini:free',name:'Google: Gemini (free)',free:true},
+    {id:'lab/marketing',name:'Lab: Marketing (free)',free:false},
+  ]});
+  assert.deepEqual([...field(openrouter,'model').children].map(option=>option.textContent),[
+    'Anthropic: Claude',
+    'Google: Gemini (free)',
+    'Lab: Marketing',
+  ]);
+  field(openrouter,'search').value='google/gemini:free';
+  field(openrouter,'search').dispatchEvent(new h.window.Event('input'));
+  assert.deepEqual([...field(openrouter,'model').children].map(option=>option.value),['google/gemini:free']);
+
+  const deepseek = h.card('deepseek');
+  h.api('deepseek', {...configured, models:[{id:'deepseek-flash',name:'DeepSeek-Flash',free:false}]});
+  assert.equal(field(deepseek,'model').firstChild.textContent,'DeepSeek-Flash (deepseek-flash)');
+});
+
 test('all API cards clamp thresholds on blur and update colors independently without extra requests', () => {
   const h = harness({visible:providers.map(p=>p.id)});
   for (const {id} of definitions) {

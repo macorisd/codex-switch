@@ -111,6 +111,20 @@ class CredentialTests(unittest.TestCase):
         self.assertEqual(len(bus.items), 1)
         self.assertNotIn('CreateItem', [m for m, _ in bus.calls])
 
+    def test_credential_removal_deletes_native_secret_and_presence_marker_only(self):
+        import credential_store
+        bus = FakeBus()
+        store = self.store(bus)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'provider-key.keyring'
+            service = credential_store.service(path)
+            store.set_password(service, 'api-key', 'fake-value')
+            path.write_text('system-keyring-v1', encoding='ascii')
+            with patch.object(credential_store.sys, 'platform', 'linux'), patch.object(credential_store, 'native_store', return_value=store):
+                credential_store.remove(path)
+            self.assertFalse(path.exists())
+            self.assertIsNone(store.get_password(service, 'api-key'))
+
     def test_unlock_prompt_uses_the_vault_owner_and_cancel_never_saves(self):
         for dismissed in (False, True):
             bus = FakeBus(dismissed=dismissed)

@@ -121,7 +121,11 @@ window.ApiCards = class {
     const models = (state.models || []).filter(m => (!lab || m.id.split('/')[0] === lab)
       && (!get('free').checked || m.free === true) && `${m.id} ${m.name}`.toLowerCase().includes(search));
     get('model').replaceChildren(...models.map(m => {
-      const option = document.createElement('option'); option.value = m.id; option.textContent = m.name === m.id ? m.id : `${m.name} (${m.id})`; option.selected = m.id === state.model; return option;
+      const option = document.createElement('option'); option.value = m.id;
+      option.textContent = provider.id === 'openrouter'
+        ? (m.name || m.id).replace(/\s*\(free\)\s*$/i, '') + (m.free === true ? ' (free)' : '')
+        : m.name === m.id ? m.id : `${m.name} (${m.id})`;
+      option.selected = m.id === state.model; return option;
     }));
     get('model').scrollTop = scrollTop;
     const selected = state.models?.find(m => m.id === state.model);

@@ -64,3 +64,9 @@ def load(key_path):
     return value
 
 
+def remove(key_path):
+    if sys.platform != 'win32':
+        native_store().delete_password(service(key_path), 'api-key')
+    Path(key_path).unlink(missing_ok=True)
+
+

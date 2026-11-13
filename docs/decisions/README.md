@@ -9,7 +9,7 @@ to new work as well as fixes. This directory is shared project knowledge;
 
 | Document | Read when |
 | --- | --- |
-| [Project and delivery](project.md) | Changing source, provider loading/refresh behavior, credentials, versions, documentation, packaging or release automation. |
+| [Project and delivery](project.md) | Changing source, model labels, provider loading/refresh behavior, credential management, versions, documentation, packaging or release automation. |
 
 ## Maintenance
 

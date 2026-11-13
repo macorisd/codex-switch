@@ -87,9 +87,15 @@ class ApiSessions {
       if (operation === 'saveKey' || operation === 'endpoint') {
         const isKey = operation === 'saveKey';
         const value = isKey ? await this.input({ title: `${p.name} API key`, password: true, ignoreFocusOut: true,
+          allowRemove: Boolean(state.hasKey),
           prompt: 'Stored securely for your OS user. Model tests are separate and may incur API charges.' })
           : await this.endpointInput(p, state);
         if (value === undefined || !live()) return;
+        if (isKey && value?.remove === true && state.hasKey) {
+          Object.assign(state, await request('removeKey'), { balance: null, balanceError: '' });
+          this.alerts(id, null);
+          return;
+        }
         if (isKey && !state.valid && p.endpointSetup) {
           const url = await this.endpointInput(p, state);
           if (url === undefined || !live()) return;

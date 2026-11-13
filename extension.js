@@ -70,11 +70,33 @@ class Selector {
     this.alertTracker = new balanceAlerts.Tracker();
     this.api = new ApiSessions({ definitions: DEFINITIONS, request: backend,
       visible: id => this.canLoad(id), post: value => this.post(value),
-      input: options => vscode.window.showInputBox(options),
+      input: options => this.input(options),
       apply: work => this.applyProvider(work),
       alerts: (id, balance) => this.checkBalance(id, balance) });
   }
   canLoad(id) { return this.viewVisible && this.providerLayout().some(p => p.id === id && p.visible); }
+  input({ allowRemove, ...options }) {
+    if (!allowRemove) return vscode.window.showInputBox(options);
+    return new Promise(resolve => {
+      const box = vscode.window.createInputBox();
+      Object.assign(box, options);
+      const remove = { iconPath: new vscode.ThemeIcon('trash'), tooltip: 'Remove API key' };
+      box.buttons = [remove];
+      let settled = false;
+      const listeners = [];
+      const finish = value => {
+        if (settled) return;
+        settled = true;
+        for (const listener of listeners) listener.dispose();
+        box.value = ''; box.hide(); box.dispose();
+        resolve(value);
+      };
+      listeners.push(box.onDidAccept(() => finish(box.value)),
+        box.onDidTriggerButton(button => { if (button === remove) finish({ remove: true }); }),
+        box.onDidHide(() => finish(undefined)));
+      box.show();
+    });
+  }
   post(value) {
     // Polling publishes one completed snapshot, never intermediate loading data.
     if (this.refreshMessages && ['state', 'apiState', 'chatgpt'].includes(value.type)) {

@@ -79,6 +79,11 @@ Source: explicit user instructions, 2026-11-08.
   cards: ChatGPT → OpenRouter → DeepSeek renders ChatGPT/DeepSeek in the first
   row and OpenRouter across the next. The managed order still determines the
   narrow layout. Source: explicit refinements, 2026-11-12.
+- In OpenRouter's model picker, show the readable provider/model name without
+  appending the model ID in parentheses. Append a single **(free)** only when
+  verified free-model metadata marks it free. Keep IDs as selection values and
+  search targets. Other providers retain their existing model labels.
+  Source: explicit refinement, 2026-11-13.
 - Place one sync icon to the right of the active provider label in Current
   Configuration. Remove provider-specific balance sync icons. It refreshes
   configuration and all visible providers' account/credential status, catalog
@@ -117,6 +122,13 @@ Source: explicit user instructions, 2026-11-08.
   Source: explicit placement/visibility refinement, 2026-11-12.
 - **Set API key** opens VS Code's native password dialog. The key is not entered,
   displayed or retained in the sidebar GUI.
+- When a saved API key exists, its native password dialog offers a trash icon
+  with the **Remove API key** tooltip. Removing it clears only that provider's
+  secure credential and validation/balance state, then shows Not configured.
+  Preserve provider selection/endpoint, other keys and ChatGPT authentication;
+  cancelling the dialog leaves the saved key intact. Keep removal inside this
+  dialog rather than adding a control to the provider card.
+  Source: API-key management refinement, 2026-11-13.
 - Model catalog and Available balance remain absent while DeepSeek has no
   validated API key. A new provider without a catalog endpoint may reveal its
   documented fallback models for an explicit validation test; switching stays
