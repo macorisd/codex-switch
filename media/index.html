@@ -54,13 +54,21 @@
             <p id="chatgpt-stale" class="usage-note" hidden>Usage unavailable. Previous data may be out of date.</p>
             <div class="usage-window">
               <div class="usage-window-heading"><span id="five-hour-label">5-hour usage remaining</span><strong id="five-hour-value">Unavailable</strong></div>
-              <progress id="five-hour-bar" max="100" aria-labelledby="five-hour-label" hidden></progress>
+              <div class="usage-meter" id="five-hour-meter" hidden>
+                <progress id="five-hour-bar" max="100" aria-labelledby="five-hour-label" hidden></progress>
+                <span class="usage-now" id="five-hour-now" aria-hidden="true" hidden></span>
+                <span class="usage-now-label" id="five-hour-now-label" aria-hidden="true" hidden>Now</span>
+              </div>
               <p class="usage-note" id="five-hour-reset"></p>
               <p class="usage-note" id="five-hour-countdown"></p>
             </div>
             <div class="usage-window">
               <div class="usage-window-heading"><span id="weekly-label">Weekly usage remaining</span><strong id="weekly-value">Unavailable</strong></div>
-              <progress id="weekly-bar" max="100" aria-labelledby="weekly-label" hidden></progress>
+              <div class="usage-meter" id="weekly-meter" hidden>
+                <progress id="weekly-bar" max="100" aria-labelledby="weekly-label" hidden></progress>
+                <span class="usage-now" id="weekly-now" aria-hidden="true" hidden></span>
+                <span class="usage-now-label" id="weekly-now-label" aria-hidden="true" hidden>Now</span>
+              </div>
               <p class="usage-note" id="weekly-reset"></p>
               <p class="usage-note" id="weekly-countdown"></p>
             </div>

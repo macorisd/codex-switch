@@ -130,17 +130,29 @@
         : account.configured === false ? (account.stale ? 'Not configured (out of date)' : 'Not configured') : 'Unavailable';
     $('chatgpt-usage').hidden = !account.configured;
     $('chatgpt-stale').hidden = !account.stale && account.usageAvailable !== false;
-    for (const [prefix, value] of [['five-hour', account.fiveHour], ['weekly', account.weekly]]) {
+    const now = Date.now();
+    for (const [prefix, value, duration] of [['five-hour', account.fiveHour, 300], ['weekly', account.weekly, 10080]]) {
       const remaining = Number.isFinite(value?.remaining) ? value.remaining : null;
       $(prefix + '-value').textContent = remaining === null ? 'Unavailable' : `${Math.round(remaining)}%`;
       $(prefix + '-bar').hidden = remaining === null;
       $(prefix + '-bar').value = remaining ?? 0;
+      $(prefix + '-meter').hidden = remaining === null;
+      $(prefix + '-bar').dataset.level = remaining === null ? '' : remaining <= 10 ? 'critical' : remaining <= 25 ? 'low' : 'normal';
       const reset = value?.resetsAt ? new Date(value.resetsAt * 1000) : null;
       const validReset = reset && Number.isFinite(reset.getTime());
+      const showNow = remaining !== null && validReset;
+      $(prefix + '-now').hidden = !showNow;
+      $(prefix + '-now-label').hidden = !showNow;
+      if (showNow) {
+        const timeRemaining = Math.max(0, Math.min(100, (reset.getTime() - now) / (duration * 60_000) * 100));
+        $(prefix + '-meter').style.setProperty('--time-remaining', `${timeRemaining}%`);
+      } else {
+        $(prefix + '-meter').style.removeProperty('--time-remaining');
+      }
       $(prefix + '-reset').textContent = validReset
         ? `Resets ${new Intl.DateTimeFormat(undefined, { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(reset)}`
         : 'Reset: Unavailable';
-      const minutes = validReset ? Math.max(0, Math.floor((reset.getTime() - Date.now()) / 60000)) : null;
+      const minutes = validReset ? Math.max(0, Math.floor((reset.getTime() - now) / 60000)) : null;
       const units = prefix === 'weekly'
         ? [[Math.floor(minutes / 1440), 'd'], [Math.floor(minutes / 60) % 24, 'h'], [minutes % 60, 'm']]
         : [[Math.floor(minutes / 60), 'h'], [minutes % 60, 'm']];

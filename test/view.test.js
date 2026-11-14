@@ -9,18 +9,59 @@ const definitions = require('../backend/providers.json');
 const root = path.dirname(__dirname);
 const providers = [{id:'openai',name:'ChatGPT',subtitle:'Your Plan'}, ...definitions.map(p=>({...p,iconUri:`local/${p.icon}`}))];
 const layout = visible => providers.map(p=>({id:p.id,visible:visible.includes(p.id)}));
-function harness({provider='openai',visible=['openai','deepseek'],chatgpt={loading:true}}={}) {
+function harness({provider='openai',visible=['openai','deepseek'],chatgpt={loading:true},now}={}) {
   const {window,document}=parseHTML(fs.readFileSync(path.join(root,'media/index.html'),'utf8'));
-  const messages=[],timers=[];
-  const sandbox={window,document,acquireVsCodeApi:()=>({postMessage:m=>messages.push(m)}),setInterval:()=>1,clearInterval(){},setTimeout:(fn,delay)=>{timers.push({fn,delay});return timers.length;},clearTimeout(){}};
+  const messages=[],timers=[],intervals=[];
+  let currentTime = now;
+  const sandbox={window,document,Date:class extends Date {static now(){return currentTime ?? Date.now();}},acquireVsCodeApi:()=>({postMessage:m=>messages.push(m)}),setInterval:fn=>{intervals.push(fn);return intervals.length;},clearInterval(){},setTimeout:(fn,delay)=>{timers.push({fn,delay});return timers.length;},clearTimeout(){}};
   const context=vm.createContext(sandbox);
   for(const file of ['balance-alerts.js','api-view.js','view.js']) vm.runInContext(fs.readFileSync(path.join(root,'media',file),'utf8'),context);
   const receive=data=>{const event=new window.Event('message');event.data=data;window.dispatchEvent(event);};
   receive({type:'state',busy:false,state:{provider,model:'test-model',effort:'high',providers,providerLayout:layout(visible),providerLayoutRevision:0,chatgpt,balanceAlerts:{}}});
-  return {window,document,messages,timers,receive,$:id=>document.getElementById(id),card:id=>document.querySelector(`article[data-provider="${id}"]`),api:(id,state)=>receive({type:'apiState',provider:id,state})};
+  return {window,document,messages,timers,intervals,setNow:value=>{currentTime=value;},receive,$:id=>document.getElementById(id),card:id=>document.querySelector(`article[data-provider="${id}"]`),api:(id,state)=>receive({type:'apiState',provider:id,state})};
 }
 const configured={loading:false,hasKey:true,valid:true,model:'test-model',effort:'high',models:[{id:'test-model',name:'Test model',efforts:['low','high']}],balance:{total:8,currency:'USD'}};
 const field=(card,role)=>card.querySelector(`[data-role="${role}"]`);
+
+test('model list rows follow catalog and filter changes while preserving selection', () => {
+  const h = harness({visible:['openai','openrouter','deepseek']});
+  const models = Array.from({length:10}, (_, i) => ({id:`lab/model-${i}`,name:`Model ${i}`,free:i<2}));
+  const card = h.card('openrouter'), picker = field(card,'model');
+  const state = {...configured,models,model:'lab/model-9'};
+  h.api('openrouter',state);
+  assert.equal(picker.getAttribute('size'),'6');
+  picker.scrollTop = 80;
+  h.api('openrouter',{...state,balance:{total:9,currency:'USD'}});
+  assert.equal(picker.scrollTop,80);
+  field(card,'free').checked = true;
+  field(card,'free').dispatchEvent(new h.window.Event('change'));
+  assert.equal(picker.getAttribute('size'),'2');
+  assert(!picker.hasAttribute('data-single-row'));
+  assert.equal(picker.scrollTop,0);
+  for (const search of ['Model 0','missing']) {
+    field(card,'search').value = search;
+    field(card,'search').dispatchEvent(new h.window.Event('input'));
+    assert.equal(picker.getAttribute('size'),'2','keep native listbox semantics');
+    assert(picker.hasAttribute('data-single-row'));
+  }
+  field(card,'search').value = '';
+  field(card,'free').checked = false;
+  field(card,'free').dispatchEvent(new h.window.Event('change'));
+  assert.equal(picker.getAttribute('size'),'6');
+  assert(!picker.hasAttribute('data-single-row'));
+  assert.equal([...picker.children].find(o=>o.selected).value,'lab/model-9');
+  assert(!h.messages.some(m=>m.operation==='select'));
+  h.api('deepseek',{...configured,models:models.slice(0,2)});
+  assert.equal(field(h.card('deepseek'),'model').getAttribute('size'),'2');
+});
+
+test('multi-provider subtitle is consistent across cards, configuration and management', () => {
+  const h = harness({provider:'openrouter',visible:['openai','openrouter','deepseek']});
+  assert.equal(h.card('openrouter').querySelector('.provider-title p').textContent,'Multi-provider API key');
+  assert.equal(h.card('deepseek').querySelector('.provider-title p').textContent,'API key');
+  assert.equal(h.$('current').textContent,'OpenRouter (Multi-provider API key)');
+  assert.match(h.$('manage-list').textContent,/OpenRouter \(Multi-provider API key\)/);
+});
 
 test('a native model update changes Selected without changing the provider or catalog', () => {
   const h = harness({ provider: 'deepseek' });
@@ -216,8 +257,6 @@ test('aggregators combine free, laboratory and search filters without changing s
     {id:'other/unknown',name:'Unknown price',free:false},
   ];
   h.api('openrouter', {...configured,model:'lab/paid',models});
-  assert(card.classList.contains('provider-aggregator'));
-  assert(!h.card('deepseek').classList.contains('provider-aggregator'));
   assert(!field(card,'free-filter').hidden);
   field(card,'free').checked = true;
   field(card,'free').dispatchEvent(new h.window.Event('change'));
@@ -230,11 +269,8 @@ test('aggregators combine free, laboratory and search filters without changing s
   field(card,'search').value='missing'; field(card,'search').dispatchEvent(new h.window.Event('input'));
   assert.equal(field(card,'model').children.length,0);
   assert(!h.messages.some(m=>m.operation==='select'), 'filters never select or switch implicitly');
-  const css=fs.readFileSync(path.join(root,'media/style.css'),'utf8');
-  assert.match(css.slice(css.indexOf('@media (min-width: 550px)')), /\.provider-aggregator\s*\{ grid-column: 1 \/ -1;/);
-  assert.match(css.slice(css.indexOf('@media (min-width: 550px)')), /\.provider-list\s*\{ grid-auto-flow: row dense;/);
   h.receive({type:'providerLayout',revision:1,layout:[{id:'openai',visible:true},{id:'openrouter',visible:true},{id:'deepseek',visible:true},...definitions.filter(p=>!['openrouter','deepseek'].includes(p.id)).map(p=>({id:p.id,visible:false}))]});
-  assert.deepEqual([...h.$('provider-list').children].map(c=>c.dataset.provider),['openai','openrouter','deepseek'], 'narrow layout retains the managed order; wide CSS fills gaps');
+  assert.deepEqual([...h.$('provider-list').children].map(c=>c.dataset.provider),['openai','openrouter','deepseek'], 'both layouts retain the managed order');
 });
 
 test('OpenRouter model labels omit IDs and mark only verified free models', () => {
@@ -349,6 +385,50 @@ test('balance currency, alert preferences and five-second feedback remain consis
   h.api('deepseek',{...configured,balance:null,balanceError:'Balance unavailable.'}); assert(field(card,'balance').hidden);
 });
 
+test('ChatGPT usage colors follow exact percentage boundaries independently', () => {
+  const h = harness();
+  for (const [remaining,level] of [[0,'critical'],[10,'critical'],[10.01,'low'],[25,'low'],[25.01,'normal'],[100,'normal']]) {
+    h.receive({type:'chatgpt',account:{configured:true,loading:false,fiveHour:{remaining},weekly:{remaining:100}}});
+    assert.equal(h.$('five-hour-bar').dataset.level,level);
+    assert.equal(h.$('weekly-bar').dataset.level,'normal');
+    assert(!h.$('five-hour-meter').hidden);
+  }
+  h.receive({type:'chatgpt',account:{configured:true,loading:false,weekly:{remaining:3}}});
+  assert(h.$('five-hour-meter').hidden);
+  assert.equal(h.$('five-hour-value').textContent,'Unavailable');
+  assert.equal(h.$('weekly-bar').dataset.level,'critical');
+});
+
+test('ChatGPT time markers track each window on countdown ticks without requests', () => {
+  const now = Date.UTC(2026,10,15,10);
+  const h = harness({now,chatgpt:{configured:true,loading:false,
+    fiveHour:{remaining:70,resetsAt:now/1000+150*60},
+    weekly:{remaining:40,resetsAt:now/1000+2520*60}}});
+  const position = prefix => parseFloat(h.$(prefix+'-meter').style.getPropertyValue('--time-remaining'));
+  assert.equal(position('five-hour'),50);
+  assert.equal(position('weekly'),25);
+  assert(!h.$('five-hour-now').hidden && !h.$('weekly-now').hidden);
+  assert.equal(h.$('five-hour-now').getAttribute('aria-hidden'),'true');
+  const count = h.messages.length;
+  h.setNow(now+60_000);
+  h.intervals[0]();
+  assert(Math.abs(position('five-hour')-(149/300*100))<1e-8);
+  assert(Math.abs(position('weekly')-(2519/10080*100))<1e-8);
+  assert.equal(h.messages.length,count);
+  assert.equal(h.$('five-hour-bar').value,70);
+  h.receive({type:'chatgpt',account:{configured:true,loading:false,
+    fiveHour:{remaining:50,resetsAt:now/1000-60},
+    weekly:{remaining:60,resetsAt:now/1000+20000*60}}});
+  assert.equal(position('five-hour'),0);
+  assert.equal(position('weekly'),100);
+  for (const fiveHour of [{remaining:50},{remaining:50,resetsAt:Infinity},{resetsAt:now/1000+60}]) {
+    h.receive({type:'chatgpt',account:{configured:true,loading:false,fiveHour}});
+    assert(h.$('five-hour-now').hidden);
+    assert(h.$('five-hour-now-label').hidden);
+    assert.equal(h.$('five-hour-meter').style.getPropertyValue('--time-remaining'),undefined);
+  }
+});
+
 test('ChatGPT keeps plan/usage independent, omits timezone suffix and zero countdown units',()=>{
   const seconds=Math.floor(Date.now()/1000);
   const h=harness({provider:'deepseek',chatgpt:{configured:true,plan:'Pro',loading:false,fiveHour:{remaining:72,resetsAt:seconds+7260},weekly:{remaining:45,resetsAt:seconds+90060},bankedResets:3}});
@@ -418,6 +498,8 @@ test('responsive styles retain 550px columns, equal row heights and narrow natur
   const css=fs.readFileSync(path.join(root,'media/style.css'),'utf8');
   assert.match(css,/@media \(min-width: 550px\)/);
   const wide=css.slice(css.indexOf('@media (min-width: 550px)'));
+  assert(!css.includes('provider-aggregator'));
+  assert(!css.includes('grid-auto-flow'));
   assert.match(wide,/grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(wide,/align-items: stretch/); assert.match(wide,/flex: 1 0 0/);
   assert.match(wide,/\.provider-card > \.primary.*order: 2/s);

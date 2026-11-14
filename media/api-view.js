@@ -6,11 +6,10 @@ window.ApiCards = class {
     if (this.entries.has(provider.id)) return this.entries.get(provider.id).card;
     const card = document.createElement('article');
     card.className = 'provider-card'; card.dataset.provider = provider.id;
-    card.classList.toggle('provider-aggregator', Boolean(provider.modelFilters?.laboratory));
     card.innerHTML = `<header class="provider-header">
         <div class="provider-identity">
           <span class="provider-icon api-icon"></span>
-          <div class="provider-title"><h3></h3><p>API key</p></div>
+          <div class="provider-title"><h3></h3><p></p></div>
         </div>
       </header>
       <div class="credential-row"><div class="credential-status"><span class="status-dot loading" data-role="dot" aria-hidden="true"></span><span data-role="status">Loading...</span></div><button class="text-button" data-role="key">Set API key</button></div>
@@ -46,6 +45,7 @@ window.ApiCards = class {
       <div data-role="alerts" hidden><button class="text-button" data-role="alert-toggle">Balance alert</button><div class="balance-alert-editor" data-role="alert-panel" hidden><button class="balance-alert-close" data-role="alert-close" aria-label="Close balance alert">&times;</button><p data-role="alert-description"></p><input type="number" min="0" step="0.01" data-role="threshold" aria-label="Balance alert threshold"></div></div>
       <button class="primary" data-role="apply">Switch provider</button>`;
     card.querySelector('h3').textContent = provider.name;
+    card.querySelector('.provider-title p').textContent = provider.subtitle;
     if (provider.id === 'deepseek') card.querySelector('.api-icon').classList.add('deepseek-icon');
     const image = document.createElement('img'); image.src = provider.iconUri; image.alt = ''; image.width = 24; image.height = 24;
     card.querySelector('.api-icon').append(image);
@@ -127,6 +127,9 @@ window.ApiCards = class {
         : m.name === m.id ? m.id : `${m.name} (${m.id})`;
       option.selected = m.id === state.model; return option;
     }));
+    // size=1 becomes a dropdown, so keep listbox semantics for a single match.
+    get('model').setAttribute('size', String(Math.max(2, Math.min(6, models.length))));
+    get('model').toggleAttribute('data-single-row', models.length < 2);
     get('model').scrollTop = scrollTop;
     const selected = state.models?.find(m => m.id === state.model);
     get('selected').textContent = selected ? `Selected: ${selected.id}` : '';
