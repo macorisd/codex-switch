@@ -440,6 +440,28 @@ from platform detection tests; do not claim untested systems are verified.
 - This is a VS Code extension project. microplanner's Flutter, Windows release
   bundle and physical Android verification rules do not apply here.
 
+## Installable behavior and clean-install audit
+
+Source: explicit mandatory user instruction, 2026-11-14.
+
+- Every delivered feature and fix must be reproducible from the distributed
+  VSIX and its automatic installation/activation paths. A repair performed only
+  on the developer's computer, installed extension directory, credentials store
+  or runtime directory is not a delivered fix.
+- Any required generated helper, migration, setting or runtime file must be
+  shipped or created automatically by code inside that exact VSIX. Never rely
+  on development scripts, repository files, pre-populated caches, an earlier
+  installation or undocumented machine-specific setup.
+- Distinguish artifact completeness from external prerequisites (VS Code, Codex,
+  runtimes, OS vaults, accounts, keys and service availability). State those
+  prerequisites and tested limits; do not promise universal or perfect behavior
+  merely because source and installed files match or CI passes.
+- Verify clean installation using the packaged artifact, isolated settings and
+  empty extension/runtime state, and audit every feature against that path.
+- In the requested audit, report irregularities and explain feasibility before
+  implementing functional fixes. Recording this decision and audit evidence is
+  authorized; finding a problem does not authorize implementing its solution.
+
 ## Release artifacts
 
 Source: explicit user request, 2026-11-07.
