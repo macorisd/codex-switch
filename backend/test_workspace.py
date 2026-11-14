@@ -192,6 +192,22 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual(child.returncode, 0, stderr.decode())
         self.assertEqual(json.loads(counter.read_text())['value'], 9)
 
+    def test_native_formatter_updates_guards_after_rewriting_shared_line_endings(self):
+        import model_defaults
+        prepared = self.prepare()
+        binding = json.loads(Path(prepared['binding']).read_text())
+        binding['provider'] = 'deepseek'
+        s.CONFIG.write_bytes(b'model="gpt-model"\r\nmodel_provider="openai"\r\n')
+        captured = model_defaults.capture(binding, {'keyPath': 'model', 'value': 'api-model'})
+        s.CONFIG.write_bytes(b'model = "api-model"\nmodel_provider = "openai"\n')
+        model_defaults.accepted(binding, captured)
+        journal = json.loads((s.ROOT / 'model-defaults.json').read_text())
+        guard = next(g for g in journal['edits'][0]['guards'] if g['key'] == 'model_provider')
+        self.assertEqual(guard['line'], 'model_provider = "openai"\n')
+        subprocess.run([shutil.which('node'), '-e', 'require(process.argv[1]).restoreModels(process.argv[2])',
+            str(s.SOURCE.parent / 'recovery.js'), str(s.ROOT)], check=True, timeout=15)
+        self.assertEqual(tomllib.loads(s.CONFIG.read_text())['model'], 'gpt-model')
+
     def client(self, nonce='a' * 32, provider=None, early=False, send_initialized=True, initialize_id=1, preparing=False):
         prepared = self.prepare(nonce)
         binding = Path(prepared['binding'])

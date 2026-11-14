@@ -41,6 +41,19 @@ def lines(text):
     return result
 
 
+def profile_table(raw, profile, fallback):
+    for table, marker in raw:
+        if marker != '__table__':
+            continue
+        try:
+            header = tomllib.loads('[' + table + ']\nvalue = true\n')
+            if profile in header.get('profiles', {}):
+                return table
+        except tomllib.TOMLDecodeError:
+            continue
+    return fallback
+
+
 def capture(binding, params):
     config = Path(binding['config'])
     text = config.read_bytes().decode('utf-8-sig') if config.exists() else ''
@@ -57,22 +70,14 @@ def capture(binding, params):
                     table, key = name, key[len(name) + 1:]
                     # Preserve the actual header spelling, including quoted
                     # profile names and whitespace in existing user TOML.
-                    for raw_table, marker in raw:
-                        if marker != '__table__':
-                            continue
-                        try:
-                            header = tomllib.loads('[' + raw_table + ']\nvalue = true\n')
-                            if profile in header.get('profiles', {}):
-                                table = raw_table
-                                break
-                        except tomllib.TOMLDecodeError:
-                            continue
+                    table = profile_table(raw, profile, table)
         if key not in ('model', 'model_reasoning_effort'):
             continue
         provider = parsed.get('profiles', {}).get(profile, {}).get('model_provider',
             parsed.get('model_provider', 'openai')) if table else parsed.get('model_provider', 'openai')
         result.append({'table': table, 'key': key, 'before': raw.get((table, key)),
             'value': edit.get('value'), 'incompatible': provider != binding['provider'],
+            'globalProvider': provider, 'activeProfile': parsed.get('profile'),
             'guards': [{'table': t, 'key': k, 'line': raw.get((t, k))}
                        for t, k in {('', 'model_provider'), ('', 'profile'), (table, 'model_provider')}]})
     return result
@@ -134,10 +139,14 @@ def accepted(binding, captured):
         except FileNotFoundError:
             journal = {'config': str(config), 'edits': []}
         for edit in captured:
-            table, key = edit['table'], edit['key']
+            table = profile_table(raw, binding.get('profile'), edit['table']) if edit['table'] else ''
+            key = edit['key']
             previous = next((item for item in journal['edits'] if item['table'] == table and item['key'] == key), None)
             current = parsed.get('profiles', {}).get(binding.get('profile'), {}) if table else parsed
             if current.get(key) != edit['value']:
+                continue
+            current_provider = current.get('model_provider', parsed.get('model_provider', 'openai'))
+            if current_provider != edit['globalProvider'] or parsed.get('profile') != edit['activeProfile']:
                 continue
             journal['edits'] = [item for item in journal['edits'] if (item['table'], item['key']) != (table, key)]
             if binding['provider'] == 'openai' or not edit['incompatible']:
@@ -146,7 +155,9 @@ def accepted(binding, captured):
             if not after or '\n' in after.rstrip('\r\n'):
                 continue
             before = previous['before'] if previous and previous['after'] == edit['before'] else edit['before']
-            journal['edits'].append({**edit, 'before': before, 'after': after})
+            guards = [{'table': t, 'key': k, 'line': raw.get((t, k))}
+                      for t, k in {('', 'model_provider'), ('', 'profile'), (table, 'model_provider')}]
+            journal['edits'].append({**edit, 'table': table, 'before': before, 'after': after, 'guards': guards})
         from window_launcher import atomic
         atomic(file, journal)
 
