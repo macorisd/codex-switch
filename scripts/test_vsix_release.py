@@ -19,7 +19,7 @@ SHA = 'a' * 40
 def package(version='0.1.2', extra=None, year=2026):
     result = io.BytesIO()
     files = {
-        'extension/package.json': json.dumps({'name': 'codex-provider-switch', 'publisher': 'macor-local', 'version': version}).encode(),
+        'extension/package.json': json.dumps({'name': 'codex-provider-switch', 'publisher': 'macor-local', 'version': version, 'activationEvents': ['*']}).encode(),
         'extension/extension.js': b'extension',
         'extension/backend/bridge.py': b'bridge',
         'extension/backend/credential_helper.py': b'helper',
@@ -56,6 +56,20 @@ class HistoryTests(unittest.TestCase):
 
 
 class PackageTests(unittest.TestCase):
+    def test_workspace_release_requires_launcher_sources_and_early_activation(self):
+        extras = {name: b'fixture' for name in ('extension/workspace-runtime.js',
+            'extension/backend/workspace_state.py', 'extension/backend/window_launcher.py',
+            'extension/backend/window_launcher.cs', 'extension/backend/credential_native.py',
+            'extension/backend/credential_store.py', 'extension/backend/vendor/NOTICE.md',
+            'extension/backend/vendor/jeepney-0.9.0-py3-none-any.whl')}
+        release.verify_vsix(package('0.5.0', extra=extras), 'v0.5.0')
+        for missing in list(extras)[:4]:
+            with self.assertRaisesRegex(ValueError, 'workspace isolation'):
+                release.verify_vsix(package('0.5.0', extra={k:v for k,v in extras.items() if k != missing}), 'v0.5.0')
+        manifest = {'name': 'codex-provider-switch', 'publisher': 'macor-local', 'version': '0.5.0'}
+        extras['extension/package.json'] = json.dumps(manifest).encode()
+        with self.assertRaisesRegex(ValueError, 'early activation'):
+            release.verify_vsix(package('0.5.0', extra=extras), 'v0.5.0')
     def test_automatic_credentials_require_the_native_connector_and_bundled_client(self):
         extras = {'extension/backend/credential_native.py': b'native',
                   'extension/backend/credential_store.py': b'store',

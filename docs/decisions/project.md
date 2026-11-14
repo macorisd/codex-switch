@@ -42,6 +42,49 @@ Source: explicit user instructions and initialization answers, 2026-11-07.
   tests, packaging and runtime-state requirements in the developer disclosure.
 - Keep a suitable `.gitignore` for source, tooling, packaging and local state.
 
+## Workspace provider selection
+
+Source: explicit multi-window bug report and requested behavior, 2026-11-14.
+
+- Each workspace must independently select and persist its Codex provider across
+  reopening. Selecting a provider in one workspace must not select it in another
+  open window. Preserve the existing credentials and ChatGPT authentication.
+- Codex Switch must not identify a provider as active in a window merely because
+  that provider appears in the shared global configuration. A saved preference,
+  the configuration applied to a client and the provider of an existing chat are
+  distinct facts; do not represent one as confirmation of another. Unknown or
+  unapplied state must be explicit rather than showing a false Current Setting.
+- Existing conversations can retain their original provider. Preserve their
+  history and make the new-conversation requirement clear when applying a
+  workspace selection; never claim that changing a preference migrated a chat.
+- Verification must cover simultaneous workspaces with different providers,
+  switching in either without affecting the other, reopening and persistence,
+  and consistency of the sidebar with the client state it actually verifies.
+- Do not use Computer Use in this task or stop its capture helper: another chat
+  is using it. Use terminal, tests and non-UI APIs. This reiterates the existing
+  project prohibition and does not grant an exception for the new scope.
+
+Implementation approved in the 0.5.0 workspace-isolation PLAN, 2026-11-14:
+
+- Launch the official Codex with per-window overrides, keeping CODEX_HOME and its
+  authentication store. The shared executable setting selects a common launcher,
+  never a shared provider. Preserve a pre-existing custom executable and offer
+  explicit recovery to the bundled Codex when it is unavailable.
+- Confirm the provider through a private config/read exchange with that exact
+  app-server process. Bind receipts to workspace, activation nonce, configuration
+  revision and a live process's OS creation identity. Unknown, dead, mismatched
+  or unapplied state cannot display a blue active card or Current Setting.
+- Current Configuration describes the verified default for new chats in this
+  workspace, not the provider of an arbitrary visible historical conversation.
+  State that distinction in the panel. After a successful switch, reload the
+  window and open a new Codex chat without sending a message or deleting history.
+- Persist model choices per workspace/provider. Credentials, catalogs and account
+  metrics remain shared local resources; hidden providers still make no requests.
+- Migrate only an old global provider block owned by this extension, preserving
+  its backup, ChatGPT restore values and unrelated TOML. Subsequent switches must
+  not write the shared global selection. Never use ignored project provider keys
+  or copy authentication into separate workspace homes.
+
 ## Sidebar interface
 
 Source: explicit user instructions, 2026-11-08.

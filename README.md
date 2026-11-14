@@ -2,9 +2,9 @@
   <img src="docs/banner.svg" alt="Codex Switch: Switch AI providers in Codex with a click. Without ever leaving VS Code." width="100%">
 </p>
 
-Codex Switch is a VS Code sidebar extension that switches Codex between your ChatGPT subscription and nine API-key providers.
+Codex Switch is a VS Code sidebar extension that remembers a separate Codex provider for each workspace, from your ChatGPT subscription to nine API-key providers.
 Keep account usage, searchable models and supported balances with optional alerts in one panel.
-Keys use your operating system secure storage; switching preserves ChatGPT sign-in and reloads VS Code automatically.
+Keys use your operating system secure storage; switching preserves ChatGPT sign-in, reloads only that window and opens a new Codex chat.
 
 | Provider | Access |
 | --- | --- |
@@ -33,6 +33,12 @@ checks a synthetic function-tool round-trip; it does not certify a full Codex se
 4. Reload VS Code, open **Codex Switch** from the Activity Bar, configure
    an API key if needed, and switch providers.
 
+Each workspace keeps its own provider and model preferences when reopened.
+**Current Configuration** is confirmed by that window's Codex process and applies
+to new chats. Existing conversations retain their original provider. An
+unconfirmed or unapplied selection offers **Reload this window**, without marking
+the saved preference as active.
+
 Codex Switch supports VS Code desktop on Windows, macOS and Linux (x64/ARM64),
 with Python 3.11+ and a compatible Codex installation. Windows uses `python`;
 macOS/Linux use `python3`. Set `codexSwitch.pythonPath` to select another
@@ -56,6 +62,7 @@ the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
+| 0.5.0 | Remember provider and model choices per workspace, isolate simultaneous Codex windows, confirm the applied configuration and open a new chat after switching. |
 | [0.4.3](https://github.com/macorisd/codex-switch/releases/tag/v0.4.3) | Remove parenthesized model IDs from OpenRouter model labels while retaining the free-model marker, and add a native Remove API key action with a trash button to the existing-key dialog. |
 | [0.4.2](https://github.com/macorisd/codex-switch/releases/tag/v0.4.2) | Keep periodic provider refreshes visually quiet, retain the displayed data until all requests finish, and spin the sync wheel throughout. Initial loading remains unchanged. |
 | [0.4.1](https://github.com/macorisd/codex-switch/releases/tag/v0.4.1) | Make secure credential storage ready to use without Python package setup, refine the banner and provider controls, and simplify the provider table. |

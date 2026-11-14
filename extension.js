@@ -8,6 +8,7 @@ const crypto = require('node:crypto');
 const process = require('node:process');
 const codexAccount = require('./codex-account');
 const { ApiSessions } = require('./api-session');
+const { WorkspaceRuntime } = require('./workspace-runtime');
 const balanceAlerts = require('./media/balance-alerts');
 const DEFINITIONS = require('./backend/providers.json');
 const PROVIDERS = [{ id: 'openai', name: 'ChatGPT', subtitle: 'Your Plan' }, ...DEFINITIONS];
@@ -57,8 +58,9 @@ function backend(request, signal) {
 }
 
 class Selector {
-  constructor(context) {
+  constructor(context, runtime) {
     this.context = context;
+    this.runtime = runtime;
     this.busy = false;
     this.layoutRevision = 0;
     this.layoutUpdate = Promise.resolve();
@@ -68,7 +70,7 @@ class Selector {
     const savedAlerts = context.globalState.get(BALANCE_ALERT_KEY, {});
     this.balanceAlerts = Object.fromEntries(DEFINITIONS.map(p => [p.id, { threshold: balanceAlerts.threshold(savedAlerts?.[p.id]?.threshold) }]));
     this.alertTracker = new balanceAlerts.Tracker();
-    this.api = new ApiSessions({ definitions: DEFINITIONS, request: backend,
+    this.api = new ApiSessions({ definitions: DEFINITIONS, request: runtime.request,
       visible: id => this.canLoad(id), post: value => this.post(value),
       input: options => this.input(options),
       apply: work => this.applyProvider(work),
@@ -134,9 +136,11 @@ class Selector {
     }));
   }
   async update(busy = this.busy) {
+    if (!this.view) return;
     try {
-      const local = await backend({ action: 'status', includeDeepSeek: false });
-      this.activeProvider = local.provider;
+      const local = await this.runtime.status();
+      this.activeProvider = local.verified ? local.provider : null;
+      this.selectedProvider = local.selectedProvider;
       await this.post({ type: 'state', busy, state: { ...local,
         providers: PROVIDERS.map(p => ({ ...p, iconUri: p.icon ? this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'providers', p.icon)).toString() : undefined })), providerLayout: this.providerLayout(), providerLayoutRevision: this.layoutRevision,
         chatgpt: this.chatgpt, balanceAlerts: this.balanceAlerts } });
@@ -178,7 +182,7 @@ class Selector {
   async applyProvider(work) {
     if (this.busy) return;
     this.busy = true;
-    try { await work(); await vscode.commands.executeCommand('workbench.action.reloadWindow'); }
+    try { await work(); await this.runtime.reload(); }
     finally { this.busy = false; }
   }
   async syncAll(manual = true) {
@@ -206,6 +210,8 @@ class Selector {
   async run(message) {
     if (!message || typeof message.action !== 'string') return;
     if (message.action === 'ready') return this.ready();
+    if (message.action === 'reloadWindow' && !this.busy) return this.runtime.reload();
+    if (message.action === 'repairWindow' && !this.busy) return this.runtime.repair();
     if (message.action === 'saveProviderLayout') return this.saveProviderLayout(message.layout, message.revision);
     if (message.action === 'api') return this.busy ? undefined : this.api.run(message);
     if (message.action === 'saveBalanceAlert') {
@@ -223,7 +229,7 @@ class Selector {
       return this.syncAll();
     }
     if (message.action === 'apply' && message.provider === 'openai' && !this.busy) {
-      try { await this.applyProvider(() => backend({ action: 'apply', provider: 'openai' })); }
+      try { await this.applyProvider(() => this.runtime.request({ action: 'apply', provider: 'openai' })); }
       catch { void vscode.window.showErrorMessage('Could not restore the ChatGPT configuration.'); }
     }
   }
@@ -243,8 +249,10 @@ class Selector {
     for (const provider of PROVIDERS) {
       if (!seen.has(provider.id)) layout.push({ id: provider.id, visible: true });
     }
-    const active = layout.find(entry => entry.id === activeProvider);
-    if (active) active.visible = true;
+    for (const id of [activeProvider, this.selectedProvider]) {
+      const active = layout.find(entry => entry.id === id);
+      if (active) active.visible = true;
+    }
     return layout;
   }
 
@@ -261,8 +269,10 @@ class Selector {
     for (const provider of PROVIDERS) {
       if (!seen.has(provider.id)) layout.push({ id: provider.id, visible: true });
     }
-    const active = layout.find(entry => entry.id === this.activeProvider);
-    if (active) active.visible = true;
+    for (const id of [this.activeProvider, this.selectedProvider]) {
+      const active = layout.find(entry => entry.id === id);
+      if (active) active.visible = true;
+    }
     const nextRevision = Number.isInteger(revision) ? revision : this.layoutRevision + 1;
     this.layoutUpdate = this.layoutUpdate.catch(() => {}).then(async () => {
       if (nextRevision < this.layoutRevision) return;
@@ -298,27 +308,34 @@ class Selector {
 }
 
 function activate(context) {
-  const selector = new Selector(context);
+  const runtime = new WorkspaceRuntime(vscode, context, backend, root);
+  runtime.prepared = runtime.initialize();
+  const selector = new Selector(context, runtime);
   context.subscriptions.push(vscode.window.registerWebviewViewProvider('codexSwitch.selector', selector));
   context.subscriptions.push(vscode.commands.registerCommand(
     'codexSwitch.open',
     () => vscode.commands.executeCommand('codexSwitch.selector.focus'),
   ));
+  context.subscriptions.push(vscode.commands.registerCommand('codexSwitch.useBundledCodex', () => selector.busy ? undefined : runtime.repair()));
   context.subscriptions.push(vscode.window.registerUriHandler({
     handleUri: () => vscode.commands.executeCommand('codexSwitch.selector.focus'),
   }));
-  const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(path.dirname(root), 'config.toml'));
   let pending;
   const refresh = () => {
     clearTimeout(pending);
     pending = setTimeout(() => selector.update(), 200);
   };
-  context.subscriptions.push(
-    watcher,
-    watcher.onDidChange(refresh),
-    watcher.onDidCreate(refresh),
-    { dispose: () => clearTimeout(pending) },
-  );
+  for (const [directory, pattern] of [[path.dirname(root), 'config.toml'],
+    [root, `workspaces/${runtime.workspace}/*.json`], [root, `windows/${runtime.window}/runtime.json`]]) {
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(directory, pattern));
+    context.subscriptions.push(watcher, watcher.onDidChange(refresh), watcher.onDidCreate(refresh),
+      watcher.onDidDelete?.(refresh) || { dispose() {} });
+  }
+  context.subscriptions.push({ dispose: () => clearTimeout(pending) });
+  // VS Code waits for eager activation before onStartupFinished consumers.
+  // Do not await opening a view here: that can recursively activate Codex.
+  void runtime.prepared.then(() => runtime.openPendingChat());
+  return runtime.prepared;
 }
 
 module.exports = { activate, deactivate() {} };

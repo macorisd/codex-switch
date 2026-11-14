@@ -116,6 +116,13 @@ def verify_vsix(content, tag):
                     raise ValueError('VSIX is missing native credential support')
             if not any(name.startswith('extension/backend/vendor/jeepney-') and name.endswith('.whl') for name in files):
                 raise ValueError('VSIX is missing its bundled Linux credential client')
+        if tuple(map(int, manifest['version'].split('.'))) >= (0, 5, 0):
+            for name in ('extension/workspace-runtime.js', 'extension/backend/workspace_state.py',
+                         'extension/backend/window_launcher.py', 'extension/backend/window_launcher.cs'):
+                if name not in files:
+                    raise ValueError('VSIX is missing workspace isolation support')
+            if '*' not in manifest.get('activationEvents', []):
+                raise ValueError('Workspace isolation requires early activation')
 
 
 def checksum(content, name):

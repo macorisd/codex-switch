@@ -15,7 +15,7 @@
   let countdownTimer = null;
   let manageListKey = '';
   const send = message => vscode.postMessage(message);
-  const isActive = provider => state?.provider === provider;
+  const isActive = provider => state?.provider === provider && state?.verified !== false && !state?.reloadRequired;
   const providerInfo = id => {
     const info = state?.providers.find(provider => provider.id === id);
     return info && id === 'openai' ? { ...info, subtitle: account.configured && account.plan ? `Your ${account.plan} Plan` : 'Your Plan' } : info;
@@ -164,12 +164,19 @@
     if (!state) return;
     for (const provider of state.providers.filter(p => p.id !== 'openai')) cards.set(provider.id, apiCards.card(provider));
     const active = providerInfo(state.provider);
-    $('current').textContent = active ? `${active.name} (${active.subtitle})` : state.provider;
+    $('current').textContent = state.verified === false ? 'Not confirmed in this window'
+      : active ? `${active.name} (${active.subtitle})` : state.provider;
+    $('configuration-note').textContent = state.phase === 'setup-error'
+      ? 'Window setup failed. Check Python and the Codex executable, then reload.'
+      : state.reloadRequired ? 'Reload this window to apply its saved workspace provider.'
+        : 'For new chats in this workspace. Existing chats keep their provider.';
+    $('reload-window').hidden = !state.reloadRequired;
+    $('repair-window').hidden = state.phase !== 'setup-error';
     cards.get('openai').classList.toggle('current-provider', isActive('openai'));
     actionButton('openai', isActive('openai') ? 'Current Setting' : 'Switch to ChatGPT', busy || isActive('openai'));
     $('sync-all').classList.toggle('loading', syncLoading);
     if (!quietSync) $('sync-all').disabled = syncLoading || busy;
-    apiCards.active(state.provider, state.model);
+    apiCards.active(isActive(state.provider) ? state.provider : null, state.model);
     apiCards.alert(state.balanceAlerts);
     renderAccount(); renderManageList(); renderProviderOrder();
   }
@@ -192,6 +199,12 @@
   $('sync-all').addEventListener('click', () => {
     if (syncLoading || busy) return;
     syncLoading = true; render(); send({ action: 'syncAll' });
+  });
+  $('reload-window').addEventListener('click', () => {
+    if (!busy && !quietSync) send({ action: 'reloadWindow' });
+  });
+  $('repair-window').addEventListener('click', () => {
+    if (!busy && !quietSync) send({ action: 'repairWindow' });
   });
   function receive(data) {
     if (data.type === 'state') {

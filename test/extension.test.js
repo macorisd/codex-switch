@@ -182,6 +182,13 @@ function harness(options = {}) {
     clearInterval: timer => clearedIntervals.push(timer),
     require: name => {
       if (name === 'vscode') return vscode;
+      if (name === './workspace-runtime') return { WorkspaceRuntime: class {
+        constructor(vscode, context, request) { this.request = request; }
+        async initialize() {}
+        async status() { return { ...await this.request({ action: 'status', includeDeepSeek: false }), verified: true, ...options.runtimeStatus }; }
+        async reload() { await vscode.commands.executeCommand('workbench.action.reloadWindow'); }
+        async openPendingChat() {}
+      } };
       if (name === './codex-account') return {
         executable: () => 'codex.exe',
         readAccount: async (exe, values) => {

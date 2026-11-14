@@ -4,6 +4,7 @@ import sys
 import tomllib
 import switcher as s
 import api_providers as api
+import workspace_state as ws
 
 
 def status(include_deepseek=True):
@@ -23,7 +24,12 @@ def status(include_deepseek=True):
 
 
 def handle(request):
+    ws.use(request.get('workspace'))
     action = request.get('action')
+    if action == 'prepareWindow':
+        return ws.prepare(request)
+    if action == 'windowStatus':
+        return ws.status(request['window'])
     if action == 'api':
         provider = request.get('provider')
         api.definition(provider)
@@ -45,7 +51,10 @@ def handle(request):
             if not api.state(provider)['valid']:
                 raise ValueError('Validate this provider before switching.')
             api.select(provider, selected.get('model'), selected.get('effort', ''))
-            s.switch(selected['model'], selected.get('effort', ''), provider)
+            if ws.workspace:
+                ws.choose(provider)
+            else:
+                s.switch(selected['model'], selected.get('effort', ''), provider)
             return api.state(provider)
         raise ValueError('Unsupported provider operation')
     if action == 'status':
@@ -60,8 +69,13 @@ def handle(request):
         return s.balance()
     elif action == 'apply':
         if request.get('provider') == 'openai':
+            if ws.workspace:
+                ws.choose('openai')
+                return ws.preference()
             s.switch()
         elif request.get('provider') == 'deepseek':
+            if ws.workspace:
+                return ws.choose('deepseek')
             models = json.loads(s.CATALOG.read_text('utf-8'))['models']
             if not models:
                 raise ValueError('No DeepSeek models are available.')

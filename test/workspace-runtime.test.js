@@ -1,0 +1,97 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const { WorkspaceRuntime, identity } = require('../workspace-runtime');
+
+function harness({ file, folders = ['file:///project-a'], session = 'window-a', custom, fail = false, logUri } = {}) {
+  const calls = [], commands = [], values = new Map();
+  let executable = custom;
+  const uri = text => ({ toString: () => text, scheme: 'file', fsPath: text.slice(7) });
+  const vscode = {
+    env: { sessionId: session }, ConfigurationTarget: { Global: 1 },
+    extensions: { getExtension: () => null },
+    workspace: { workspaceFile: file ? uri(file) : undefined,
+      workspaceFolders: folders.map(text => ({ uri: uri(text) })),
+      getConfiguration: section => { assert.equal(section, 'chatgpt'); return {
+        get: () => executable, update: async (key, value, target) => {
+          assert.equal(key, 'cliExecutable'); assert.equal(target, 1); executable = value;
+        },
+      }; },
+    },
+    commands: { executeCommand: async command => commands.push(command) },
+  };
+  const context = { logUri: logUri ? uri(logUri) : undefined,
+    workspaceState: { get: key => values.get(key), update: async (key, value) => values.set(key, value) } };
+  let runtime;
+  const request = async value => {
+    calls.push(value);
+    if (fail) throw new Error('private backend failure');
+    if (value.action === 'prepareWindow') return { launcher: path.join('/runtime', 'launcher'), binding: runtime.binding };
+    return { provider: 'deepseek', verified: true, reloadRequired: false };
+  };
+  runtime = new WorkspaceRuntime(vscode, context, request, '/runtime');
+  return { runtime, context, vscode, values, calls, commands, executable: () => executable };
+}
+
+test('workspace file identity is stable across folder order and independent of active editor/window', () => {
+  const a = harness({ file: 'file:///team.code-workspace', folders: ['file:///a', 'file:///b'] });
+  const b = harness({ file: 'file:///team.code-workspace', folders: ['file:///b', 'file:///a'], session: 'window-b' });
+  const c = harness({ folders: ['file:///a'] });
+  assert.equal(a.runtime.workspace, b.runtime.workspace);
+  assert.notEqual(a.runtime.window, b.runtime.window);
+  assert.notEqual(a.runtime.workspace, c.runtime.workspace);
+  assert.notEqual(c.runtime.workspace, harness({ folders: ['file:///b'] }).runtime.workspace);
+  assert.equal(c.runtime.workspace, harness({ folders: ['file:///a'], session: 'different' }).runtime.workspace);
+});
+
+test('empty windows have independent identities and bind synchronously before preparation', () => {
+  const a = harness({ folders: [], session: 'empty-a' });
+  assert.equal(process.env.CODEX_SWITCH_BINDING, a.runtime.binding);
+  const b = harness({ folders: [], session: 'empty-b' });
+  assert.notEqual(a.runtime.workspace, b.runtime.workspace);
+  assert.equal(identity(a.vscode, a.context), a.runtime.workspace);
+});
+
+test('every backend request carries the same window/workspace, preserving custom CLI and original home', async () => {
+  const original = process.env.CODEX_HOME;
+  const h = harness({ custom: '/my/custom codex' });
+  h.runtime.prepared = h.runtime.initialize();
+  await h.runtime.prepared;
+  await h.runtime.request({ action: 'api', provider: 'deepseek', operation: 'select' });
+  await h.runtime.status();
+  assert.equal(h.calls[0].configuredCommand, '/my/custom codex');
+  assert.equal(h.executable(), path.join('/runtime', 'launcher'));
+  for (const call of h.calls) {
+    assert.equal(call.workspace, h.runtime.workspace);
+    assert.equal(call.window, h.runtime.window);
+  }
+  assert.equal(process.env.CODEX_HOME, original);
+});
+
+test('setup failure cannot fall back to a false active provider', async () => {
+  const h = harness({ fail: true });
+  h.runtime.prepared = h.runtime.initialize();
+  const state = await h.runtime.status();
+  assert.equal(state.provider, null); assert.equal(state.verified, false);
+  assert.equal(state.phase, 'setup-error'); assert.equal(h.executable(), undefined);
+});
+
+test('switch records a new-chat request before reloading only its window; reopening consumes it once', async () => {
+  const h = harness();
+  await h.runtime.reload();
+  assert.equal(h.values.get(h.runtime.pendingKey), true);
+  assert.deepEqual(h.commands, ['workbench.action.reloadWindow']);
+  h.runtime.prepared = h.runtime.initialize();
+  await h.runtime.openPendingChat(); await h.runtime.openPendingChat();
+  assert.deepEqual(h.commands, ['workbench.action.reloadWindow', 'chatgpt.newChat']);
+  assert.equal(h.calls.filter(call => call.action === 'apply').length, 0);
+});
+
+test('reloading rotates the extension session but retains only the owning workbench window request', () => {
+  const first = harness({ session: 'old-session', logUri: 'file:///logs/run/window2/exthost/extension' });
+  const reloaded = harness({ session: 'new-session', logUri: 'file:///logs/run/window2/exthost1/extension' });
+  const other = harness({ session: 'other-session', logUri: 'file:///logs/run/window3/exthost/extension' });
+  assert.equal(first.runtime.pendingKey, reloaded.runtime.pendingKey);
+  assert.notEqual(first.runtime.pendingKey, other.runtime.pendingKey);
+});
