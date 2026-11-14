@@ -62,7 +62,7 @@ the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
-| 0.5.1 | Keep Codex usable when Codex Switch is disabled or removed, restore owned settings conditionally and retain workspace choices and credentials. |
+| [0.5.1](https://github.com/macorisd/codex-switch/releases/tag/v0.5.1) | Keep Codex usable when Codex Switch is disabled or removed, restore owned settings conditionally and retain workspace choices and credentials. |
 | [0.5.0](https://github.com/macorisd/codex-switch/releases/tag/v0.5.0) | Remember provider and model choices per workspace, isolate simultaneous Codex windows, confirm the applied configuration and open a new chat after switching. |
 | [0.4.3](https://github.com/macorisd/codex-switch/releases/tag/v0.4.3) | Remove parenthesized model IDs from OpenRouter model labels while retaining the free-model marker, and add a native Remove API key action with a trash button to the existing-key dialog. |
 | [0.4.2](https://github.com/macorisd/codex-switch/releases/tag/v0.4.2) | Keep periodic provider refreshes visually quiet, retain the displayed data until all requests finish, and spin the sync wheel throughout. Initial loading remains unchanged. |
