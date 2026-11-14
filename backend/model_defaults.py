@@ -77,9 +77,7 @@ def capture(binding, params):
             parsed.get('model_provider', 'openai')) if table else parsed.get('model_provider', 'openai')
         result.append({'table': table, 'key': key, 'before': raw.get((table, key)),
             'value': edit.get('value'), 'incompatible': provider != binding['provider'],
-            'globalProvider': provider, 'activeProfile': parsed.get('profile'),
-            'guards': [{'table': t, 'key': k, 'line': raw.get((t, k))}
-                       for t, k in {('', 'model_provider'), ('', 'profile'), (table, 'model_provider')}]})
+            'globalProvider': provider, 'activeProfile': parsed.get('profile')})
     return result
 
 
@@ -157,7 +155,7 @@ def accepted(binding, captured):
             before = previous['before'] if previous and previous['after'] == edit['before'] else edit['before']
             guards = [{'table': t, 'key': k, 'line': raw.get((t, k))}
                       for t, k in {('', 'model_provider'), ('', 'profile'), (table, 'model_provider')}]
-            journal['edits'].append({**edit, 'table': table, 'before': before, 'after': after, 'guards': guards})
+            journal['edits'].append({'table': table, 'key': key, 'before': before, 'after': after, 'guards': guards})
         from window_launcher import atomic
         atomic(file, journal)
 
