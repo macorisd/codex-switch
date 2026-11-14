@@ -9,15 +9,16 @@ const definitions = require('../backend/providers.json');
 const root = path.dirname(__dirname);
 const providers = [{id:'openai',name:'ChatGPT',subtitle:'Your Plan'}, ...definitions.map(p=>({...p,iconUri:`local/${p.icon}`}))];
 const layout = visible => providers.map(p=>({id:p.id,visible:visible.includes(p.id)}));
-function harness({provider='openai',visible=['openai','deepseek'],chatgpt={loading:true}}={}) {
+function harness({provider='openai',visible=['openai','deepseek'],chatgpt={loading:true},now}={}) {
   const {window,document}=parseHTML(fs.readFileSync(path.join(root,'media/index.html'),'utf8'));
-  const messages=[],timers=[];
-  const sandbox={window,document,acquireVsCodeApi:()=>({postMessage:m=>messages.push(m)}),setInterval:()=>1,clearInterval(){},setTimeout:(fn,delay)=>{timers.push({fn,delay});return timers.length;},clearTimeout(){}};
+  const messages=[],timers=[],intervals=[];
+  let currentTime = now;
+  const sandbox={window,document,Date:class extends Date {static now(){return currentTime ?? Date.now();}},acquireVsCodeApi:()=>({postMessage:m=>messages.push(m)}),setInterval:fn=>{intervals.push(fn);return intervals.length;},clearInterval(){},setTimeout:(fn,delay)=>{timers.push({fn,delay});return timers.length;},clearTimeout(){}};
   const context=vm.createContext(sandbox);
   for(const file of ['balance-alerts.js','api-view.js','view.js']) vm.runInContext(fs.readFileSync(path.join(root,'media',file),'utf8'),context);
   const receive=data=>{const event=new window.Event('message');event.data=data;window.dispatchEvent(event);};
   receive({type:'state',busy:false,state:{provider,model:'test-model',effort:'high',providers,providerLayout:layout(visible),providerLayoutRevision:0,chatgpt,balanceAlerts:{}}});
-  return {window,document,messages,timers,receive,$:id=>document.getElementById(id),card:id=>document.querySelector(`article[data-provider="${id}"]`),api:(id,state)=>receive({type:'apiState',provider:id,state})};
+  return {window,document,messages,timers,intervals,setNow:value=>{currentTime=value;},receive,$:id=>document.getElementById(id),card:id=>document.querySelector(`article[data-provider="${id}"]`),api:(id,state)=>receive({type:'apiState',provider:id,state})};
 }
 const configured={loading:false,hasKey:true,valid:true,model:'test-model',effort:'high',models:[{id:'test-model',name:'Test model',efforts:['low','high']}],balance:{total:8,currency:'USD'}};
 const field=(card,role)=>card.querySelector(`[data-role="${role}"]`);
@@ -382,6 +383,50 @@ test('balance currency, alert preferences and five-second feedback remain consis
   h.receive({type:'balanceAlerts',balanceAlerts:{deepseek:{threshold:3}}}); assert.equal(field(card,'threshold').value,'3');
   field(card,'alert-close').click(); assert(field(card,'alert-panel').hidden);
   h.api('deepseek',{...configured,balance:null,balanceError:'Balance unavailable.'}); assert(field(card,'balance').hidden);
+});
+
+test('ChatGPT usage colors follow exact percentage boundaries independently', () => {
+  const h = harness();
+  for (const [remaining,level] of [[0,'critical'],[10,'critical'],[10.01,'low'],[25,'low'],[25.01,'normal'],[100,'normal']]) {
+    h.receive({type:'chatgpt',account:{configured:true,loading:false,fiveHour:{remaining},weekly:{remaining:100}}});
+    assert.equal(h.$('five-hour-bar').dataset.level,level);
+    assert.equal(h.$('weekly-bar').dataset.level,'normal');
+    assert(!h.$('five-hour-meter').hidden);
+  }
+  h.receive({type:'chatgpt',account:{configured:true,loading:false,weekly:{remaining:3}}});
+  assert(h.$('five-hour-meter').hidden);
+  assert.equal(h.$('five-hour-value').textContent,'Unavailable');
+  assert.equal(h.$('weekly-bar').dataset.level,'critical');
+});
+
+test('ChatGPT time markers track each window on countdown ticks without requests', () => {
+  const now = Date.UTC(2026,10,15,10);
+  const h = harness({now,chatgpt:{configured:true,loading:false,
+    fiveHour:{remaining:70,resetsAt:now/1000+150*60},
+    weekly:{remaining:40,resetsAt:now/1000+2520*60}}});
+  const position = prefix => parseFloat(h.$(prefix+'-meter').style.getPropertyValue('--time-remaining'));
+  assert.equal(position('five-hour'),50);
+  assert.equal(position('weekly'),25);
+  assert(!h.$('five-hour-now').hidden && !h.$('weekly-now').hidden);
+  assert.equal(h.$('five-hour-now').getAttribute('aria-hidden'),'true');
+  const count = h.messages.length;
+  h.setNow(now+60_000);
+  h.intervals[0]();
+  assert(Math.abs(position('five-hour')-(149/300*100))<1e-8);
+  assert(Math.abs(position('weekly')-(2519/10080*100))<1e-8);
+  assert.equal(h.messages.length,count);
+  assert.equal(h.$('five-hour-bar').value,70);
+  h.receive({type:'chatgpt',account:{configured:true,loading:false,
+    fiveHour:{remaining:50,resetsAt:now/1000-60},
+    weekly:{remaining:60,resetsAt:now/1000+20000*60}}});
+  assert.equal(position('five-hour'),0);
+  assert.equal(position('weekly'),100);
+  for (const fiveHour of [{remaining:50},{remaining:50,resetsAt:Infinity},{resetsAt:now/1000+60}]) {
+    h.receive({type:'chatgpt',account:{configured:true,loading:false,fiveHour}});
+    assert(h.$('five-hour-now').hidden);
+    assert(h.$('five-hour-now-label').hidden);
+    assert.equal(h.$('five-hour-meter').style.getPropertyValue('--time-remaining'),undefined);
+  }
 });
 
 test('ChatGPT keeps plan/usage independent, omits timezone suffix and zero countdown units',()=>{

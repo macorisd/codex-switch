@@ -289,6 +289,19 @@ Source: user request and approved 0.3.0 PLAN, 2026-11-11.
 - Omit every zero-valued countdown unit in both windows. When no complete
   minute remains, display **Resets in a few seconds. Blink and you'll miss it!**
   Source: explicit refinement, 2026-11-11.
+- Color each ChatGPT remaining-usage fill by its actual percentage: 0–10%
+  inclusive red, above 10% through 25% inclusive yellow, above 25% the existing
+  theme blue. Keep accessible numeric values and apply these colors only to
+  ChatGPT plan bars, independently for the five-hour and weekly windows.
+- Overlay a thin current-time marker on each available ChatGPT usage bar. Its
+  horizontal position is remaining time divided by the actual window duration
+  (five hours or seven days), clamped to 0–100%: right at the start, left at
+  reset. Update with the existing minute countdown without extra requests.
+  Keep the marker visible; show its small **Now** label only while hovering the
+  ChatGPT provider card (or focusing within it for keyboard users), without
+  layout shifts. Keep labels inside the bar width, including both endpoints.
+  Hide the marker if the reset time or remaining usage is unavailable; never
+  invent a reset time. Source: explicit visual refinements, 2026-11-15.
 - Show the available **Banked resets** count, without consuming resets.
 - Missing fields are **Unavailable**, never assumed to be zero. Refresh when
   the panel opens and every 60 seconds while visible, without overlapping
