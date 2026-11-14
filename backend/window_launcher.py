@@ -65,9 +65,13 @@ class ModelChanges:
             return
         model = info.get('model')
         if isinstance(model, str) and 0 < len(model) <= 512 and not any(c.isspace() for c in model):
-            self.publish({'provider': provider, 'model': model, 'effort': info.get('effort'),
-                'nonce': self.binding['nonce'], 'baseRevision': self.binding['revision'],
-                'sequence': time.time_ns()})
+            try:
+                self.publish({'provider': provider, 'model': model, 'effort': info.get('effort'),
+                    'nonce': self.binding['nonce'], 'baseRevision': self.binding['revision'],
+                    'sequence': time.time_ns()})
+            except OSError:
+                # A metadata-storage failure must never interrupt the chat's RPC.
+                pass
 
 
 def process_identity(pid):
