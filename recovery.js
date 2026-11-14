@@ -115,6 +115,16 @@ function hasOwners(root, except) {
   });
 }
 
+function hasClients(root) {
+  const directory = path.join(root, 'windows');
+  let windows;
+  try { windows = fs.readdirSync(directory); } catch { return false; }
+  return windows.some(window => {
+    const receipt = read(path.join(directory, window, 'runtime.json'));
+    return alive(receipt.pid) && receipt.processStart && identity(receipt.pid) === receipt.processStart;
+  });
+}
+
 function registry() { return path.join(os.homedir(), '.codex-switch', 'installations'); }
 
 function installationId(extensionPath) {
@@ -221,14 +231,15 @@ async function uninstall(extensionPath = __dirname) {
     const location = path.join(registry(), file);
     const { root } = read(location);
     if (!root) continue;
-    await locked(root, () => {
-      if (hasOwners(root)) return;
+    const released = await locked(root, () => {
+      if (hasOwners(root)) return false;
       const record = read(path.join(root, 'recovery.json'));
       if (!record.extensionPath || installationId(record.extensionPath) !== id) return;
       restoreModels(root);
+      if (hasClients(root)) return false;
       restoreSettings(record);
     });
-    remove(location);
+    if (released !== false) remove(location);
   }
   // Other installed versions can still use this root. Retain launchers and
   // preferences so interrupted or delayed references remain functional.
@@ -272,7 +283,10 @@ async function launch(root, pid, started, args) {
     // No extension activation claims this invocation. Record the early-start
     // case so a subsequent activation can reload before confirming a provider.
     atomic(path.join(root, 'owners', `${pid}-bypass.json`), { pid, started });
-    await locked(root, () => restoreModels(root));
+    await locked(root, () => {
+      restoreModels(root);
+      if (!hasOwners(root) && !hasClients(root)) restoreSettings(read(path.join(root, 'recovery.json')));
+    });
     command = ordinaryCommand(read(path.join(root, 'recovery.json')));
     arguments_ = args;
   }
@@ -315,5 +329,5 @@ if (require.main === module) {
   }
 }
 
-module.exports = { read, atomic, remove, managed, locked, hasOwners, register, settingsPath,
+module.exports = { read, atomic, remove, managed, locked, hasOwners, hasClients, register, settingsPath,
   restoreSettings, restoreModels, uninstall, launch, identity };

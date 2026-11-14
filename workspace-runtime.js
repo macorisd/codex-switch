@@ -109,6 +109,9 @@ class WorkspaceRuntime {
       recovery.atomic(this.owner, { ...recovery.read(this.owner), state: 'inactive' });
       if (recovery.hasOwners(this.root, this.binding)) return;
       recovery.restoreModels(this.root);
+      // An in-flight native write can finish during shutdown. Keep recovery on
+      // the next launch until those clients exit, so that write is also retired.
+      if (recovery.hasClients(this.root)) return;
       const record = recovery.read(path.join(this.root, 'recovery.json'));
       const config = this.vscode.workspace.getConfiguration('chatgpt');
       if (!this.reloading && config.get('cliExecutable') === record.launcher) {

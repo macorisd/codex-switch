@@ -486,6 +486,9 @@ Source: lifecycle proposal approved explicitly by the user, 2026-11-14.
   for other windows and profiles. The official uninstall hook provides final
   conditional settings cleanup. Keep the small runtime fallback available for
   outstanding references, including an interrupted shutdown.
+  If a launched client is still alive during deactivation, retain recovery until
+  an ordinary startup can retire its final in-flight model writes and restore
+  the executable setting.
 - Track only the model-setting edits made through API-provider clients. Restore
   incompatible shared defaults conditionally, preserving later user changes and
   unrelated TOML. Never restore an entire old configuration file.
