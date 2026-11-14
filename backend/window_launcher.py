@@ -106,28 +106,43 @@ def launch(binding_path, arguments):
             stderr=subprocess.DEVNULL, start_new_session=True)
         os.close(guard_read)
     lock = threading.Lock()
-    initialized = threading.Event()
+    confirmation_lock = threading.Lock()
+    receipt_lock = threading.Lock()
+    confirmation_requested = threading.Event()
     verified = threading.Event()
+    initialize_id = None
 
     def send(raw):
         with lock:
             child.stdin.write(raw)
             child.stdin.flush()
 
+    def request_confirmation():
+        with confirmation_lock:
+            if confirmation_requested.is_set():
+                return
+            confirmation_requested.set()
+        send((json.dumps({'id': private_id, 'method': 'config/read',
+            'params': {'includeLayers': False, 'cwd': binding['cwd']}}) + '\n').encode())
+
     def parent_input():
+        nonlocal initialize_id
         try:
             for raw in sys.stdin.buffer:
-                send(raw)
+                value = None
                 # Bound inspection; large tool/request data is forwarded only.
                 if len(raw) < 65536:
                     try:
                         value = json.loads(raw)
                     except (ValueError, UnicodeError):
-                        continue
-                    if value.get('method') == 'initialized' and not initialized.is_set():
-                        initialized.set()
-                        send((json.dumps({'id': private_id, 'method': 'config/read',
-                            'params': {'includeLayers': False, 'cwd': binding['cwd']}}) + '\n').encode())
+                        pass
+                    if isinstance(value, dict) and value.get('method') == 'initialize':
+                        # Record before forwarding: a fast server may respond
+                        # before this input thread runs again.
+                        initialize_id = value.get('id')
+                send(raw)
+                if isinstance(value, dict) and value.get('method') == 'initialized':
+                    request_confirmation()
         except (BrokenPipeError, OSError):
             pass
         finally:
@@ -136,7 +151,9 @@ def launch(binding_path, arguments):
 
     def deadline():
         if not verified.wait(30):
-            atomic(receipt_path, {**base, 'phase': 'unconfirmed'})
+            with receipt_lock:
+                if not verified.is_set():
+                    atomic(receipt_path, {**base, 'phase': 'unconfirmed'})
 
     threading.Thread(target=parent_input, daemon=True).start()
     threading.Thread(target=deadline, daemon=True).start()
@@ -154,13 +171,21 @@ def launch(binding_path, arguments):
                 config = config if valid_response else {}
                 provider = config.get('model_provider') or 'openai'
                 confirmed = valid_response and not value.get('error') and provider == binding['provider']
-                atomic(receipt_path, {**base, 'phase': 'verified' if confirmed else 'mismatch',
-                    'provider': provider if confirmed else None,
-                    'model': config.get('model', '') if confirmed else ''})
-                verified.set()
+                with receipt_lock:
+                    atomic(receipt_path, {**base, 'phase': 'verified' if confirmed else 'mismatch',
+                        'provider': provider if confirmed else None,
+                        'model': config.get('model', '') if confirmed else ''})
+                    verified.set()
                 continue
             sys.stdout.buffer.write(raw)
             sys.stdout.buffer.flush()
+            # The official IDE proceeds after the initialize *response* and
+            # sends no initialized notification. Other clients send both.
+            # Forward its response unchanged, then confirm once in either case.
+            if (isinstance(value, dict) and initialize_id is not None
+                    and value.get('id') == initialize_id and not value.get('error')
+                    and isinstance(value.get('result'), dict)):
+                request_confirmation()
         return child.wait()
     finally:
         verified.set()

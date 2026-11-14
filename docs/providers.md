@@ -221,6 +221,10 @@ Responses requests and tool messages are forwarded unchanged. One private
 provider/model/process metadata reaches the runtime receipt. Full configuration,
 authentication and account responses are never stored in it or sent to the panel.
 The receipt does not identify an arbitrary visible historical conversation.
+Confirmation starts after the successful `initialize` response. The official IDE
+does not send an `initialized` notification; clients that do send it still cause
+only one private confirmation request. An absent notification is not a reason to
+keep a working client unconfirmed or ask for repeated reloads.
 
 The launcher keeps the original `CODEX_HOME`, encrypted key identities, ChatGPT
 account and conversation storage. It neither copies `auth.json` nor creates

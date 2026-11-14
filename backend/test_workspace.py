@@ -19,6 +19,7 @@ import workspace_state as ws
 
 FAKE = '''import json, sys, tomllib
 provider = 'openai'
+config_reads = 0
 for i, value in enumerate(sys.argv):
     if value == '-c' and sys.argv[i+1].startswith('model_provider='):
         provider = tomllib.loads(sys.argv[i+1])['model_provider']
@@ -26,7 +27,10 @@ for raw in sys.stdin.buffer:
     value = json.loads(raw)
     if value.get('method') == 'initialized': continue
     if value.get('method') == 'initialize': result = {'serverInfo': {'name': 'fixture'}}
-    elif value.get('method') == 'config/read': result = {'config': {'model_provider': provider, 'model': 'fixture-model', 'api_key': 'NEVER_STORE_THIS'}}
+    elif value.get('method') == 'config/read':
+        config_reads += 1
+        result = {'config': {'model_provider': provider, 'model': 'fixture-model', 'api_key': 'NEVER_STORE_THIS'}}
+    elif value.get('method') == 'fixture/config-read-count': result = config_reads
     elif value.get('method') == 'echo': result = value['params']
     else: result = {}
     print(json.dumps({'id': value['id'], 'result': result}), flush=True)
@@ -62,7 +66,7 @@ class WorkspaceTests(unittest.TestCase):
         return ws.prepare({'window': nonce, 'command': sys.executable, 'configuredCommand': None,
                            'ownerPid': os.getpid(), 'cwd': str(self.root)})
 
-    def client(self, nonce='a' * 32, provider=None, early=False):
+    def client(self, nonce='a' * 32, provider=None, early=False, send_initialized=True, initialize_id=1):
         prepared = self.prepare(nonce)
         binding = Path(prepared['binding'])
         spec = json.loads(binding.read_text())
@@ -85,9 +89,10 @@ class WorkspaceTests(unittest.TestCase):
         def send(value):
             child.stdin.write((json.dumps(value) + '\n').encode())
             child.stdin.flush()
-        send({'id': 1, 'method': 'initialize', 'params': {}})
-        self.assertEqual(messages.get(timeout=15)['id'], 1)
-        send({'method': 'initialized'})
+        send({'id': initialize_id, 'method': 'initialize', 'params': {}})
+        self.assertEqual(messages.get(timeout=15)['id'], initialize_id)
+        if send_initialized:
+            send({'method': 'initialized'})
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
             state = ws.status(nonce)
@@ -124,6 +129,16 @@ class WorkspaceTests(unittest.TestCase):
         receipt = (ws.window_directory('a' * 32) / 'runtime.json').read_text()
         self.assertNotIn('NEVER_STORE_THIS', receipt)
         self.assertEqual(state['provider'], 'openai')
+
+    def test_official_ide_handshake_confirms_without_initialized_notification(self):
+        _, messages, send, state = self.client(send_initialized=False, initialize_id='1')
+        self.assertTrue(state['verified'])
+        # A later optional notification must not issue another private request.
+        send({'method': 'initialized'})
+        send({'id': 'count', 'method': 'fixture/config-read-count'})
+        self.assertEqual(messages.get(timeout=5), {'id': 'count', 'result': 1})
+        send({'id': 'after-startup', 'method': 'echo', 'params': {'ready': True}})
+        self.assertEqual(messages.get(timeout=5), {'id': 'after-startup', 'result': {'ready': True}})
 
     def test_mismatch_and_other_window_receipts_cannot_be_reported_active(self):
         _, _, _, state = self.client(provider='different')

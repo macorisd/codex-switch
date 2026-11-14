@@ -74,6 +74,10 @@ Implementation approved in the 0.5.0 workspace-isolation PLAN, 2026-11-14:
   app-server process. Bind receipts to workspace, activation nonce, configuration
   revision and a live process's OS creation identity. Unknown, dead, mismatched
   or unapplied state cannot display a blue active card or Current Setting.
+  Confirmation must start from a successful initialize response; do not require
+  the optional initialized notification, which the installed official IDE client
+  does not send. Test launch-protocol changes against that actual extension as
+  well as fixtures. Source: repeated unconfirmed-window regression, 2026-11-14.
 - Current Configuration describes the verified default for new chats in this
   workspace, not the provider of an arbitrary visible historical conversation.
   State that distinction in the panel. After a successful switch, reload the
