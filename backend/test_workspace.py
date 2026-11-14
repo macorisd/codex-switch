@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import queue
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -66,7 +67,148 @@ class WorkspaceTests(unittest.TestCase):
         return ws.prepare({'window': nonce, 'command': sys.executable, 'configuredCommand': None,
                            'ownerPid': os.getpid(), 'cwd': str(self.root)})
 
-    def client(self, nonce='a' * 32, provider=None, early=False, send_initialized=True, initialize_id=1):
+    def ordinary(self, state=None):
+        prepared = self.prepare()
+        record = json.loads((s.ROOT / 'recovery.json').read_text())
+        record['command'] = sys.executable
+        s.atomic(s.ROOT / 'recovery.json', json.dumps(record))
+        owner = s.ROOT / 'owners' / (str(os.getpid()) + '.json')
+        if state:
+            value = json.loads(owner.read_text())
+            value['state'] = state
+            s.atomic(owner, json.dumps(value))
+        else:
+            owner.unlink()
+        env = {**os.environ, 'CODEX_SWITCH_BINDING': str(self.root / 'stale-binding.json')}
+        return prepared, env, owner
+
+    def test_unbound_launcher_works_without_python_helper_or_extension_sources(self):
+        prepared, env, _ = self.ordinary()
+        (s.ROOT / 'window_launcher.py').unlink()
+        # The fallback executable happens to be Python as a harmless fixture.
+        # The connector's Python path and instrumentation have been removed.
+        result = subprocess.run([prepared['launcher'], '-c', 'print("ordinary codex")'],
+            env=env, capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), 'ordinary codex')
+
+    def test_failed_owned_activation_does_not_silently_run_ordinary_codex(self):
+        prepared, env, _ = self.ordinary('error')
+        result = subprocess.run([prepared['launcher'], '-c', 'print("wrong provider")'],
+            env=env, capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 1)
+        self.assertNotIn('wrong provider', result.stdout)
+
+    def test_registered_slow_activation_keeps_its_workspace_provider(self):
+        s.atomic(ws.directory() / 'selection.json', json.dumps({'provider': 'fixture-api', 'model': 'fixture-model'}))
+        _, _, _, state = self.client(preparing=True)
+        self.assertEqual(state['provider'], 'fixture-api')
+
+    def test_upgrade_imports_only_a_matching_accepted_api_model_with_a_saved_binding(self):
+        import model_defaults
+        prepared = self.prepare()
+        (s.ROOT / 'legacy-model-recovery.json').unlink()
+        binding_path = Path(prepared['binding'])
+        binding = json.loads(binding_path.read_text())
+        binding['provider'] = 'deepseek'
+        s.atomic(binding_path, json.dumps(binding))
+        s.atomic(ws.directory() / 'selection.json', json.dumps({'provider': 'deepseek',
+            'chatgpt': {'model': '"gpt-6.1-sol"'}, 'model': 'deepseek-flash'}))
+        s.atomic(ws.directory() / 'native-model.json', json.dumps({'provider': 'deepseek',
+            'model': 'deepseek-flash', 'nonce': 'a' * 32, 'sequence': 1, 'effort': 'high'}))
+        s.CONFIG.write_text('model="deepseek-flash"\nmodel_reasoning_effort="low"\n')
+        model_defaults.import_legacy()
+        journal = json.loads((s.ROOT / 'model-defaults.json').read_text())
+        self.assertEqual(len(journal['edits']), 1)
+        self.assertEqual(journal['edits'][0]['before'], 'model = "gpt-6.1-sol"' + os.linesep)
+        self.assertEqual(journal['edits'][0]['after'], 'model="deepseek-flash"' + os.linesep)
+
+    def test_inactive_owner_delegates_to_original_custom_cli(self):
+        prepared, env, _ = self.ordinary('inactive')
+        result = subprocess.run([prepared['launcher'], '-c', 'print("custom codex")'],
+            env=env, capture_output=True, text=True, timeout=15)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), 'custom codex')
+
+    def test_model_journal_keeps_initial_default_across_api_windows_and_disowns_user_edits(self):
+        import model_defaults
+        prepared = self.prepare()
+        binding = json.loads(Path(prepared['binding']).read_text())
+        binding['provider'] = 'deepseek'
+        params = {'edits': [{'keyPath': 'model', 'value': 'api-first'}]}
+        first = model_defaults.capture(binding, params)
+        s.CONFIG.write_text('model="api-first"\nmodel_provider="openai"\n[desktop]\nsetting="preserved"\n')
+        model_defaults.accepted(binding, first)
+        params['edits'][0]['value'] = 'api-second'
+        second = model_defaults.capture(binding, params)
+        s.CONFIG.write_text(s.CONFIG.read_text().replace('api-first', 'api-second'))
+        model_defaults.accepted(binding, second)
+        journal = json.loads((s.ROOT / 'model-defaults.json').read_text())
+        self.assertEqual(journal['edits'][0]['before'], 'model="gpt-6.1-sol"' + os.linesep)
+        self.assertEqual(journal['edits'][0]['after'], 'model="api-second"' + os.linesep)
+        # A user edit between requests becomes the new restoration baseline.
+        s.CONFIG.write_text(s.CONFIG.read_text().replace('api-second', 'user-model'))
+        third = model_defaults.capture(binding, params)
+        s.CONFIG.write_text(s.CONFIG.read_text().replace('user-model', 'api-second'))
+        model_defaults.accepted(binding, third)
+        journal = json.loads((s.ROOT / 'model-defaults.json').read_text())
+        self.assertEqual(journal['edits'][0]['before'], 'model="user-model"' + os.linesep)
+
+    def test_native_journal_preserves_bom_crlf_and_existing_quoted_profile_keys(self):
+        import model_defaults
+        prepared = self.prepare()
+        binding = json.loads(Path(prepared['binding']).read_text())
+        binding.update(provider='deepseek', profile='work.team')
+        text = '\ufeffprofile = "work.team"\r\n[ profiles . "work.team" ]\r\n\'model\' = "gpt-profile"\r\n'
+        s.CONFIG.write_bytes(text.encode('utf-8'))
+        params = {'edits': [{'keyPath': 'profiles."work.team".model', 'value': 'api-model'}]}
+        captured = model_defaults.capture(binding, params)
+        s.CONFIG.write_bytes(text.replace('gpt-profile', 'api-model').encode('utf-8'))
+        model_defaults.accepted(binding, captured)
+        journal = json.loads((s.ROOT / 'model-defaults.json').read_text())
+        self.assertEqual(journal['edits'][0]['table'], ' profiles . "work.team" ')
+        self.assertEqual(journal['edits'][0]['before'], '\'model\' = "gpt-profile"\r\n')
+        self.assertEqual(journal['edits'][0]['after'], '\'model\' = "api-model"\r\n')
+
+    def test_node_and_python_lifecycle_updates_are_serialized_across_processes(self):
+        import model_defaults
+        counter = s.ROOT / 'counter.json'
+        code = '''const r = require(process.argv[1]), path = require('node:path');
+        (async () => { for (let i=0; i<3; i++) await r.locked(process.argv[2], async () => {
+          const file=path.join(process.argv[2], 'counter.json'), value=r.read(file, {value:0}).value;
+          await new Promise(resolve => setTimeout(resolve, 10)); r.atomic(file, {value:value+1});
+        }); })().catch(() => {process.exitCode=1});'''
+        children = [subprocess.Popen([shutil.which('node'), '-e', code,
+            str(s.SOURCE.parent / 'recovery.js'), str(s.ROOT)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            for _ in range(2)]
+        self.children.extend(children)
+        for _ in range(3):
+            with model_defaults.lock(s.ROOT):
+                value = json.loads(counter.read_text())['value'] if counter.exists() else 0
+                time.sleep(.01)
+                s.atomic(counter, json.dumps({'value': value + 1}))
+        for child in children:
+            _, stderr = child.communicate(timeout=60)
+            self.assertEqual(child.returncode, 0, stderr.decode())
+        self.assertEqual(json.loads(counter.read_text())['value'], 9)
+
+    def test_native_formatter_updates_guards_after_rewriting_shared_line_endings(self):
+        import model_defaults
+        prepared = self.prepare()
+        binding = json.loads(Path(prepared['binding']).read_text())
+        binding['provider'] = 'deepseek'
+        s.CONFIG.write_bytes(b'model="gpt-model"\r\nmodel_provider="openai"\r\n')
+        captured = model_defaults.capture(binding, {'keyPath': 'model', 'value': 'api-model'})
+        s.CONFIG.write_bytes(b'model = "api-model"\nmodel_provider = "openai"\n')
+        model_defaults.accepted(binding, captured)
+        journal = json.loads((s.ROOT / 'model-defaults.json').read_text())
+        guard = next(g for g in journal['edits'][0]['guards'] if g['key'] == 'model_provider')
+        self.assertEqual(guard['line'], 'model_provider = "openai"\n')
+        subprocess.run([shutil.which('node'), '-e', 'require(process.argv[1]).restoreModels(process.argv[2])',
+            str(s.SOURCE.parent / 'recovery.js'), str(s.ROOT)], check=True, timeout=15)
+        self.assertEqual(tomllib.loads(s.CONFIG.read_text())['model'], 'gpt-model')
+
+    def client(self, nonce='a' * 32, provider=None, early=False, send_initialized=True, initialize_id=1, preparing=False):
         prepared = self.prepare(nonce)
         binding = Path(prepared['binding'])
         spec = json.loads(binding.read_text())
@@ -74,6 +216,11 @@ class WorkspaceTests(unittest.TestCase):
         if provider:
             spec['args'] += ['-c', 'model_provider=' + json.dumps(provider)]
         s.atomic(binding, json.dumps(spec))
+        if preparing:
+            owner = s.ROOT / 'owners' / (str(os.getpid()) + '.json')
+            record = json.loads(owner.read_text())
+            s.atomic(owner, json.dumps({**record, 'state': 'preparing'}))
+            threading.Timer(.6, lambda: s.atomic(owner, json.dumps(record))).start()
         env = {**os.environ, 'CODEX_SWITCH_BINDING': str(binding)}
         if early:
             env.pop('CODEX_SWITCH_BINDING', None)

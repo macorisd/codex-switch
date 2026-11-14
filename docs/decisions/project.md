@@ -60,9 +60,7 @@ Source: explicit multi-window bug report and requested behavior, 2026-11-14.
 - Verification must cover simultaneous workspaces with different providers,
   switching in either without affecting the other, reopening and persistence,
   and consistency of the sidebar with the client state it actually verifies.
-- Do not use Computer Use in this task or stop its capture helper: another chat
-  is using it. Use terminal, tests and non-UI APIs. This reiterates the existing
-  project prohibition and does not grant an exception for the new scope.
+- The workspace-isolation investigation used terminal, tests and non-UI APIs.
 
 Implementation approved in the 0.5.0 workspace-isolation PLAN, 2026-11-14:
 
@@ -410,6 +408,9 @@ from platform detection tests; do not claim untested systems are verified.
   and visual fixtures, with capture cleanup after the review. The default rule
   remains applicable to subsequent work without another authorization.
   The resumed review explicitly excludes Chrome and uses VS Code instead.
+  Exception for the lifecycle implementation, 2026-11-14, permits Computer Use
+  only where it materially improves verification, as explicitly authorized by
+  the user. Prefer terminal and non-UI integration tests.
 - Verify backend/configuration behavior and extension tests when code changes.
   For visible changes, report the automated checks and any pending user visual
   review separately; automated tests do not establish visual verification.
@@ -461,6 +462,44 @@ Source: explicit mandatory user instruction, 2026-11-14.
 - In the requested audit, report irregularities and explain feasibility before
   implementing functional fixes. Recording this decision and audit evidence is
   authorized; finding a problem does not authorize implementing its solution.
+
+## Disable and uninstall recovery
+
+Source: lifecycle proposal approved explicitly by the user, 2026-11-14.
+
+- Disabling Codex Switch globally or in a workspace, uninstalling it, restarting
+  or updating VS Code must leave ordinary Codex usable. Retain a previous custom
+  CLI choice and subsequent user edits. Restore only settings still owned by
+  Codex Switch. Preserve credentials, sign-in, conversations and saved workspace
+  choices.
+- Register each activation synchronously before asynchronous setup. An owned
+  activation that is preparing or has failed must never silently substitute a
+  different provider. An invocation without an owning activation delegates to
+  ordinary Codex. A launch that races eager activation must trigger recovery
+  reload before the workspace can claim a confirmed selection.
+- The retained launcher and recovery code must work without Python and without
+  the removed extension directory. Resolve the current official Codex binary
+  from the invoking official extension's PATH, avoiding a pinned extension version.
+- Restore the previous executable setting when the last owning activation
+  releases it, using the VS Code configuration API and conditional JSONC-file
+  recovery if shutdown has already closed that API. Keep shared launchers usable
+  for other windows and profiles. The official uninstall hook provides final
+  conditional settings cleanup. Keep the small runtime fallback available for
+  outstanding references, including an interrupted shutdown.
+  If a launched client is still alive during deactivation, retain recovery until
+  an ordinary startup can retire its final in-flight model writes and restore
+  the executable setting.
+- Track only the model-setting edits made through API-provider clients. Restore
+  incompatible shared defaults conditionally, preserving later user changes and
+  unrelated TOML. Never restore an entire old configuration file.
+  On upgrade from 0.5.0, matching accepted native-model records and their saved
+  window bindings can establish ownership of a still-matching shared API model.
+  Use the saved ChatGPT snapshot for that conditional recovery.
+- Ship all lifecycle code and its dependencies in the VSIX and deploy recovery
+  files automatically. Verify installed-artifact activation, disable, reopen,
+  uninstall, multiple owners, custom executable and interrupted setup behavior.
+- For this implementation the user permits Computer Use only where it adds
+  value. Terminal and non-UI integration tests remain the preferred approach.
 
 ## Release artifacts
 

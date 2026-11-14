@@ -318,8 +318,10 @@ class Selector {
 
 }
 
+let activeRuntime;
 function activate(context) {
   const runtime = new WorkspaceRuntime(vscode, context, backend, root);
+  activeRuntime = runtime;
   runtime.prepared = runtime.initialize();
   const selector = new Selector(context, runtime);
   context.subscriptions.push(vscode.window.registerWebviewViewProvider('codexSwitch.selector', selector));
@@ -349,4 +351,4 @@ function activate(context) {
   return runtime.prepared;
 }
 
-module.exports = { activate, deactivate() {} };
+module.exports = { activate, deactivate: () => activeRuntime?.release() };

@@ -1,5 +1,11 @@
 # Auditoria de entrega del VSIX - 2026-11-14
 
+La correccion posterior 0.5.1 implementa la recuperacion al deshabilitar o
+desinstalar aprobada despues de esta auditoria. Incluye el lanzador persistente,
+restauracion condicional y hook de desinstalacion descritos en
+[la documentacion de proveedores](../providers.md). El informe siguiente conserva
+la evidencia y las limitaciones de la version 0.5.0 auditada.
+
 ## Conclusion y alcance
 
 Se audita la version 0.5.0 de la PR #15, commit funcional
