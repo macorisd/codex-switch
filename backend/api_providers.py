@@ -9,6 +9,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 import switcher as s
+import workspace_state as ws
 
 DEFINITIONS = json.loads((Path(__file__).with_name('providers.json')).read_text('utf-8'))
 PROVIDERS = {p['id']: p for p in DEFINITIONS}
@@ -36,7 +37,27 @@ def catalog_path(provider):
 
 def saved(provider):
     path = cache_path(provider)
-    return json.loads(path.read_text('utf-8')) if path.exists() else {}
+    data = ws.read(path, {})
+    local = ws.api_selection(provider)
+    if local.get('credentialRevision') != data.get('credentialRevision'):
+        local.pop('tested', None)
+    if local:
+        # A local model selection that has not been tested must not inherit a
+        # legacy global model's successful test on the next status read.
+        data.pop('tested', None)
+    return {**data, **local, 'credentialRevision': data.get('credentialRevision')}
+
+
+def persist(provider, data, selection_only=False):
+    if not ws.workspace:
+        s.atomic(cache_path(provider), json.dumps(data))
+        return
+    local = {k: data[k] for k in ('model', 'effort', 'tested') if k in data}
+    local['credentialRevision'] = data.get('credentialRevision')
+    ws.save_api_selection(provider, local)
+    if not selection_only:
+        shared = {k: v for k, v in data.items() if k not in ('model', 'effort', 'tested')}
+        s.atomic(cache_path(provider), json.dumps(shared))
 
 
 def endpoint(provider):
@@ -53,9 +74,10 @@ def configure_endpoint(provider, url):
         raise ValueError('Use an official HTTPS endpoint for this provider.')
     data = saved(provider)
     data['baseUrl'] = url.rstrip('/')
+    data['credentialRevision'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     data.pop('validatedAt', None)
     data.pop('tested', None)
-    s.atomic(cache_path(provider), json.dumps(data))
+    persist(provider, data)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -83,17 +105,19 @@ def save_key(provider, value):
         raise ValueError('Invalid API key')
     s.atomic(key_path(provider), s.credential_store.save(key_path(provider), value.strip()))
     data = saved(provider)
+    data['credentialRevision'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     data.pop('validatedAt', None)
     data.pop('tested', None)
-    s.atomic(cache_path(provider), json.dumps(data))
+    persist(provider, data)
 
 
 def remove_key(provider):
     s.credential_store.remove(key_path(provider))
     data = saved(provider)
+    data['credentialRevision'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     for field in ('validatedAt', 'tested', 'needsTest'):
         data.pop(field, None)
-    s.atomic(cache_path(provider), json.dumps(data))
+    persist(provider, data)
     return state(provider)
 
 
@@ -248,7 +272,7 @@ def refresh(provider):
     if tested and (tested['model'] != data['model'] or tested['effort'] != data['effort']):
         data.pop('tested', None)
     codex_catalog(provider, models)
-    s.atomic(cache_path(provider), json.dumps(data))
+    persist(provider, data)
     return state(provider)
 
 
@@ -267,7 +291,7 @@ def select(provider, model, effort):
         raise ValueError('Select a discovered model and supported reasoning level.')
     data.update(model=model, effort=effort)
     data.pop('tested', None)
-    s.atomic(cache_path(provider), json.dumps(data))
+    persist(provider, data, selection_only=True)
     return state(provider)
 
 
@@ -335,5 +359,5 @@ def test_model(provider):
     data['validatedAt'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
     data['needsTest'] = False
     data['tested'] = {'model': model, 'effort': effort, 'at': data['validatedAt']}
-    s.atomic(cache_path(provider), json.dumps(data))
+    persist(provider, data)
     return state(provider)

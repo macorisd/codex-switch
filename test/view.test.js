@@ -22,6 +22,38 @@ function harness({provider='openai',visible=['openai','deepseek'],chatgpt={loadi
 const configured={loading:false,hasKey:true,valid:true,model:'test-model',effort:'high',models:[{id:'test-model',name:'Test model',efforts:['low','high']}],balance:{total:8,currency:'USD'}};
 const field=(card,role)=>card.querySelector(`[data-role="${role}"]`);
 
+test('a native model update changes Selected without changing the provider or catalog', () => {
+  const h = harness({ provider: 'deepseek' });
+  const models = [{ id: 'first', name: 'First', efforts: [] }, { id: 'second', name: 'Second', efforts: [] }];
+  h.api('deepseek', { ...configured, models, model: 'first' });
+  assert.equal(field(h.card('deepseek'), 'selected').textContent, 'Selected: first');
+  h.api('deepseek', { ...configured, models, model: 'second' });
+  assert.equal(field(h.card('deepseek'), 'selected').textContent, 'Selected: second');
+  assert(h.card('deepseek').classList.contains('current-provider'));
+});
+
+test('unknown, pending and confirmed window states never confuse preferences with active providers', () => {
+  const h = harness({ provider: 'deepseek' });
+  const sendState = extra => h.receive({ type: 'state', busy: false, state: {
+    provider: null, model: 'test-model', providers, providerLayout: layout(['openai', 'deepseek']),
+    providerLayoutRevision: 0, balanceAlerts: {}, ...extra,
+  } });
+  h.api('deepseek', configured);
+  sendState({ verified: false, selectedProvider: 'deepseek', reloadRequired: true });
+  assert.equal(h.$('current').textContent, 'Not confirmed in this window');
+  assert(!h.card('deepseek').classList.contains('current-provider'));
+  assert.equal(field(h.card('deepseek'), 'apply').textContent, 'Switch to DeepSeek');
+  h.$('reload-window').click(); assert.equal(h.messages.at(-1).action, 'reloadWindow');
+  sendState({ provider: 'openai', verified: true, selectedProvider: 'deepseek', reloadRequired: true });
+  assert(!h.card('openai').classList.contains('current-provider'));
+  assert.notEqual(h.$('openai').textContent, 'Current Setting');
+  sendState({ provider: 'openai', verified: true, reloadRequired: false });
+  assert(h.card('openai').classList.contains('current-provider'));
+  assert.equal(h.$('configuration-note').textContent, '');
+  assert(h.$('configuration-note').hidden, 'normal state restores original spacing without a note box');
+  assert(h.$('reload-window').hidden);
+});
+
 test('real HTML and shared card template apply filtering before revealing providers',()=>{
   const h=harness({visible:['openai','openrouter','mimo']});
   assert.equal(h.$('provider-list').hidden,false);

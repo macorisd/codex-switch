@@ -71,7 +71,7 @@ models therefore need no local protocol conversion. Routing, billing, encrypted
 reasoning, streaming and full agent sessions still need real-key verification.
 
 Aggregator cards declare `modelFilters` and span a full row from 550px. The wide
-grid fills gaps with subsequent ordinary cards: ChatGPT → OpenRouter → DeepSeek
+grid fills gaps with subsequent ordinary cards: ChatGPT Ã¢â€ â€™ OpenRouter Ã¢â€ â€™ DeepSeek
 places ChatGPT/DeepSeek together before the full-width OpenRouter card. Below
 550px, the managed order remains unchanged. Search, laboratory and free filters
 combine without implicitly changing the selected model or writing Codex config.
@@ -135,7 +135,7 @@ At/above the threshold the amount is neutral; below it is yellow; at/below 0 is
 red. Initial readings after starting the extension are silent. Notify only when
 crossing from neutral to yellow or from yellow to red; a direct neutral-to-red
 drop produces one exhausted warning. Repeated reads and recovery never notify.
-Recovery rearms subsequent downward crossings, including red → yellow → red.
+Recovery rearms subsequent downward crossings, including red Ã¢â€ â€™ yellow Ã¢â€ â€™ red.
 Threshold, credential or metric/currency changes establish a silent new baseline;
 settings changes do not make extra API requests. Only thresholds persist, so
 restarting never replays an old warning. Hidden providers remain inactive.
@@ -200,3 +200,73 @@ streaming, route-specific tools, plan permissions and long-running sessions
 remain unverified. A synthetic function test does not verify images, parallel/
 freeform tools or a full Codex session. Visual review remains with the user;
 computer use is prohibited for this project.
+
+
+### Workspace provider isolation
+
+Each folder workspace or saved `.code-workspace` has its own provider and model
+preferences under `provider-switcher/workspaces/<identity>`. Multi-folder identity
+uses the workspace file, independently of folder order and the active editor.
+Empty windows use their workbench-window identity. Different windows of the same
+workspace share its saved preference; a window with an older applied revision
+shows a reload action rather than a false current setting.
+
+An early-activated local UI extension binds each app-server launch to its own
+workspace and extension-host process. `chatgpt.cliExecutable` installs one common
+launcher; provider and model overrides remain private to each launched process.
+A restored Codex view that starts first waits for its own parent host's binding,
+checking the OS process creation identity to reject stale PID reuse. Native
+Responses requests and tool messages are forwarded unchanged. One private
+`config/read` exchange confirms the actual app-server default; only minimal
+provider/model/process metadata reaches the runtime receipt. Full configuration,
+authentication and account responses are never stored in it or sent to the panel.
+The receipt does not identify an arbitrary visible historical conversation.
+Confirmation starts after the successful `initialize` response. The official IDE
+does not send an `initialized` notification; clients that do send it still cause
+only one private confirmation request. An absent notification is not a reason to
+keep a working client unconfirmed or ask for repeated reloads.
+
+The launcher keeps the original `CODEX_HOME`, encrypted key identities, ChatGPT
+account and conversation storage. It neither copies `auth.json` nor creates
+separate account homes. The first migration retires only an old global provider
+block with this extension's ownership markers, preserving its configuration
+backup, valid ChatGPT restore values and unrelated TOML. Subsequent workspace
+switches do not rewrite the global selection. Project `.codex/config.toml` is
+not used to select providers because Codex ignores provider keys in that layer.
+See the [official configuration reference](https://developers.openai.com/codex/config-reference/).
+
+On Windows the small bootstrap is built from bundled C# source using the .NET
+Framework compiler included with desktop Windows. It forwards binary stdio and
+uses a job object to close its process tree when the editor stops it. The Python
+launcher is bundled as source on every platform. macOS/Linux use an executable
+shell entry point and a pipe guard owning only the launched client's process
+group. There are no runtime downloads or additional package-install commands.
+
+Existing custom Codex executables are remembered and passed through. If a custom
+path disappears, **Use bundled Codex** (also in the Command Palette) explicitly
+selects the executable supplied by the official extension. Python failures need
+`codexSwitch.pythonPath` corrected before reloading. Before disabling or removing
+Codex Switch, clear `chatgpt.cliExecutable` in settings; otherwise its managed
+launcher correctly refuses an unbound window rather than borrowing a different
+workspace's provider. Configuration backups and credentials can be kept.
+
+Switching reloads only the requesting window, then invokes the official new-chat
+command without sending a message. Pending new-chat requests use the workbench's
+window container identity from `ExtensionContext.logUri`; the telemetry session
+ID changes on reload and cannot identify that request. Current Configuration
+and the blue card describe the confirmed default for **new chats**. Reopening an
+old conversation does not migrate it to that default. Dead, mismatched or
+unconfirmed clients are never labeled Current Setting.
+
+
+Native model choices are synchronized back to the workspace after successful
+`config/batchWrite`, `config/value/write` or known-provider
+`thread/settings/update` responses. Only model/effort identifiers are retained;
+prompts, tool data and complete RPC payloads are not stored. Rejected requests,
+unknown conversations and conversations using a different provider do not change
+the workspace preference. Accepted events survive closing the panel or editor:
+the next startup consumes the persisted event before constructing its overrides.
+The sidebar updates Selected through local metadata, without refreshing provider
+APIs, changing provider or reloading a working window. Codex's own user-config
+writes retain their native behavior; an attempted private config-write target was
+rejected by the installed app-server, so no unsupported redirection is used.

@@ -2,8 +2,14 @@
 
 Switch Codex between ChatGPT and nine API-key providers: DeepSeek, OpenRouter,
 OpenAI API, Z.AI (GLM), Moonshot AI (Kimi), Alibaba Cloud (Qwen), xAI (Grok),
-MiniMax and Xiaomi MiMo. VS Code reloads automatically after a successful switch;
-start a new Codex conversation afterward.
+MiniMax and Xiaomi MiMo. Each workspace remembers its provider and model choices.
+A successful switch reloads only that window and opens a new Codex conversation.
+Other workspaces keep their providers; existing chats keep their original provider.
+
+**Current Configuration** describes the configuration confirmed by this window's
+Codex process for new chats. If it has not been confirmed, or another window of
+the same workspace saved a change, use **Reload this window**. The panel never
+marks a saved preference as active without a runtime confirmation.
 
 The rosette-and-gear icon opens the selector. Your existing encrypted key is
 reused; **Set API key** opens VS Code's native password dialog. No keys are
@@ -41,6 +47,12 @@ Windows preserves DPAPI keys, macOS uses Keychain directly, and Linux includes
 its Secret Service connector. The OS may request keyring authorization or unlock.
 Linux needs its desktop secure vault; no plaintext fallback is used.
 Runtime paths honor CODEX_HOME. See the repository installation requirements.
+
+An existing custom Codex executable is preserved. If it becomes unavailable,
+**Use bundled Codex** restores the executable shipped with the official extension.
+If Python cannot start, first correct `codexSwitch.pythonPath`, then reload.
+Before disabling or removing Codex Switch, clear `chatgpt.cliExecutable` in VS Code
+settings to restore the official extension's normal launcher.
 
 [Providers, version history and downloads](https://github.com/macorisd/codex-switch)
 

@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import tomllib
+import time
 import urllib.request
 
 SOURCE = Path(__file__).resolve().parent
@@ -55,7 +56,14 @@ def atomic(path, text):
         binary = isinstance(text, bytes)
         with os.fdopen(fd, 'wb' if binary else 'w', **({} if binary else {'encoding': 'utf-8', 'newline': ''})) as f:
             f.write(text)
-        os.replace(tmp, path)
+        for attempt in range(10):
+            try:
+                os.replace(tmp, path)
+                break
+            except PermissionError:
+                if attempt == 9:
+                    raise
+                time.sleep(.02)
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)

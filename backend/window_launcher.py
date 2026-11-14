@@ -1,0 +1,277 @@
+"""Launch the official Codex with window-local arguments and verify its config.
+
+Stdio is forwarded unchanged, except for one private config/read exchange. No
+inference protocol conversion, request logging, credential parsing or auth copy.
+"""
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import threading
+import tempfile
+import time
+from collections import OrderedDict
+
+
+class ModelChanges:
+    """Keep only model-setting metadata, never prompts, tools or full RPCs."""
+    def __init__(self, binding, publish):
+        self.binding = binding
+        self.publish = publish
+        self.pending = OrderedDict()
+        self.threads = OrderedDict()
+
+    def request(self, value):
+        if not isinstance(value, dict) or 'id' not in value:
+            return
+        method, params = value.get('method'), value.get('params') or {}
+        if not isinstance(params, dict): return
+        info = {'method': method, 'thread': params.get('threadId')}
+        if method in ('thread/start', 'thread/resume', 'thread/read', 'thread/fork'):
+            pass
+        elif method == 'thread/settings/update':
+            info.update(model=params.get('model'), effort=params.get('reasoningEffort'))
+        elif method in ('config/batchWrite', 'config/value/write'):
+            edits = params.get('edits', []) if method == 'config/batchWrite' else [params]
+            for edit in edits:
+                key = edit.get('keyPath', '')
+                profile = self.binding.get('profile')
+                if profile:
+                    for prefix in ('profiles.' + profile + '.', 'profiles.' + json.dumps(profile) + '.'):
+                        if key.startswith(prefix): key = key[len(prefix):]
+                if key == 'model': info['model'] = edit.get('value')
+                if key == 'model_reasoning_effort': info['effort'] = edit.get('value')
+            if 'model' not in info:
+                return
+        else:
+            return
+        self.pending[value['id']] = info
+        if len(self.pending) > 128: self.pending.popitem(last=False)
+
+    def response(self, value):
+        if not isinstance(value, dict): return
+        info = self.pending.pop(value.get('id'), None)
+        if not info or value.get('error') or 'result' not in value: return
+        result = value['result'] or {}
+        if info['method'] in ('thread/start', 'thread/resume', 'thread/read', 'thread/fork'):
+            thread = result.get('thread') or {}
+            if thread.get('id') and thread.get('modelProvider'):
+                self.threads[thread['id']] = thread['modelProvider']
+                if len(self.threads) > 256: self.threads.popitem(last=False)
+            return
+        provider = self.binding['provider']
+        if info['method'] == 'thread/settings/update' and self.threads.get(info['thread']) != provider:
+            return
+        model = info.get('model')
+        if isinstance(model, str) and 0 < len(model) <= 512 and not any(c.isspace() for c in model):
+            try:
+                self.publish({'provider': provider, 'model': model, 'effort': info.get('effort'),
+                    'nonce': self.binding['nonce'], 'baseRevision': self.binding['revision'],
+                    'sequence': time.time_ns()})
+            except OSError:
+                # A metadata-storage failure must never interrupt the chat's RPC.
+                pass
+
+
+def process_identity(pid):
+    """Pair PID with OS start identity so stale/reused PIDs cannot confirm state."""
+    try:
+        if sys.platform == 'win32':
+            import ctypes
+            from ctypes import wintypes
+            kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+            kernel.OpenProcess.restype = wintypes.HANDLE
+            kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+            kernel.GetProcessTimes.argtypes = [wintypes.HANDLE, *([ctypes.POINTER(wintypes.FILETIME)] * 4)]
+            kernel.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+            kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+            handle = kernel.OpenProcess(0x1000, False, pid)
+            if not handle:
+                return None
+            try:
+                created, ended, kernel_time, user_time = [wintypes.FILETIME() for _ in range(4)]
+                code = wintypes.DWORD()
+                if not kernel.GetExitCodeProcess(handle, ctypes.byref(code)) or code.value != 259:
+                    return None
+                if not kernel.GetProcessTimes(handle, ctypes.byref(created), ctypes.byref(ended), ctypes.byref(kernel_time), ctypes.byref(user_time)):
+                    return None
+                return str((created.dwHighDateTime << 32) | created.dwLowDateTime)
+            finally:
+                kernel.CloseHandle(handle)
+        if sys.platform == 'linux':
+            stat = Path('/proc/' + str(pid) + '/stat').read_text().rsplit(') ', 1)[1].split()
+            return None if stat[0] == 'Z' else stat[19]
+        result = subprocess.run(['ps', '-o', 'lstart=', '-p', str(pid)], capture_output=True, text=True, timeout=3)
+        return result.stdout.strip() or None
+    except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+        return None
+
+
+def atomic(path, value):
+    fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=path.name, suffix='.tmp')
+    try:
+        with os.fdopen(fd, 'w', encoding='utf-8') as stream:
+            json.dump(value, stream)
+        for attempt in range(10):
+            try:
+                os.replace(temporary, path)
+                break
+            except PermissionError:
+                if attempt == 9:
+                    raise
+                time.sleep(.02)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def launch(binding_path, arguments):
+    deadline = time.monotonic() + 30
+    while not binding_path or not Path(binding_path).is_file():
+        if not binding_path:
+            owner = Path(__file__).parent / 'owners' / (str(os.getppid()) + '.json')
+            try:
+                record = json.loads(owner.read_text('utf-8'))
+                if record.get('ownerStart') == process_identity(os.getppid()):
+                    binding_path = record['binding']
+            except (OSError, ValueError, KeyError):
+                pass
+        if time.monotonic() >= deadline:
+            raise RuntimeError('Window binding unavailable')
+        time.sleep(.05)
+    binding = json.loads(Path(binding_path).read_text('utf-8'))
+    native_path = Path(binding_path).parents[2] / 'workspaces' / binding['workspace'] / 'native-model.json'
+    changes = ModelChanges(binding, lambda event: atomic(native_path, event))
+    observation_lock = threading.Lock()
+    command = [binding['command'], *binding['args'], *arguments]
+    creationflags = 0x08000000 if sys.platform == 'win32' else 0
+    if 'app-server' not in arguments:
+        # Version/probe commands must not create a false app-server receipt.
+        return subprocess.call([binding['command'], *arguments], creationflags=creationflags)
+    receipt_path = Path(binding_path).with_name('runtime.json')
+    private_id = 'codex-switch-config-' + binding['nonce']
+    base = {k: binding[k] for k in ('nonce', 'workspace', 'revision', 'ownerPid')}
+    base.update(phase='starting', provider=None, model='', pid=os.getpid(), processStart=process_identity(os.getpid()))
+    atomic(receipt_path, base)
+    child = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=None, cwd=binding['cwd'], start_new_session=sys.platform != 'win32',
+                             creationflags=creationflags)
+    guard = None
+    guard_write = None
+    if sys.platform != 'win32':
+        # A separate pipe guard also handles SIGKILL, which Python cannot catch.
+        # It owns only this launch's new process group, never the editor's group.
+        guard_read, guard_write = os.pipe()
+        code = ('import os,signal,sys; data=os.read(int(sys.argv[1]),1); '
+                '\nif not data:\n try: os.killpg(int(sys.argv[2]),signal.SIGTERM)\n except ProcessLookupError: pass\n')
+        guard = subprocess.Popen([sys.executable, '-c', code, str(guard_read), str(child.pid)],
+            pass_fds=(guard_read,), stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, start_new_session=True)
+        os.close(guard_read)
+    lock = threading.Lock()
+    confirmation_lock = threading.Lock()
+    receipt_lock = threading.Lock()
+    confirmation_requested = threading.Event()
+    verified = threading.Event()
+    initialize_id = None
+
+    def send(raw):
+        with lock:
+            child.stdin.write(raw)
+            child.stdin.flush()
+
+    def request_confirmation():
+        with confirmation_lock:
+            if confirmation_requested.is_set():
+                return
+            confirmation_requested.set()
+        send((json.dumps({'id': private_id, 'method': 'config/read',
+            'params': {'includeLayers': False, 'cwd': binding['cwd']}}) + '\n').encode())
+
+    def parent_input():
+        nonlocal initialize_id
+        try:
+            for raw in sys.stdin.buffer:
+                value = None
+                # Bound inspection; large tool/request data is forwarded only.
+                if len(raw) < 65536:
+                    try:
+                        value = json.loads(raw)
+                    except (ValueError, UnicodeError):
+                        pass
+                    if isinstance(value, dict) and value.get('method') == 'initialize':
+                        # Record before forwarding: a fast server may respond
+                        # before this input thread runs again.
+                        initialize_id = value.get('id')
+                with observation_lock:
+                    changes.request(value)
+                send(raw)
+                if isinstance(value, dict) and value.get('method') == 'initialized':
+                    request_confirmation()
+        except (BrokenPipeError, OSError):
+            pass
+        finally:
+            with lock:
+                child.stdin.close()
+
+    def deadline():
+        if not verified.wait(30):
+            with receipt_lock:
+                if not verified.is_set():
+                    atomic(receipt_path, {**base, 'phase': 'unconfirmed'})
+
+    threading.Thread(target=parent_input, daemon=True).start()
+    threading.Thread(target=deadline, daemon=True).start()
+    try:
+        for raw in child.stdout:
+            value = None
+            if len(raw) < 4_000_000:
+                try:
+                    value = json.loads(raw)
+                except (ValueError, UnicodeError):
+                    pass
+            if isinstance(value, dict) and value.get('id') == private_id:
+                config = value.get('result', {}).get('config')
+                valid_response = isinstance(config, dict)
+                config = config if valid_response else {}
+                provider = config.get('model_provider') or 'openai'
+                confirmed = valid_response and not value.get('error') and provider == binding['provider']
+                with receipt_lock:
+                    atomic(receipt_path, {**base, 'phase': 'verified' if confirmed else 'mismatch',
+                        'provider': provider if confirmed else None,
+                        'model': config.get('model', '') if confirmed else ''})
+                    verified.set()
+                continue
+            with observation_lock:
+                changes.response(value)
+            sys.stdout.buffer.write(raw)
+            sys.stdout.buffer.flush()
+            # The official IDE proceeds after the initialize *response* and
+            # sends no initialized notification. Other clients send both.
+            # Forward its response unchanged, then confirm once in either case.
+            if (isinstance(value, dict) and initialize_id is not None
+                    and value.get('id') == initialize_id and not value.get('error')
+                    and isinstance(value.get('result'), dict)):
+                request_confirmation()
+        return child.wait()
+    finally:
+        verified.set()
+        if child.poll() is None:
+            child.kill()
+        child.wait()
+        child.stdout.close()
+        if guard is not None:
+            os.write(guard_write, b'd')
+            os.close(guard_write)
+            guard.wait(timeout=5)
+        atomic(receipt_path, {**base, 'phase': 'stopped'})
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(launch(sys.argv[1], sys.argv[2:]))
+    except Exception:
+        # Never print child output, configuration or upstream exceptions.
+        print('Codex Switch could not start this window. Reload from Codex Switch.', file=sys.stderr)
+        sys.exit(1)
