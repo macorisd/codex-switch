@@ -169,7 +169,8 @@
     $('configuration-note').textContent = state.phase === 'setup-error'
       ? 'Window setup failed. Check Python and the Codex executable, then reload.'
       : state.reloadRequired ? 'Reload this window to apply its saved workspace provider.'
-        : 'For new chats in this workspace. Existing chats keep their provider.';
+        : '';
+    $('configuration-note').hidden = !$('configuration-note').textContent;
     $('reload-window').hidden = !state.reloadRequired;
     $('repair-window').hidden = state.phase !== 'setup-error';
     cards.get('openai').classList.toggle('current-provider', isActive('openai'));

@@ -39,7 +39,8 @@ test('unknown, pending and confirmed window states never confuse preferences wit
   assert.notEqual(h.$('openai').textContent, 'Current Setting');
   sendState({ provider: 'openai', verified: true, reloadRequired: false });
   assert(h.card('openai').classList.contains('current-provider'));
-  assert(h.$('configuration-note').textContent.includes('Existing chats keep their provider'));
+  assert.equal(h.$('configuration-note').textContent, '');
+  assert(h.$('configuration-note').hidden, 'normal state restores original spacing without a note box');
   assert(h.$('reload-window').hidden);
 });
 

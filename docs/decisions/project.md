@@ -80,7 +80,11 @@ Implementation approved in the 0.5.0 workspace-isolation PLAN, 2026-11-14:
   well as fixtures. Source: repeated unconfirmed-window regression, 2026-11-14.
 - Current Configuration describes the verified default for new chats in this
   workspace, not the provider of an arbitrary visible historical conversation.
-  State that distinction in the panel. After a successful switch, reload the
+  Keep that distinction in documentation, without a permanent explanatory note
+  in the panel. In the normal confirmed state, hide the note entirely and retain
+  the original spacing; show notes only for actionable configuration problems.
+  Source: explicit removal and spacing correction, 2026-11-14.
+  After a successful switch, reload the
   window and open a new Codex chat without sending a message or deleting history.
 - Persist model choices per workspace/provider. Credentials, catalogs and account
   metrics remain shared local resources; hidden providers still make no requests.
