@@ -22,6 +22,46 @@ function harness({provider='openai',visible=['openai','deepseek'],chatgpt={loadi
 const configured={loading:false,hasKey:true,valid:true,model:'test-model',effort:'high',models:[{id:'test-model',name:'Test model',efforts:['low','high']}],balance:{total:8,currency:'USD'}};
 const field=(card,role)=>card.querySelector(`[data-role="${role}"]`);
 
+test('model list rows follow catalog and filter changes while preserving selection', () => {
+  const h = harness({visible:['openai','openrouter','deepseek']});
+  const models = Array.from({length:10}, (_, i) => ({id:`lab/model-${i}`,name:`Model ${i}`,free:i<2}));
+  const card = h.card('openrouter'), picker = field(card,'model');
+  const state = {...configured,models,model:'lab/model-9'};
+  h.api('openrouter',state);
+  assert.equal(picker.getAttribute('size'),'6');
+  picker.scrollTop = 80;
+  h.api('openrouter',{...state,balance:{total:9,currency:'USD'}});
+  assert.equal(picker.scrollTop,80);
+  field(card,'free').checked = true;
+  field(card,'free').dispatchEvent(new h.window.Event('change'));
+  assert.equal(picker.getAttribute('size'),'2');
+  assert(!picker.hasAttribute('data-single-row'));
+  assert.equal(picker.scrollTop,0);
+  for (const search of ['Model 0','missing']) {
+    field(card,'search').value = search;
+    field(card,'search').dispatchEvent(new h.window.Event('input'));
+    assert.equal(picker.getAttribute('size'),'2','keep native listbox semantics');
+    assert(picker.hasAttribute('data-single-row'));
+  }
+  field(card,'search').value = '';
+  field(card,'free').checked = false;
+  field(card,'free').dispatchEvent(new h.window.Event('change'));
+  assert.equal(picker.getAttribute('size'),'6');
+  assert(!picker.hasAttribute('data-single-row'));
+  assert.equal([...picker.children].find(o=>o.selected).value,'lab/model-9');
+  assert(!h.messages.some(m=>m.operation==='select'));
+  h.api('deepseek',{...configured,models:models.slice(0,2)});
+  assert.equal(field(h.card('deepseek'),'model').getAttribute('size'),'2');
+});
+
+test('multi-provider subtitle is consistent across cards, configuration and management', () => {
+  const h = harness({provider:'openrouter',visible:['openai','openrouter','deepseek']});
+  assert.equal(h.card('openrouter').querySelector('.provider-title p').textContent,'Multi-provider API key');
+  assert.equal(h.card('deepseek').querySelector('.provider-title p').textContent,'API key');
+  assert.equal(h.$('current').textContent,'OpenRouter (Multi-provider API key)');
+  assert.match(h.$('manage-list').textContent,/OpenRouter \(Multi-provider API key\)/);
+});
+
 test('a native model update changes Selected without changing the provider or catalog', () => {
   const h = harness({ provider: 'deepseek' });
   const models = [{ id: 'first', name: 'First', efforts: [] }, { id: 'second', name: 'Second', efforts: [] }];
@@ -216,8 +256,6 @@ test('aggregators combine free, laboratory and search filters without changing s
     {id:'other/unknown',name:'Unknown price',free:false},
   ];
   h.api('openrouter', {...configured,model:'lab/paid',models});
-  assert(card.classList.contains('provider-aggregator'));
-  assert(!h.card('deepseek').classList.contains('provider-aggregator'));
   assert(!field(card,'free-filter').hidden);
   field(card,'free').checked = true;
   field(card,'free').dispatchEvent(new h.window.Event('change'));
@@ -230,11 +268,8 @@ test('aggregators combine free, laboratory and search filters without changing s
   field(card,'search').value='missing'; field(card,'search').dispatchEvent(new h.window.Event('input'));
   assert.equal(field(card,'model').children.length,0);
   assert(!h.messages.some(m=>m.operation==='select'), 'filters never select or switch implicitly');
-  const css=fs.readFileSync(path.join(root,'media/style.css'),'utf8');
-  assert.match(css.slice(css.indexOf('@media (min-width: 550px)')), /\.provider-aggregator\s*\{ grid-column: 1 \/ -1;/);
-  assert.match(css.slice(css.indexOf('@media (min-width: 550px)')), /\.provider-list\s*\{ grid-auto-flow: row dense;/);
   h.receive({type:'providerLayout',revision:1,layout:[{id:'openai',visible:true},{id:'openrouter',visible:true},{id:'deepseek',visible:true},...definitions.filter(p=>!['openrouter','deepseek'].includes(p.id)).map(p=>({id:p.id,visible:false}))]});
-  assert.deepEqual([...h.$('provider-list').children].map(c=>c.dataset.provider),['openai','openrouter','deepseek'], 'narrow layout retains the managed order; wide CSS fills gaps');
+  assert.deepEqual([...h.$('provider-list').children].map(c=>c.dataset.provider),['openai','openrouter','deepseek'], 'both layouts retain the managed order');
 });
 
 test('OpenRouter model labels omit IDs and mark only verified free models', () => {
@@ -418,6 +453,8 @@ test('responsive styles retain 550px columns, equal row heights and narrow natur
   const css=fs.readFileSync(path.join(root,'media/style.css'),'utf8');
   assert.match(css,/@media \(min-width: 550px\)/);
   const wide=css.slice(css.indexOf('@media (min-width: 550px)'));
+  assert(!css.includes('provider-aggregator'));
+  assert(!css.includes('grid-auto-flow'));
   assert.match(wide,/grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(wide,/align-items: stretch/); assert.match(wide,/flex: 1 0 0/);
   assert.match(wide,/\.provider-card > \.primary.*order: 2/s);

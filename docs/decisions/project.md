@@ -104,8 +104,11 @@ Source: explicit user instructions, 2026-11-08.
 - Show only **Current Configuration** and **Provider**. Current Configuration
   names the active provider and its subtitle, such as **ChatGPT (Your Plan)** or
   **DeepSeek (API key)**, and never exposes a concrete model.
-- Show ChatGPT with its detected plan subtitle (see ChatGPT Usage) and all nine
-  API providers with **API key**, respecting Manage Providers visibility/order.
+- Show ChatGPT with its detected plan subtitle (see ChatGPT Usage) and API
+  providers with **API key**, except multi-provider services (currently
+  OpenRouter), which use **Multi-provider API key** in the card, Current
+  Configuration and Manage Providers. Respect visibility/order.
+  Source: explicit subtitle refinement, 2026-11-15.
 - Place each provider's recognizable logo in a compact rounded app-icon tile
   to the left of its name and subtitle, aligned as one header identity group.
   Bundle the logo assets locally, retain their attribution, and make the image
@@ -125,13 +128,13 @@ Source: explicit user instructions, 2026-11-08.
   button, aligning the buttons while retaining their existing minimum gap.
   Below 550px, keep natural card heights and existing spacing.
   Source: explicit responsive-layout request, 2026-11-11.
-- Aggregators with laboratory/model filters (currently OpenRouter) span the full
-  row in the wide layout. Provide a combinable **Free models only** filter using
+- Multi-provider cards (currently OpenRouter) use the same responsive widths and
+  managed order as other providers. Do not span the full row or backfill grid
+  gaps specially for them. Source: explicit removal of the special width and
+  its surrounding layout logic, 2026-11-15.
+  Provide a combinable **Free models only** filter using
   the provider's verified free-model metadata/identifier rules. Never guess that
-  an unknown price means free. Fill wide-grid gaps with subsequent half-width
-  cards: ChatGPT → OpenRouter → DeepSeek renders ChatGPT/DeepSeek in the first
-  row and OpenRouter across the next. The managed order still determines the
-  narrow layout. Source: explicit refinements, 2026-11-12.
+  an unknown price means free. Source: explicit refinements, 2026-11-12.
 - In OpenRouter's model picker, show the readable provider/model name without
   appending the model ID in parentheses. Append a single **(free)** only when
   verified free-model metadata marks it free. Keep IDs as selection values and
@@ -235,6 +238,11 @@ Source: explicit user instructions, 2026-11-08.
   **Update model catalog**. The collapsed disclosure has a single bottom divider,
   never both top and bottom borders. The following Available balance section
   must not add a second top divider.
+- Model lists shrink to the displayed options when fewer than six models remain,
+  including after search/laboratory/free filtering. Keep a listbox for a single
+  match, reserve one row for no matches, and omit a scrollbar when the options
+  fit. At six or more options retain the existing 135px height and scrolling
+  when needed. Source: explicit compact-selector request, 2026-11-15.
 
 ## API provider architecture
 

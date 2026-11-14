@@ -347,7 +347,9 @@ h4 { margin: 0; font-size: 12px; font-weight: 600; }
   padding: 5px;
   font: inherit;
 }
-.model-catalog-content select[size] { height: 135px; }
+.model-catalog-content select[size] { height: auto; max-height: 135px; overflow-y: auto; }
+.model-catalog-content select[size="6"] { height: 135px; }
+.model-catalog-content select[data-single-row] { height: calc(1lh + 12px); }
 .model-free-filter { display: flex; align-items: center; gap: 7px; font-size: 11px; }
 .model-free-filter input { width: auto; margin: 0; accent-color: var(--vscode-focusBorder); }
 .model-selection { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -378,8 +380,6 @@ button.current-setting {
   .provider-card > .primary { min-height: 50px; }
 }
 @media (min-width: 550px) {
-  .provider-list { grid-auto-flow: row dense; }
-  .provider-aggregator { grid-column: 1 / -1; }
   main { max-width: 960px; }
   .provider-list { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
   .provider-card { display: flex; flex-direction: column; }
