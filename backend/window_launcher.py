@@ -11,6 +11,63 @@ import sys
 import threading
 import tempfile
 import time
+from collections import OrderedDict
+
+
+class ModelChanges:
+    """Keep only model-setting metadata, never prompts, tools or full RPCs."""
+    def __init__(self, binding, publish):
+        self.binding = binding
+        self.publish = publish
+        self.pending = OrderedDict()
+        self.threads = OrderedDict()
+
+    def request(self, value):
+        if not isinstance(value, dict) or 'id' not in value:
+            return
+        method, params = value.get('method'), value.get('params') or {}
+        if not isinstance(params, dict): return
+        info = {'method': method, 'thread': params.get('threadId')}
+        if method in ('thread/start', 'thread/resume', 'thread/read', 'thread/fork'):
+            pass
+        elif method == 'thread/settings/update':
+            info.update(model=params.get('model'), effort=params.get('reasoningEffort'))
+        elif method in ('config/batchWrite', 'config/value/write'):
+            edits = params.get('edits', []) if method == 'config/batchWrite' else [params]
+            for edit in edits:
+                key = edit.get('keyPath', '')
+                profile = self.binding.get('profile')
+                if profile:
+                    for prefix in ('profiles.' + profile + '.', 'profiles.' + json.dumps(profile) + '.'):
+                        if key.startswith(prefix): key = key[len(prefix):]
+                if key == 'model': info['model'] = edit.get('value')
+                if key == 'model_reasoning_effort': info['effort'] = edit.get('value')
+            if 'model' not in info:
+                return
+        else:
+            return
+        self.pending[value['id']] = info
+        if len(self.pending) > 128: self.pending.popitem(last=False)
+
+    def response(self, value):
+        if not isinstance(value, dict): return
+        info = self.pending.pop(value.get('id'), None)
+        if not info or value.get('error') or 'result' not in value: return
+        result = value['result'] or {}
+        if info['method'] in ('thread/start', 'thread/resume', 'thread/read', 'thread/fork'):
+            thread = result.get('thread') or {}
+            if thread.get('id') and thread.get('modelProvider'):
+                self.threads[thread['id']] = thread['modelProvider']
+                if len(self.threads) > 256: self.threads.popitem(last=False)
+            return
+        provider = self.binding['provider']
+        if info['method'] == 'thread/settings/update' and self.threads.get(info['thread']) != provider:
+            return
+        model = info.get('model')
+        if isinstance(model, str) and 0 < len(model) <= 512 and not any(c.isspace() for c in model):
+            self.publish({'provider': provider, 'model': model, 'effort': info.get('effort'),
+                'nonce': self.binding['nonce'], 'baseRevision': self.binding['revision'],
+                'sequence': time.time_ns()})
 
 
 def process_identity(pid):
@@ -80,6 +137,9 @@ def launch(binding_path, arguments):
             raise RuntimeError('Window binding unavailable')
         time.sleep(.05)
     binding = json.loads(Path(binding_path).read_text('utf-8'))
+    native_path = Path(binding_path).parents[2] / 'workspaces' / binding['workspace'] / 'native-model.json'
+    changes = ModelChanges(binding, lambda event: atomic(native_path, event))
+    observation_lock = threading.Lock()
     command = [binding['command'], *binding['args'], *arguments]
     creationflags = 0x08000000 if sys.platform == 'win32' else 0
     if 'app-server' not in arguments:
@@ -140,6 +200,8 @@ def launch(binding_path, arguments):
                         # Record before forwarding: a fast server may respond
                         # before this input thread runs again.
                         initialize_id = value.get('id')
+                with observation_lock:
+                    changes.request(value)
                 send(raw)
                 if isinstance(value, dict) and value.get('method') == 'initialized':
                     request_confirmation()
@@ -177,6 +239,8 @@ def launch(binding_path, arguments):
                         'model': config.get('model', '') if confirmed else ''})
                     verified.set()
                 continue
+            with observation_lock:
+                changes.response(value)
             sys.stdout.buffer.write(raw)
             sys.stdout.buffer.flush()
             # The official IDE proceeds after the initialize *response* and

@@ -242,6 +242,7 @@ function harness(options = {}) {
     pendingBackend,
     backendSignals,
     backendState: state,
+    updateConfiguration: () => provider.update(),
     view,
     setVisible: visible => {
       view.visible = visible;
@@ -254,6 +255,18 @@ function harness(options = {}) {
 const definitions = require('../backend/providers.json');
 const apiMessage = (provider, operation, extra = {}) => ({ action: 'api', provider, operation, ...extra });
 const tick = () => new Promise(resolve => setImmediate(resolve));
+
+test('accepted native picker events publish the new model without provider network refreshes', async () => {
+  const options = { provider: 'deepseek', runtimeStatus: {} };
+  const h = harness(options);
+  await h.receive({ action: 'ready' });
+  const count = h.calls.filter(c => c.action === 'api').length;
+  options.runtimeStatus = { model: 'model-b', nativeSelection: {
+    provider: 'deepseek', model: 'model-b', effort: 'high', sequence: 123 } };
+  await h.updateConfiguration();
+  assert(h.messages.some(m => m.type === 'apiState' && m.provider === 'deepseek' && m.state.model === 'model-b'));
+  assert.equal(h.calls.filter(c => c.action === 'api').length, count);
+});
 const layout = visible => [{ id: 'openai', visible: true }, ...definitions.map(p => ({ id: p.id, visible: visible.includes(p.id) }))];
 const requests = (h, operation, id) => h.calls.filter(c => c.action === 'api' && c.operation === operation && (!id || c.provider === id));
 

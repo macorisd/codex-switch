@@ -22,6 +22,16 @@ function harness({provider='openai',visible=['openai','deepseek'],chatgpt={loadi
 const configured={loading:false,hasKey:true,valid:true,model:'test-model',effort:'high',models:[{id:'test-model',name:'Test model',efforts:['low','high']}],balance:{total:8,currency:'USD'}};
 const field=(card,role)=>card.querySelector(`[data-role="${role}"]`);
 
+test('a native model update changes Selected without changing the provider or catalog', () => {
+  const h = harness({ provider: 'deepseek' });
+  const models = [{ id: 'first', name: 'First', efforts: [] }, { id: 'second', name: 'Second', efforts: [] }];
+  h.api('deepseek', { ...configured, models, model: 'first' });
+  assert.equal(field(h.card('deepseek'), 'selected').textContent, 'Selected: first');
+  h.api('deepseek', { ...configured, models, model: 'second' });
+  assert.equal(field(h.card('deepseek'), 'selected').textContent, 'Selected: second');
+  assert(h.card('deepseek').classList.contains('current-provider'));
+});
+
 test('unknown, pending and confirmed window states never confuse preferences with active providers', () => {
   const h = harness({ provider: 'deepseek' });
   const sendState = extra => h.receive({ type: 'state', busy: false, state: {

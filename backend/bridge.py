@@ -25,6 +25,8 @@ def status(include_deepseek=True):
 
 def handle(request):
     ws.use(request.get('workspace'))
+    if ws.workspace:
+        ws.adopt_native()
     action = request.get('action')
     if action == 'prepareWindow':
         return ws.prepare(request)

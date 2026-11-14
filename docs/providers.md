@@ -71,7 +71,7 @@ models therefore need no local protocol conversion. Routing, billing, encrypted
 reasoning, streaming and full agent sessions still need real-key verification.
 
 Aggregator cards declare `modelFilters` and span a full row from 550px. The wide
-grid fills gaps with subsequent ordinary cards: ChatGPT â†’ OpenRouter â†’ DeepSeek
+grid fills gaps with subsequent ordinary cards: ChatGPT Ã¢â€ â€™ OpenRouter Ã¢â€ â€™ DeepSeek
 places ChatGPT/DeepSeek together before the full-width OpenRouter card. Below
 550px, the managed order remains unchanged. Search, laboratory and free filters
 combine without implicitly changing the selected model or writing Codex config.
@@ -135,7 +135,7 @@ At/above the threshold the amount is neutral; below it is yellow; at/below 0 is
 red. Initial readings after starting the extension are silent. Notify only when
 crossing from neutral to yellow or from yellow to red; a direct neutral-to-red
 drop produces one exhausted warning. Repeated reads and recovery never notify.
-Recovery rearms subsequent downward crossings, including red â†’ yellow â†’ red.
+Recovery rearms subsequent downward crossings, including red Ã¢â€ â€™ yellow Ã¢â€ â€™ red.
 Threshold, credential or metric/currency changes establish a silent new baseline;
 settings changes do not make extra API requests. Only thresholds persist, so
 restarting never replays an old warning. Hidden providers remain inactive.
@@ -257,3 +257,16 @@ ID changes on reload and cannot identify that request. Current Configuration
 and the blue card describe the confirmed default for **new chats**. Reopening an
 old conversation does not migrate it to that default. Dead, mismatched or
 unconfirmed clients are never labeled Current Setting.
+
+
+Native model choices are synchronized back to the workspace after successful
+`config/batchWrite`, `config/value/write` or known-provider
+`thread/settings/update` responses. Only model/effort identifiers are retained;
+prompts, tool data and complete RPC payloads are not stored. Rejected requests,
+unknown conversations and conversations using a different provider do not change
+the workspace preference. Accepted events survive closing the panel or editor:
+the next startup consumes the persisted event before constructing its overrides.
+The sidebar updates Selected through local metadata, without refreshing provider
+APIs, changing provider or reloading a working window. Codex's own user-config
+writes retain their native behavior; an attempted private config-write target was
+rejected by the installed app-server, so no unsupported redirection is used.

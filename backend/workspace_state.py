@@ -107,7 +107,12 @@ def import_preference():
 
 def choose(provider):
     with locked(directory() / 'selection.lock'):
-        return choose_locked(provider)
+        selected = choose_locked(provider)
+        # Explicit switches supersede previously observed native picker events.
+        selected['nativeSequence'] = max(selected.get('nativeSequence', 0),
+            read(directory() / 'native-model.json', {}).get('sequence', 0))
+        s.atomic(directory() / 'selection.json', json.dumps(selected))
+        return selected
 
 
 def choose_locked(provider):
@@ -166,6 +171,43 @@ def arguments(selected):
 
 def revision(selected):
     return hashlib.sha256(json.dumps(arguments(selected), sort_keys=True).encode()).hexdigest()
+
+
+def provider_revision(selected):
+    args = arguments(selected)
+    stable = [args[i+1] for i in range(0, len(args), 2)
+              if args[i+1].split('=', 1)[0] not in ('model', 'model_reasoning_effort')]
+    return hashlib.sha256(json.dumps(stable).encode()).hexdigest()
+
+
+def adopt_native():
+    event = read(directory() / 'native-model.json', {})
+    if not event: return
+    with locked(directory() / 'selection.lock'):
+        selected = preference()
+        if selected.get('provider') != event.get('provider'): return
+        if selected.get('nativeSequence', 0) >= event.get('sequence', 0): return
+        try:
+            if selected.get('nativeNonce') != event.get('nonce') and revision(selected) != event.get('baseRevision'): return
+        except (ValueError, OSError): return
+        provider, model = event['provider'], event['model']
+        if provider == 'openai':
+            selected.setdefault('chatgpt', {})['model'] = json.dumps(model)
+        else:
+            import api_providers as api
+            if provider not in api.PROVIDERS: return
+            data = read(api.cache_path(provider), {})
+            if model not in {m['id'] for m in data.get('models', [])}: return
+            local = api_selection(provider)
+            local.update(model=model, effort=event.get('effort') or '')
+            local.pop('tested', None)
+            save_api_selection(provider, local)
+        selected.update(model=model, effort=event.get('effort') or '',
+                        nativeNonce=event['nonce'], nativeSequence=event['sequence'])
+        if provider == 'openai':
+            if event.get('effort'): selected['chatgpt']['model_reasoning_effort'] = json.dumps(event['effort'])
+            else: selected['chatgpt'].pop('model_reasoning_effort', None)
+        s.atomic(directory() / 'selection.json', json.dumps(selected))
 
 
 def launcher_path():
@@ -227,6 +269,7 @@ def window_directory(nonce):
 
 
 def prepare(request):
+    adopt_native()
     # Only retire a legacy block actually owned by this extension. Its backup
     # and ChatGPT restore snapshot keep the pre-migration configuration recoverable.
     with locked(s.ROOT / 'migration.lock'):
@@ -253,9 +296,10 @@ def prepare(request):
         raise ValueError('The saved Codex executable is unavailable')
     window = window_directory(request['window'])
     binding = {'workspace': workspace, 'nonce': request['window'], 'ownerPid': request['ownerPid'],
+        'profile': tomllib.loads(global_text()).get('profile'),
         'command': command, 'python': str(s.PYTHON), 'launcher': str(s.ROOT / 'window_launcher.py'),
         'cwd': request['cwd'], 'args': arguments(selected), 'provider': selected['provider'],
-        'revision': revision(selected)}
+        'revision': revision(selected), 'providerRevision': provider_revision(selected)}
     s.atomic(window / 'binding.json', json.dumps(binding))
     # A restored Codex view can activate before our module loads. The bootstrap
     # can wait for its *own parent* extension host, with PID start verification,
@@ -269,6 +313,7 @@ def prepare(request):
 
 
 def status(nonce):
+    adopt_native()
     from window_launcher import process_identity
     selected = preference()
     receipt = read(window_directory(nonce) / 'runtime.json', {})
@@ -280,7 +325,14 @@ def status(nonce):
     except (ValueError, KeyError, OSError):
         current_revision = None
     pending = verified and receipt.get('revision') != current_revision
+    native = selected.get('nativeNonce') == nonce and selected.get('provider') == receipt.get('provider')
+    binding = read(window_directory(nonce) / 'binding.json', {})
+    try:
+        if native and binding.get('providerRevision') == provider_revision(selected): pending = False
+    except (ValueError, OSError): pass
     return {'provider': receipt.get('provider') if verified else None,
-        'model': receipt.get('model', '') if verified else '',
+        'model': (selected.get('model', '') if native else receipt.get('model', '')) if verified else '',
+        'nativeSelection': {'provider': selected.get('provider'), 'model': selected.get('model'),
+            'effort': selected.get('effort', ''), 'sequence': selected.get('nativeSequence')} if native else None,
         'selectedProvider': selected.get('provider'), 'verified': bool(verified),
         'reloadRequired': pending or not verified, 'phase': (receipt.get('phase', 'unconfirmed') if live else 'stopped') if match else 'unconfirmed'}

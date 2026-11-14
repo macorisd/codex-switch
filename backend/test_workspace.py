@@ -39,7 +39,7 @@ for raw in sys.stdin.buffer:
 
 class WorkspaceTests(unittest.TestCase):
     def setUp(self):
-        self.tmp = tempfile.TemporaryDirectory(prefix='codex workspace ñ ')
+        self.tmp = tempfile.TemporaryDirectory(prefix='codex workspace Ã± ')
         self.root = Path(self.tmp.name)
         self.patch = patch.multiple(s, ROOT=self.root / 'provider-switcher',
             CONFIG=self.root / 'config.toml', CATALOG=self.root / 'provider-switcher/deepseek-models.json',
@@ -77,7 +77,7 @@ class WorkspaceTests(unittest.TestCase):
         env = {**os.environ, 'CODEX_SWITCH_BINDING': str(binding)}
         if early:
             env.pop('CODEX_SWITCH_BINDING', None)
-        child = subprocess.Popen([prepared['launcher'], 'app-server', '--fixture', 'space ñ \\ tail'],
+        child = subprocess.Popen([prepared['launcher'], 'app-server', '--fixture', 'space Ã± \\ tail'],
             env=env, stdin=subprocess.PIPE,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=self.root)
         self.children.append(child)
@@ -123,7 +123,7 @@ class WorkspaceTests(unittest.TestCase):
 
     def test_private_confirmation_never_leaks_into_client_protocol_or_receipt(self):
         child, messages, send, state = self.client()
-        payload = {'text': 'á \\ "\n', 'tool': {'result': [False, None, 1]}, 'padding': 'x' * 80000}
+        payload = {'text': 'Ã¡ \\ "\n', 'tool': {'result': [False, None, 1]}, 'padding': 'x' * 80000}
         send({'id': 'client-config-id', 'method': 'echo', 'params': payload})
         self.assertEqual(messages.get(timeout=10), {'id': 'client-config-id', 'result': payload})
         receipt = (ws.window_directory('a' * 32) / 'runtime.json').read_text()
@@ -218,6 +218,38 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(migrated['desktop']['setting'], 'preserved')
         self.assertEqual(auth.read_bytes(), b'private-auth-fixture')
         self.assertTrue(any(p.read_bytes() == legacy for p in s.ROOT.glob('config-*.bak')))
+
+    def test_native_model_acknowledgements_persist_and_ignore_other_provider_threads(self):
+        from window_launcher import ModelChanges
+        self.prepare()
+        selected = ws.preference()
+        binding = {'provider': 'openai', 'nonce': 'a'*32, 'revision': ws.revision(selected)}
+        events = []
+        changes = ModelChanges(binding, events.append)
+        def write(i, model):
+            changes.request({'id': i, 'method': 'config/batchWrite', 'params': {'edits': [
+                {'keyPath': 'model', 'value': model}, {'keyPath': 'model_reasoning_effort', 'value': 'high'}]}})
+        write(1, 'rejected-model')
+        changes.response({'id': 1, 'error': {'code': -1}})
+        self.assertEqual(events, [])
+        write(2, 'gpt-native-choice')
+        changes.response({'id': 2, 'result': {'status': 'okOverridden'}})
+        s.atomic(ws.directory()/'native-model.json', json.dumps(events[-1]))
+        ws.adopt_native()
+        self.assertEqual(ws.preference()['model'], 'gpt-native-choice')
+        self.assertIn('model=\"gpt-native-choice\"', ws.arguments(ws.preference()))
+        changes.request({'id': 3, 'method': 'thread/read', 'params': {'threadId': 'old'}})
+        changes.response({'id': 3, 'result': {'thread': {'id': 'old', 'modelProvider': 'deepseek'}}})
+        changes.request({'id': 4, 'method': 'thread/settings/update', 'params': {'threadId': 'old', 'model': 'deepseek-flash'}})
+        changes.response({'id': 4, 'result': {}})
+        self.assertEqual(len(events), 1)
+        changes.request({'id': 5, 'method': 'thread/read', 'params': {'threadId': 'current'}})
+        changes.response({'id': 5, 'result': {'thread': {'id': 'current', 'modelProvider': 'openai'}}})
+        changes.request({'id': 6, 'method': 'thread/settings/update', 'params': {'threadId': 'current', 'model': 'gpt-second'}})
+        changes.response({'id': 6, 'result': {}})
+        self.assertEqual(events[-1]['model'], 'gpt-second')
+        ws.use('b'*64); ws.initial_preference()
+        self.assertNotEqual(ws.preference()['model'], 'gpt-native-choice')
 
     def test_invalid_id_cannot_escape_local_storage(self):
         for value in ('../project', '', 'A' * 64):

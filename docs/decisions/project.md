@@ -88,6 +88,10 @@ Implementation approved in the 0.5.0 workspace-isolation PLAN, 2026-11-14:
   window and open a new Codex chat without sending a message or deleting history.
 - Persist model choices per workspace/provider. Credentials, catalogs and account
   metrics remain shared local resources; hidden providers still make no requests.
+  Accepted model changes from Codex's native picker must update that workspace's
+  saved model and the sidebar's Selected value, surviving reopening. Do not infer
+  changes from a historical chat or persist failed requests or another provider's
+  choices. Source: explicit native-picker synchronization request, 2026-11-14.
 - Migrate only an old global provider block owned by this extension, preserving
   its backup, ChatGPT restore values and unrelated TOML. Subsequent switches must
   not write the shared global selection. Never use ignored project provider keys

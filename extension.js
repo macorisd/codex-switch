@@ -141,6 +141,17 @@ class Selector {
       const local = await this.runtime.status();
       this.activeProvider = local.verified ? local.provider : null;
       this.selectedProvider = local.selectedProvider;
+      const native = local.nativeSelection;
+      if (native?.sequence && native.sequence !== this.nativeSequence) {
+        const session = this.api.sessions.get(native.provider);
+        const pending = this.api.pending.get(native.provider);
+        if (pending) void pending.then(() => this.update());
+        else if (session) {
+          this.nativeSequence = native.sequence;
+          Object.assign(session, { model: native.model, effort: native.effort, tested: null });
+          await this.api.publish(native.provider);
+        }
+      }
       await this.post({ type: 'state', busy, state: { ...local,
         providers: PROVIDERS.map(p => ({ ...p, iconUri: p.icon ? this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'providers', p.icon)).toString() : undefined })), providerLayout: this.providerLayout(), providerLayoutRevision: this.layoutRevision,
         chatgpt: this.chatgpt, balanceAlerts: this.balanceAlerts } });
