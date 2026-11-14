@@ -264,6 +264,8 @@ after removal or a crash. A small installation index under `~/.codex-switch`
 records runtime locations for the uninstall hook, including custom CODEX_HOME
 directories. It contains no credentials. Launchers and saved preferences remain
 available for delayed references and future reinstallation.
+If a client is still departing during shutdown, recovery remains selected until
+the next ordinary start can retire its final writes and restore the setting.
 
 Native API-model writes to shared defaults are journaled with their previous
 scalar values and table/provider guards. Recovery restores only still-matching

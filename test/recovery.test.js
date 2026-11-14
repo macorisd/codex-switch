@@ -111,3 +111,21 @@ test('BOM, CRLF, quoted model keys and spaced profile headers survive recovery',
   recovery.restoreModels(root);
   assert.equal(fs.readFileSync(config, 'utf8'), prefix + "'model' = 'gpt-model'\r\n");
 });
+
+test('departing live clients retain recovery for their final writes and stale receipts cannot retain it', async t => {
+  const root = fixture(t), home = fixture(t);
+  t.mock.method(os, 'homedir', () => home);
+  const settings = path.join(root, 'settings.json');
+  const launcher = path.join(root, 'provider-switcher', 'codex-window');
+  const extensionPath = path.join(root, 'extension');
+  fs.writeFileSync(settings, JSON.stringify({ 'chatgpt.cliExecutable': launcher }));
+  recovery.register(extensionPath, root);
+  recovery.atomic(path.join(root, 'recovery.json'), { settings, launcher, extensionPath, hadOriginal: false });
+  const receipt = path.join(root, 'windows', 'window-a', 'runtime.json');
+  recovery.atomic(receipt, { pid: process.pid, processStart: recovery.identity(process.pid) });
+  await recovery.uninstall(extensionPath);
+  assert.equal(JSON.parse(fs.readFileSync(settings))['chatgpt.cliExecutable'], launcher);
+  recovery.atomic(receipt, { pid: process.pid, processStart: 'stale-process-identity' });
+  await recovery.uninstall(extensionPath);
+  assert.deepEqual(JSON.parse(fs.readFileSync(settings)), {});
+});
