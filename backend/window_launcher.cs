@@ -49,38 +49,31 @@ class WindowLauncher {
         });
         thread.IsBackground = true; thread.Start(); return thread;
     }
-    static string Binding() {
-        string direct = Environment.GetEnvironmentVariable("CODEX_SWITCH_BINDING");
+    static Process Parent() {
         IntPtr[] info = new IntPtr[6]; int length;
         if (NtQueryInformationProcess(Process.GetCurrentProcess().Handle, 0, info, info.Length * IntPtr.Size, out length) != 0) throw new Exception();
-        int parent = info[5].ToInt32();
-        string owner = Path.Combine(Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName), "owners", parent + ".json");
-        for (int i = 0; i < 300; i++) {
-            if (!String.IsNullOrEmpty(direct) && File.Exists(direct)) return direct;
-            if (String.IsNullOrEmpty(direct) && File.Exists(owner)) {
-                try {
-                    var record = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(owner));
-                    string started = Process.GetProcessById(parent).StartTime.ToUniversalTime().ToFileTimeUtc().ToString();
-                    if ((string)record["ownerStart"] == started && File.Exists((string)record["binding"])) return (string)record["binding"];
-                } catch (IOException) {} catch (KeyNotFoundException) {}
-            }
-            Thread.Sleep(100);
-        }
-        throw new Exception();
+        return Process.GetProcessById(info[5].ToInt32());
     }
     static int Main(string[] args) {
         IntPtr job = IntPtr.Zero;
         try {
-            string binding = Binding();
-            var data = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(binding));
-            string command = (string)data["python"];
-            string arguments = Quote((string)data["launcher"]) + " " + Quote(binding);
+            string root = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
+            var data = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(Path.Combine(root, "recovery.json")));
+            var parent = Parent();
+            string command = (string)data["node"];
+            // VS Code may have moved or updated since the launcher was deployed.
+            string current = parent.MainModule.FileName;
+            if (Path.GetFileName(current).Equals(Path.GetFileName(command), StringComparison.OrdinalIgnoreCase)) command = current;
+            string arguments = Quote(Path.Combine(root, "recovery.js")) + " --launch " + parent.Id + " "
+                + Quote(parent.StartTime.ToUniversalTime().ToFileTimeUtc().ToString());
             foreach (string arg in args) arguments += " " + Quote(arg);
             job = Job();
             // Enroll this bootstrap before starting children: descendants inherit
             // the job, with no race between starting and enrolling a child.
             if (!AssignProcessToJobObject(job, Process.GetCurrentProcess().Handle)) throw new Exception();
             var start = new ProcessStartInfo(command, arguments);
+            start.EnvironmentVariables["ELECTRON_RUN_AS_NODE"] = "1";
+            start.EnvironmentVariables["CODEX_SWITCH_PARENT_CREATED"] = new DateTimeOffset(parent.StartTime.ToUniversalTime()).ToUnixTimeMilliseconds().ToString();
             start.UseShellExecute = false; start.CreateNoWindow = true;
             start.RedirectStandardInput = true; start.RedirectStandardOutput = true; start.RedirectStandardError = true;
             using (var child = Process.Start(start)) {

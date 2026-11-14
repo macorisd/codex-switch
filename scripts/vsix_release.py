@@ -123,6 +123,13 @@ def verify_vsix(content, tag):
                     raise ValueError('VSIX is missing workspace isolation support')
             if '*' not in manifest.get('activationEvents', []):
                 raise ValueError('Workspace isolation requires early activation')
+        if tuple(map(int, manifest['version'].split('.'))) >= (0, 5, 1):
+            for name in ('extension/recovery.js', 'extension/backend/model_defaults.py',
+                         'extension/node_modules/jsonc-parser/lib/umd/main.js'):
+                if name not in files:
+                    raise ValueError('VSIX is missing lifecycle recovery support')
+            if manifest.get('scripts', {}).get('vscode:uninstall') != 'node ./recovery.js':
+                raise ValueError('VSIX is missing its uninstall hook')
 
 
 def checksum(content, name):

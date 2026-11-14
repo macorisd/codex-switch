@@ -218,16 +218,24 @@ def launcher_path():
 
 
 def managed_launcher(value):
-    return (value and Path(value).parent == s.ROOT and
+    return (value and Path(value).parent.name == 'provider-switcher' and
             re.fullmatch(r'codex-window(?:-[a-f0-9]{12})?(?:\.exe)?', Path(value).name) is not None)
 
 
-def install_launcher():
+def install_launcher(node=None):
     # Atomic updates keep previous launchers usable while another window starts.
     target = s.ROOT / 'window_launcher.py'
     content = (s.SOURCE / 'window_launcher.py').read_bytes()
     if not target.exists() or target.read_bytes() != content:
         s.atomic(target, content)
+    s.atomic(s.ROOT / 'model_defaults.py', (s.SOURCE / 'model_defaults.py').read_bytes())
+    recovery = s.SOURCE.parent / 'recovery.js'
+    s.atomic(s.ROOT / 'recovery.js', recovery.read_bytes())
+    vendor = s.SOURCE.parent / 'node_modules/jsonc-parser/lib/umd'
+    for source in vendor.rglob('*.js'):
+        destination = s.ROOT / 'jsonc-parser' / source.relative_to(vendor)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        s.atomic(destination, source.read_bytes())
     launcher = launcher_path()
     if sys.platform == 'win32':
         source = s.SOURCE / 'window_launcher.cs'
@@ -253,7 +261,17 @@ def install_launcher():
         finally:
             output.unlink(missing_ok=True)
     else:
-        script = '#!/bin/sh\nexec ' + shlex.quote(str(s.PYTHON)) + ' ' + shlex.quote(str(target)) + ' "$CODEX_SWITCH_BINDING" "$@"\n'
+        # exec retains the extension host as Node's parent. Fallback does not
+        # invoke Python or depend on files in the installed extension directory.
+        runtime = str(node or shutil.which('node'))
+        script = ('#!/bin/sh\nruntime=' + shlex.quote(runtime) + '\n'
+            'if [ -L "/proc/$PPID/exe" ]; then\n'
+            '  current=$(readlink "/proc/$PPID/exe")\n'
+            'else\n  current=$(ps -p "$PPID" -o comm=)\nfi\n'
+            'if [ "${current##*/}" = ' + shlex.quote(Path(runtime).name) + ' ] && [ -x "$current" ]; then\n'
+            '  runtime=$current\nfi\n'
+            'ELECTRON_RUN_AS_NODE=1 exec "$runtime" ' + shlex.quote(str(s.ROOT / 'recovery.js'))
+            + ' --launch "$PPID" "" "$@"\n')
         if not launcher.exists() or launcher.read_text() != script:
             s.atomic(launcher, script)
         launcher.chmod(0o700)
@@ -279,11 +297,13 @@ def prepare(request):
             if not s.STATE.exists():
                 s.atomic(s.STATE, json.dumps(s.normalized_chatgpt_values(s.captured_values(text))))
             s.switch()
-    launcher = install_launcher()
+        import model_defaults
+        model_defaults.import_legacy()
+    launcher = install_launcher(request.get('node'))
     configured = request.get('configuredCommand')
     original_path = s.ROOT / 'original-cli.json'
-    if configured and not managed_launcher(configured):
-        s.atomic(original_path, json.dumps({'command': configured}))
+    if not managed_launcher(configured):
+        s.atomic(original_path, json.dumps({'command': configured} if configured else {}))
     if request.get('resetCommand'):
         s.atomic(original_path, json.dumps({}))
     original = read(original_path, {}).get('command')
@@ -294,9 +314,13 @@ def prepare(request):
         raise ValueError('Recursive Codex launcher')
     if not shutil.which(command):
         raise ValueError('The saved Codex executable is unavailable')
+    recovery = read(s.ROOT / 'recovery.json', {})
+    recovery.update(node=request.get('node') or shutil.which('node'), command=original,
+                    bundled=request['command'], launcher=str(launcher))
+    s.atomic(s.ROOT / 'recovery.json', json.dumps(recovery))
     window = window_directory(request['window'])
     binding = {'workspace': workspace, 'nonce': request['window'], 'ownerPid': request['ownerPid'],
-        'profile': tomllib.loads(global_text()).get('profile'),
+        'profile': tomllib.loads(global_text()).get('profile'), 'config': str(s.CONFIG),
         'command': command, 'python': str(s.PYTHON), 'launcher': str(s.ROOT / 'window_launcher.py'),
         'cwd': request['cwd'], 'args': arguments(selected), 'provider': selected['provider'],
         'revision': revision(selected), 'providerRevision': provider_revision(selected)}
@@ -308,7 +332,8 @@ def prepare(request):
     owners = s.ROOT / 'owners'
     owners.mkdir(exist_ok=True)
     s.atomic(owners / (str(request['ownerPid']) + '.json'), json.dumps({
-        'binding': str(window / 'binding.json'), 'ownerStart': process_identity(request['ownerPid'])}))
+        'binding': str(window / 'binding.json'), 'ownerStart': process_identity(request['ownerPid']),
+        'pid': request['ownerPid'], 'state': 'ready'}))
     return {'launcher': str(launcher), 'binding': str(window / 'binding.json')}
 
 

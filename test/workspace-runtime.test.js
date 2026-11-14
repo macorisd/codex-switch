@@ -2,9 +2,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const fs = require('node:fs');
+const os = require('node:os');
+const recovery = require('../recovery');
 const { WorkspaceRuntime, identity } = require('../workspace-runtime');
 
-function harness({ file, folders = ['file:///project-a'], session = 'window-a', custom, fail = false, logUri } = {}) {
+function harness({ file, folders = ['file:///project-a'], session = 'window-a', custom, fail = false, logUri, lifecycleRoot } = {}) {
   const calls = [], commands = [], values = new Map();
   let executable = custom;
   const uri = text => ({ toString: () => text, scheme: 'file', fsPath: text.slice(7) });
@@ -14,7 +17,7 @@ function harness({ file, folders = ['file:///project-a'], session = 'window-a', 
     workspace: { workspaceFile: file ? uri(file) : undefined,
       workspaceFolders: folders.map(text => ({ uri: uri(text) })),
       getConfiguration: section => { assert.equal(section, 'chatgpt'); return {
-        get: () => executable, update: async (key, value, target) => {
+        get: () => executable, inspect: () => ({ globalValue: executable }), update: async (key, value, target) => {
           assert.equal(key, 'cliExecutable'); assert.equal(target, 1); executable = value;
         },
       }; },
@@ -23,14 +26,25 @@ function harness({ file, folders = ['file:///project-a'], session = 'window-a', 
   };
   const context = { logUri: logUri ? uri(logUri) : undefined,
     workspaceState: { get: key => values.get(key), update: async (key, value) => values.set(key, value) } };
+  if (lifecycleRoot) {
+    context.extensionPath = __dirname;
+    context.globalStorageUri = { fsPath: path.join(lifecycleRoot, 'User/globalStorage/codex-switch') };
+  }
   let runtime;
   const request = async value => {
     calls.push(value);
     if (fail) throw new Error('private backend failure');
-    if (value.action === 'prepareWindow') return { launcher: path.join('/runtime', 'launcher'), binding: runtime.binding };
+    if (value.action === 'prepareWindow') {
+      const launcher = lifecycleRoot ? path.join(lifecycleRoot, 'codex-window') : path.join('/runtime', 'launcher');
+      if (lifecycleRoot) {
+        recovery.atomic(path.join(lifecycleRoot, 'recovery.json'), { ...recovery.read(path.join(lifecycleRoot, 'recovery.json')), launcher });
+        recovery.atomic(runtime.owner, { ...recovery.read(runtime.owner), state: 'ready' });
+      }
+      return { launcher, binding: runtime.binding };
+    }
     return { provider: 'deepseek', verified: true, reloadRequired: false };
   };
-  runtime = new WorkspaceRuntime(vscode, context, request, '/runtime');
+  runtime = new WorkspaceRuntime(vscode, context, request, lifecycleRoot || '/runtime');
   return { runtime, context, vscode, values, calls, commands, executable: () => executable };
 }
 
@@ -94,4 +108,80 @@ test('reloading rotates the extension session but retains only the owning workbe
   const other = harness({ session: 'other-session', logUri: 'file:///logs/run/window3/exthost/extension' });
   assert.equal(first.runtime.pendingKey, reloaded.runtime.pendingKey);
   assert.notEqual(first.runtime.pendingKey, other.runtime.pendingKey);
+});
+
+test('shutdown restores the original CLI only after the last owning activation releases it', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'codex lifecycle '));
+  const root = path.join(directory, 'provider-switcher');
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.mock.method(recovery, 'register', () => {});
+  const h = harness({ custom: '/original custom codex', lifecycleRoot: root });
+  assert.equal(recovery.read(h.runtime.owner).state, 'preparing');
+  h.runtime.prepared = h.runtime.initialize();
+  await h.runtime.prepared;
+  assert.equal(h.runtime.error, false);
+  // Use a real, distinct live PID and its creation identity.
+  const child = require('node:child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { windowsHide: true });
+  t.after(() => child.kill());
+  const otherOwner = path.join(root, 'owners', `${child.pid}.json`);
+  recovery.atomic(otherOwner, { pid: child.pid, binding: 'other-window', state: 'ready', ownerStart: recovery.identity(child.pid) });
+  await h.runtime.release();
+  assert.equal(h.executable(), path.join(root, 'codex-window'));
+  fs.rmSync(otherOwner);
+  await h.runtime.release();
+  assert.equal(h.executable(), '/original custom codex');
+});
+
+test('shutdown preserves a newer user CLI choice and failed setup remains explicitly owned', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'codex lifecycle '));
+  const root = path.join(directory, 'provider-switcher');
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.mock.method(recovery, 'register', () => {});
+  const h = harness({ lifecycleRoot: root });
+  h.runtime.prepared = h.runtime.initialize();
+  await h.runtime.prepared;
+  await h.vscode.workspace.getConfiguration('chatgpt').update('cliExecutable', '/new user choice', 1);
+  await h.runtime.release();
+  assert.equal(h.executable(), '/new user choice');
+  const failed = harness({ lifecycleRoot: root, fail: true });
+  failed.runtime.prepared = failed.runtime.initialize();
+  await failed.runtime.prepared;
+  assert.equal(recovery.read(failed.runtime.owner).state, 'error');
+  assert.equal((await failed.runtime.status()).verified, false);
+});
+
+test('a canceled shutdown API restores only the still-owned JSONC setting', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'codex shutdown '));
+  const root = path.join(directory, 'provider-switcher');
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.mock.method(recovery, 'register', () => {});
+  const h = harness({ lifecycleRoot: root });
+  h.runtime.prepared = h.runtime.initialize();
+  await h.runtime.prepared;
+  const record = recovery.read(path.join(root, 'recovery.json'));
+  fs.mkdirSync(path.dirname(record.settings), { recursive: true });
+  fs.writeFileSync(record.settings, `// Retain comments\n${JSON.stringify({ 'chatgpt.cliExecutable': record.launcher, preserved: 1 })}`);
+  const get = h.vscode.workspace.getConfiguration;
+  t.mock.method(h.vscode.workspace, 'getConfiguration', section => ({ ...get(section),
+    update: async () => { throw Error('Canceled'); } }));
+  await h.runtime.release();
+  const text = fs.readFileSync(record.settings, 'utf8');
+  assert.match(text, /Retain comments/);
+  assert.match(text, /preserved/);
+  assert.doesNotMatch(text, /cliExecutable/);
+});
+
+test('an unbound early launch schedules one recovery reload after successful activation', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'codex early start '));
+  const root = path.join(directory, 'provider-switcher');
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.mock.method(recovery, 'register', () => {});
+  const h = harness({ lifecycleRoot: root });
+  recovery.atomic(path.join(root, 'owners', `${process.pid}-bypass.json`), { pid: process.pid });
+  h.runtime.prepared = h.runtime.initialize();
+  await h.runtime.prepared;
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(h.commands, ['workbench.action.reloadWindow']);
+  assert.equal(h.values.size, 0);
+  assert.equal(fs.existsSync(path.join(root, 'owners', `${process.pid}-bypass.json`)), false);
 });

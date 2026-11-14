@@ -245,10 +245,30 @@ group. There are no runtime downloads or additional package-install commands.
 Existing custom Codex executables are remembered and passed through. If a custom
 path disappears, **Use bundled Codex** (also in the Command Palette) explicitly
 selects the executable supplied by the official extension. Python failures need
-`codexSwitch.pythonPath` corrected before reloading. Before disabling or removing
-Codex Switch, clear `chatgpt.cliExecutable` in settings; otherwise its managed
-launcher correctly refuses an unbound window rather than borrowing a different
-workspace's provider. Configuration backups and credentials can be kept.
+`codexSwitch.pythonPath` corrected before reloading.
+
+Each activation claims its own extension-host process before asynchronous setup.
+An owned setup failure stays an explicit error. An invocation without an active
+owner runs the original custom CLI, or the current official Codex binary from the
+IDE's appended PATH. If that invocation races eager activation, successful setup
+reloads the window before confirming its workspace selection.
+
+On disable or shutdown the last owning activation conditionally restores the
+previous executable setting through VS Code's configuration API, with conditional
+JSONC-file recovery if shutdown has already closed that API. Another enabled
+window or profile keeps the shared launcher available. The official uninstall
+hook provides final conditional settings cleanup. Recovery code, JSONC parsing
+and bootstrap files are deployed automatically from the VSIX outside the extension
+directory and use VS Code's Node runtime, so outstanding references remain usable
+after removal or a crash. A small installation index under `~/.codex-switch`
+records runtime locations for the uninstall hook, including custom CODEX_HOME
+directories. It contains no credentials. Launchers and saved preferences remain
+available for delayed references and future reinstallation.
+
+Native API-model writes to shared defaults are journaled with their previous
+scalar values and table/provider guards. Recovery restores only still-matching
+owned values, retaining unrelated TOML and subsequent user changes. Credentials,
+sign-in and conversations are preserved throughout disable and uninstall.
 
 Switching reloads only the requesting window, then invokes the official new-chat
 command without sending a message. Pending new-chat requests use the workbench's

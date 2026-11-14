@@ -51,8 +51,11 @@ Runtime paths honor CODEX_HOME. See the repository installation requirements.
 An existing custom Codex executable is preserved. If it becomes unavailable,
 **Use bundled Codex** restores the executable shipped with the official extension.
 If Python cannot start, first correct `codexSwitch.pythonPath`, then reload.
-Before disabling or removing Codex Switch, clear `chatgpt.cliExecutable` in VS Code
-settings to restore the official extension's normal launcher.
+Disabling or removing Codex Switch restores the previous executable setting when
+the last enabled window releases it. Other windows can keep their workspace
+providers. A retained recovery launcher starts ordinary Codex in unbound windows,
+including after an interrupted shutdown, without Python or the removed extension.
+Keys, sign-in, conversations and workspace choices are retained.
 
 [Providers, version history and downloads](https://github.com/macorisd/codex-switch)
 

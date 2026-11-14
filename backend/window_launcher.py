@@ -33,6 +33,12 @@ class ModelChanges:
         elif method == 'thread/settings/update':
             info.update(model=params.get('model'), effort=params.get('reasoningEffort'))
         elif method in ('config/batchWrite', 'config/value/write'):
+            if self.binding.get('config'):
+                try:
+                    import model_defaults
+                    info['defaults'] = model_defaults.capture(self.binding, params)
+                except (OSError, ValueError):
+                    pass
             edits = params.get('edits', []) if method == 'config/batchWrite' else [params]
             for edit in edits:
                 key = edit.get('keyPath', '')
@@ -42,7 +48,7 @@ class ModelChanges:
                         if key.startswith(prefix): key = key[len(prefix):]
                 if key == 'model': info['model'] = edit.get('value')
                 if key == 'model_reasoning_effort': info['effort'] = edit.get('value')
-            if 'model' not in info:
+            if 'model' not in info and not info.get('defaults'):
                 return
         else:
             return
@@ -54,6 +60,12 @@ class ModelChanges:
         info = self.pending.pop(value.get('id'), None)
         if not info or value.get('error') or 'result' not in value: return
         result = value['result'] or {}
+        if info.get('defaults'):
+            try:
+                import model_defaults
+                model_defaults.accepted(self.binding, info['defaults'])
+            except (OSError, ValueError):
+                pass
         if info['method'] in ('thread/start', 'thread/resume', 'thread/read', 'thread/fork'):
             thread = result.get('thread') or {}
             if thread.get('id') and thread.get('modelProvider'):
