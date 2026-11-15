@@ -186,3 +186,17 @@ test('repeated fresh activations with legacy early-start markers never reload th
     assert.equal(h.values.size, 0);
   }
 });
+
+test('startup publishes its provisional claim before querying OS process identity', t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'codex initial claim '));
+  const root = path.join(directory, 'provider-switcher');
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.mock.method(recovery, 'register', () => {});
+  t.mock.method(recovery, 'identity', () => { throw Error('Slow OS identity lookup must follow the claim'); });
+  const h = harness({ lifecycleRoot: root });
+  const owner = recovery.read(h.runtime.owner);
+  assert.equal(owner.state, 'preparing');
+  assert.equal(owner.ownerStart, null);
+  assert.equal(owner.pid, process.pid);
+  assert.equal(owner.binding, h.runtime.binding);
+});
