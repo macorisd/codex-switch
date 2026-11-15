@@ -65,6 +65,15 @@ function identity(pid) {
   return null;
 }
 
+function possiblySameProcess(pid, started) {
+  if (!alive(pid)) return false;
+  if (!started) return true;
+  const observed = identity(pid);
+  // A bounded OS lookup can fail under load. Unknown identity cannot authorize
+  // deleting another live process's lock or retiring its pending model writes.
+  return !observed || observed === started;
+}
+
 function managed(command) {
   return typeof command === 'string' && /(?:^|[/\\])provider-switcher[/\\]codex-window(?:-[a-f0-9]{12})?(?:\.exe)?$/.test(command);
 }
@@ -79,7 +88,7 @@ async function locked(root, action) {
     const location = path.join(directory, file);
     const owner = read(location);
     if (!owner.pid) return [];
-    if (!alive(owner.pid) || (owner.ownerStart && identity(owner.pid) !== owner.ownerStart)) {
+    if (!possiblySameProcess(owner.pid, owner.ownerStart)) {
       remove(location);
       return [];
     }
@@ -109,8 +118,7 @@ function hasOwners(root, except) {
   return files.some(file => {
     if (!/^\d+\.json$/.test(file)) return false;
     const record = read(path.join(root, 'owners', file));
-    return record.binding !== except && record.state !== 'inactive' && alive(record.pid)
-      && (!record.ownerStart || identity(record.pid) === record.ownerStart);
+    return record.binding !== except && record.state !== 'inactive' && possiblySameProcess(record.pid, record.ownerStart);
   });
 }
 
@@ -120,7 +128,7 @@ function hasClients(root) {
   try { windows = fs.readdirSync(directory); } catch { return false; }
   return windows.some(window => {
     const receipt = read(path.join(directory, window, 'runtime.json'));
-    return alive(receipt.pid) && receipt.processStart && identity(receipt.pid) === receipt.processStart;
+    return receipt.processStart && possiblySameProcess(receipt.pid, receipt.processStart);
   });
 }
 
@@ -320,7 +328,7 @@ async function retire(root, intervalMs = 5000) {
   const self = { pid: process.pid, started: identity(process.pid) };
   const elected = await locked(root, () => {
     const previous = read(file);
-    if (previous.started && identity(previous.pid) === previous.started) return false;
+    if (previous.started && possiblySameProcess(previous.pid, previous.started)) return false;
     atomic(file, self);
     return true;
   });

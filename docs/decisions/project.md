@@ -521,6 +521,8 @@ Source: lifecycle proposal approved explicitly by the user, 2026-11-14.
   A retained independent cleanup monitor retires final owned model writes after
   the last owner and client exit, including forced shutdown. It must not require
   an installed extension, Python or a later managed executable invocation.
+  An unavailable OS creation-identity lookup must retain live ownership and
+  locks until verified, rather than authorize cleanup. It never confirms a client.
 - The retained launcher and recovery code must work without Python and without
   the removed extension directory. Resolve the current official Codex binary
   from the invoking official extension's PATH, avoiding a pinned extension version.

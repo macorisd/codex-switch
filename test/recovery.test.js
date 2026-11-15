@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const recovery = require('../recovery');
+const vm = require('node:vm');
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex recovery '));
@@ -53,6 +54,24 @@ test('independent retirement waits for a final live client and restores its late
   await retiring;
   assert.equal(fs.readFileSync(config, 'utf8'), 'model = "gpt-model"\n');
   assert.equal(fs.existsSync(path.join(root, 'retirement.json')), false);
+});
+
+test('an unavailable OS identity lookup cannot retire a live owner or client', t => {
+  const root = fixture(t), module = { exports: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../recovery.js'), 'utf8'), {
+    module, __dirname, process: { platform: 'win32', pid: process.pid, env: {}, kill: process.kill.bind(process) },
+    require: name => name === 'node:child_process' ? { spawnSync: () => ({ status: 1 }) } : require(name),
+  });
+  const unknown = module.exports;
+  recovery.atomic(path.join(root, 'owners', `${process.pid}.json`), {
+    pid: process.pid, ownerStart: 'known-creation-identity', binding: 'this-window', state: 'ready',
+  });
+  recovery.atomic(path.join(root, 'windows/window-a/runtime.json'), {
+    pid: process.pid, processStart: 'known-creation-identity',
+  });
+  assert.equal(unknown.identity(process.pid), null);
+  assert.equal(unknown.hasOwners(root), true);
+  assert.equal(unknown.hasClients(root), true);
 });
 
 test('default and named profiles resolve the same application settings file', () => {
