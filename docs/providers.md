@@ -249,9 +249,10 @@ selects the executable supplied by the official extension. Python failures need
 
 Each activation claims its own extension-host process before asynchronous setup.
 An owned setup failure stays an explicit error. An invocation without an active
-owner runs the original custom CLI, or the current official Codex binary from the
-IDE's appended PATH. If that invocation races eager activation, successful setup
-reloads the window before confirming its workspace selection.
+owner waits briefly for that host's eager activation, then runs the original
+custom CLI or the current official Codex binary from the IDE's appended PATH if
+the activation remains absent. Startup never reloads the workbench. A client
+that started unbound stays explicitly unconfirmed until the user reloads it.
 
 On disable or shutdown the last owning activation conditionally restores the
 previous executable setting through VS Code's configuration API, with conditional

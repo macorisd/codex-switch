@@ -171,17 +171,18 @@ test('a canceled shutdown API restores only the still-owned JSONC setting', asyn
   assert.doesNotMatch(text, /cliExecutable/);
 });
 
-test('an unbound early launch schedules one recovery reload after successful activation', async t => {
+test('repeated fresh activations with legacy early-start markers never reload the workbench', async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'codex early start '));
   const root = path.join(directory, 'provider-switcher');
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   t.mock.method(recovery, 'register', () => {});
-  const h = harness({ lifecycleRoot: root });
-  recovery.atomic(path.join(root, 'owners', `${process.pid}-bypass.json`), { pid: process.pid });
-  h.runtime.prepared = h.runtime.initialize();
-  await h.runtime.prepared;
-  await new Promise(resolve => setTimeout(resolve, 10));
-  assert.deepEqual(h.commands, ['workbench.action.reloadWindow']);
-  assert.equal(h.values.size, 0);
-  assert.equal(fs.existsSync(path.join(root, 'owners', `${process.pid}-bypass.json`)), false);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const h = harness({ lifecycleRoot: root, folders: [`file:///new-workspace-${attempt}`] });
+    recovery.atomic(path.join(root, 'owners', `${process.pid}-bypass.json`), { pid: process.pid });
+    h.runtime.prepared = h.runtime.initialize();
+    await h.runtime.prepared;
+    await new Promise(resolve => setTimeout(resolve, 10));
+    assert.deepEqual(h.commands, []);
+    assert.equal(h.values.size, 0);
+  }
 });

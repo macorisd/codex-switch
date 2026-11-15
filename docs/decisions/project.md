@@ -496,8 +496,12 @@ Source: lifecycle proposal approved explicitly by the user, 2026-11-14.
 - Register each activation synchronously before asynchronous setup. An owned
   activation that is preparing or has failed must never silently substitute a
   different provider. An invocation without an owning activation delegates to
-  ordinary Codex. A launch that races eager activation must trigger recovery
-  reload before the workspace can claim a confirmed selection.
+  ordinary Codex after a bounded startup wait for its own activation claim.
+  Opening or restoring a workspace must never automatically reload the window.
+  Resolve startup ordering in the launcher and publish the provisional claim
+  before subprocesses or asynchronous setup. A client that starts unbound stays
+  explicitly unconfirmed until the user chooses the existing reload action.
+  Source: reported infinite workspace-startup reload loop, 2026-11-15.
 - The retained launcher and recovery code must work without Python and without
   the removed extension directory. Resolve the current official Codex binary
   from the invoking official extension's PATH, avoiding a pinned extension version.

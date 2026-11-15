@@ -104,6 +104,12 @@ class WorkspaceTests(unittest.TestCase):
         _, _, _, state = self.client(preparing=True)
         self.assertEqual(state['provider'], 'fixture-api')
 
+    def test_launcher_started_before_activation_waits_for_its_own_workspace_claim(self):
+        s.atomic(ws.directory() / 'selection.json', json.dumps({'provider': 'fixture-api', 'model': 'fixture-model'}))
+        _, _, _, state = self.client(late_claim=True)
+        self.assertTrue(state['verified'])
+        self.assertEqual(state['provider'], 'fixture-api')
+
     def test_upgrade_imports_only_a_matching_accepted_api_model_with_a_saved_binding(self):
         import model_defaults
         prepared = self.prepare()
@@ -208,7 +214,7 @@ class WorkspaceTests(unittest.TestCase):
             str(s.SOURCE.parent / 'recovery.js'), str(s.ROOT)], check=True, timeout=15)
         self.assertEqual(tomllib.loads(s.CONFIG.read_text())['model'], 'gpt-model')
 
-    def client(self, nonce='a' * 32, provider=None, early=False, send_initialized=True, initialize_id=1, preparing=False):
+    def client(self, nonce='a' * 32, provider=None, early=False, send_initialized=True, initialize_id=1, preparing=False, late_claim=False):
         prepared = self.prepare(nonce)
         binding = Path(prepared['binding'])
         spec = json.loads(binding.read_text())
@@ -216,6 +222,12 @@ class WorkspaceTests(unittest.TestCase):
         if provider:
             spec['args'] += ['-c', 'model_provider=' + json.dumps(provider)]
         s.atomic(binding, json.dumps(spec))
+        if late_claim:
+            owner = s.ROOT / 'owners' / (str(os.getpid()) + '.json')
+            record = json.loads(owner.read_text())
+            owner.unlink()
+            threading.Timer(.5, lambda: s.atomic(owner, json.dumps({**record, 'state': 'preparing'}))).start()
+            threading.Timer(.9, lambda: s.atomic(owner, json.dumps(record))).start()
         if preparing:
             owner = s.ROOT / 'owners' / (str(os.getpid()) + '.json')
             record = json.loads(owner.read_text())
