@@ -40,8 +40,8 @@ unconfirmed or unapplied selection offers **Reload this window**, without markin
 the saved preference as active.
 
 Codex Switch supports VS Code desktop on Windows, macOS and Linux (x64/ARM64),
-with Python 3.11+ and a compatible Codex installation. Windows uses `python`;
-macOS/Linux use `python3`. Set `codexSwitch.pythonPath` to select another
+with Python 3.11+ and a compatible Codex installation. A compatible interpreter
+is discovered automatically. Set `codexSwitch.pythonPath` to select another
 interpreter, including a virtual environment.
 
 Credential storage is ready to use: Windows retains DPAPI-encrypted keys, macOS
@@ -52,8 +52,9 @@ a desktop session with a Secret Service vault, such as GNOME Keyring or KWallet.
 If no secure vault is available, saving fails safely instead of using plaintext.
 
 Runtime state stays in `~/.codex/provider-switcher`, or under `CODEX_HOME` when
-set, outside the repository. With SSH, WSL or containers, the UI extension still
-manages the local desktop's Codex account, not a remote machine's account.
+set, outside the repository. For SSH, WSL and containers, install Codex Switch
+alongside Codex on the remote host. It uses that host's account, Python and secure
+vault. Authentication and API keys are never copied between hosts automatically.
 
 ## Version History
 
@@ -62,6 +63,7 @@ the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
+| 0.5.4 | Use the correct Codex account and workspace provider on remote hosts, discover compatible Python interpreters, and keep local and remote executable paths independent. |
 | [0.5.3](https://github.com/macorisd/codex-switch/releases/tag/v0.5.3) | Prevent repeated window reloads when opening a workspace, apply its provider when Codex starts before the selector, and blend the supplied pixel art into the banner. |
 | [0.5.2](https://github.com/macorisd/codex-switch/releases/tag/v0.5.2) | Fit short model lists to their options, unify multi-provider card widths and labels, and add percentage colors and time markers to ChatGPT usage bars. |
 | [0.5.1](https://github.com/macorisd/codex-switch/releases/tag/v0.5.1) | Keep Codex usable when Codex Switch is disabled or removed, restore owned settings conditionally and retain workspace choices and credentials. |

@@ -66,8 +66,7 @@ function identity(pid) {
 }
 
 function managed(command) {
-  return typeof command === 'string' && path.basename(path.dirname(command)) === 'provider-switcher'
-    && /^codex-window(?:-[a-f0-9]{12})?(?:\.exe)?$/.test(path.basename(command));
+  return typeof command === 'string' && /(?:^|[/\\])provider-switcher[/\\]codex-window(?:-[a-f0-9]{12})?(?:\.exe)?$/.test(command);
 }
 
 async function locked(root, action) {
@@ -316,6 +315,44 @@ async function launch(root, pid, started, args) {
   });
 }
 
+async function retire(root, intervalMs = 5000) {
+  const file = path.join(root, 'retirement.json');
+  const self = { pid: process.pid, started: identity(process.pid) };
+  const elected = await locked(root, () => {
+    const previous = read(file);
+    if (previous.started && identity(previous.pid) === previous.started) return false;
+    atomic(file, self);
+    return true;
+  });
+  if (!elected) return;
+  // Independent of the IDE and native bootstrap jobs. A final acknowledged
+  // model write can finish after deactivate or a forced host shutdown.
+  try {
+    for (;;) {
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+      if (hasOwners(root) || hasClients(root)) continue;
+      const finished = await locked(root, () => {
+        if (hasOwners(root) || hasClients(root)) return false;
+        restoreModels(root);
+        restoreSettings(read(path.join(root, 'recovery.json')));
+        return true;
+      });
+      if (finished) return;
+    }
+  } finally {
+    if (read(file).pid === self.pid) remove(file);
+  }
+}
+
+function monitorRetirement(root) {
+  const child = spawn(process.execPath, [path.join(root, 'recovery.js'), '--retire'], {
+    detached: true, stdio: 'ignore', windowsHide: true,
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+  });
+  child.on('error', () => {});
+  child.unref();
+}
+
 if (require.main === module) {
   const [mode, ...args] = process.argv.slice(2);
   if (mode === '--guard') {
@@ -326,7 +363,7 @@ if (require.main === module) {
       if (!completed) { try { process.kill(-Number(args[0]), 'SIGTERM'); } catch {} }
     });
   } else {
-    const action = mode === '--uninstall' || mode === '--type=extension-post-uninstall'
+    const action = mode === '--retire' ? retire(__dirname) : mode === '--uninstall' || mode === '--type=extension-post-uninstall'
       ? uninstall() : launch(__dirname, Number(args[0]), args[1], args.slice(2));
     action.catch(() => {
       console.error('Codex Switch could not prepare Codex. Open Codex Switch to recover its configuration.');
@@ -336,4 +373,4 @@ if (require.main === module) {
 }
 
 module.exports = { read, atomic, remove, managed, locked, hasOwners, hasClients, register, settingsPath,
-  restoreSettings, restoreModels, uninstall, launch, identity };
+  restoreSettings, restoreModels, uninstall, launch, identity, retire, monitorRetirement };

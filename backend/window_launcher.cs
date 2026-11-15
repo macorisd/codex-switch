@@ -49,9 +49,9 @@ class WindowLauncher {
         });
         thread.IsBackground = true; thread.Start(); return thread;
     }
-    static Process Parent() {
+    static Process Parent(Process process) {
         IntPtr[] info = new IntPtr[6]; int length;
-        if (NtQueryInformationProcess(Process.GetCurrentProcess().Handle, 0, info, info.Length * IntPtr.Size, out length) != 0) throw new Exception();
+        if (NtQueryInformationProcess(process.Handle, 0, info, info.Length * IntPtr.Size, out length) != 0) throw new Exception();
         return Process.GetProcessById(info[5].ToInt32());
     }
     static int Main(string[] args) {
@@ -59,7 +59,13 @@ class WindowLauncher {
         try {
             string root = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
             var data = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(Path.Combine(root, "recovery.json")));
-            var parent = Parent();
+            var directParent = Parent(Process.GetCurrentProcess());
+            var parent = directParent;
+            string owner = Environment.GetEnvironmentVariable("CODEX_SWITCH_OWNER");
+            if (!String.IsNullOrEmpty(owner) && owner != parent.Id.ToString()) {
+                parent = Parent(directParent);
+                if (owner != parent.Id.ToString()) throw new Exception();
+            }
             string command = (string)data["node"];
             // VS Code may have moved or updated since the launcher was deployed.
             string current = parent.MainModule.FileName;
@@ -71,6 +77,10 @@ class WindowLauncher {
             // Enroll this bootstrap before starting children: descendants inherit
             // the job, with no race between starting and enrolling a child.
             if (!AssignProcessToJobObject(job, Process.GetCurrentProcess().Handle)) throw new Exception();
+            // The IDE may kill its direct Node entry. Closing this job then
+            // also closes every descendant's inherited protocol pipe.
+            var watcher = new Thread(() => { try { directParent.WaitForExit(); } catch {} Environment.Exit(1); });
+            watcher.IsBackground = true; watcher.Start();
             var start = new ProcessStartInfo(command, arguments);
             start.EnvironmentVariables["ELECTRON_RUN_AS_NODE"] = "1";
             start.EnvironmentVariables["CODEX_SWITCH_PARENT_CREATED"] = new DateTimeOffset(parent.StartTime.ToUniversalTime()).ToUnixTimeMilliseconds().ToString();

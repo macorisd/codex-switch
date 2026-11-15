@@ -6,13 +6,14 @@ const fs = require('node:fs');
 const os = require('node:os');
 const recovery = require('../recovery');
 const { WorkspaceRuntime, identity } = require('../workspace-runtime');
+test.beforeEach(t => t.mock.method(require('../codex-spawn'), 'install', () => ({ dispose() {} })));
 
-function harness({ file, folders = ['file:///project-a'], session = 'window-a', custom, fail = false, logUri, lifecycleRoot } = {}) {
+function harness({ file, folders = ['file:///project-a'], session = 'window-a', custom, fail = false, logUri, lifecycleRoot, remoteName } = {}) {
   const calls = [], commands = [], values = new Map();
   let executable = custom;
   const uri = text => ({ toString: () => text, scheme: 'file', fsPath: text.slice(7) });
   const vscode = {
-    env: { sessionId: session }, ConfigurationTarget: { Global: 1 },
+    env: { sessionId: session, remoteName }, ConfigurationTarget: { Global: 1 },
     extensions: { getExtension: () => null },
     workspace: { workspaceFile: file ? uri(file) : undefined,
       workspaceFolders: folders.map(text => ({ uri: uri(text) })),
@@ -75,7 +76,7 @@ test('every backend request carries the same window/workspace, preserving custom
   await h.runtime.request({ action: 'api', provider: 'deepseek', operation: 'select' });
   await h.runtime.status();
   assert.equal(h.calls[0].configuredCommand, '/my/custom codex');
-  assert.equal(h.executable(), path.join('/runtime', 'launcher'));
+  assert.equal(h.executable(), '/my/custom codex');
   for (const call of h.calls) {
     assert.equal(call.workspace, h.runtime.workspace);
     assert.equal(call.window, h.runtime.window);
@@ -110,7 +111,7 @@ test('reloading rotates the extension session but retains only the owning workbe
   assert.notEqual(first.runtime.pendingKey, other.runtime.pendingKey);
 });
 
-test('shutdown restores the original CLI only after the last owning activation releases it', async t => {
+test('activation and shutdown preserve custom application CLI across other owning windows', async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'codex lifecycle '));
   const root = path.join(directory, 'provider-switcher');
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
@@ -126,7 +127,7 @@ test('shutdown restores the original CLI only after the last owning activation r
   const otherOwner = path.join(root, 'owners', `${child.pid}.json`);
   recovery.atomic(otherOwner, { pid: child.pid, binding: 'other-window', state: 'ready', ownerStart: recovery.identity(child.pid) });
   await h.runtime.release();
-  assert.equal(h.executable(), path.join(root, 'codex-window'));
+  assert.equal(h.executable(), '/original custom codex');
   fs.rmSync(otherOwner);
   await h.runtime.release();
   assert.equal(h.executable(), '/original custom codex');
@@ -159,6 +160,10 @@ test('a canceled shutdown API restores only the still-owned JSONC setting', asyn
   h.runtime.prepared = h.runtime.initialize();
   await h.runtime.prepared;
   const record = recovery.read(path.join(root, 'recovery.json'));
+  record.settings = recovery.settingsPath(h.context);
+  record.hadOriginal = false;
+  recovery.atomic(path.join(root, 'recovery.json'), record);
+  await h.vscode.workspace.getConfiguration('chatgpt').update('cliExecutable', record.launcher, 1);
   fs.mkdirSync(path.dirname(record.settings), { recursive: true });
   fs.writeFileSync(record.settings, `// Retain comments\n${JSON.stringify({ 'chatgpt.cliExecutable': record.launcher, preserved: 1 })}`);
   const get = h.vscode.workspace.getConfiguration;
@@ -199,4 +204,20 @@ test('startup publishes its provisional claim before querying OS process identit
   assert.equal(owner.ownerStart, null);
   assert.equal(owner.pid, process.pid);
   assert.equal(owner.binding, h.runtime.binding);
+});
+
+test('a remote host never replaces the local application selector while local migration restores its saved CLI', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'codex host migration '));
+  const root = path.join(directory, 'provider-switcher');
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.mock.method(recovery, 'register', () => {});
+  const legacy = path.join(root, 'codex-window-123456789abc.exe');
+  recovery.atomic(path.join(root, 'recovery.json'), { launcher: legacy, hadOriginal: true, original: '/original/custom' });
+  const remote = harness({ custom: legacy, remoteName: 'ssh-remote', lifecycleRoot: root });
+  await remote.runtime.initialize();
+  assert.equal(remote.executable(), legacy);
+  const local = harness({ custom: legacy, lifecycleRoot: root });
+  await local.runtime.initialize();
+  assert.equal(local.executable(), '/original/custom');
+  assert.equal(local.runtime.error, false);
 });

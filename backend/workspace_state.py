@@ -218,8 +218,7 @@ def launcher_path():
 
 
 def managed_launcher(value):
-    return (value and Path(value).parent.name == 'provider-switcher' and
-            re.fullmatch(r'codex-window(?:-[a-f0-9]{12})?(?:\.exe)?', Path(value).name) is not None)
+    return isinstance(value, str) and re.search(r'(?:^|[/\\])provider-switcher[/\\]codex-window(?:-[a-f0-9]{12})?(?:\.exe)?$', value) is not None
 
 
 def install_launcher(node=None):
@@ -302,11 +301,13 @@ def prepare(request):
     launcher = install_launcher(request.get('node'))
     configured = request.get('configuredCommand')
     original_path = s.ROOT / 'original-cli.json'
-    if not managed_launcher(configured):
-        s.atomic(original_path, json.dumps({'command': configured} if configured else {}))
+    saved_original = read(original_path, {})
+    if not managed_launcher(configured) and configured != saved_original.get('ignoredCommand'):
+        saved_original = {'command': configured} if configured else {}
     if request.get('resetCommand'):
-        s.atomic(original_path, json.dumps({}))
-    original = read(original_path, {}).get('command')
+        saved_original = {'ignoredCommand': saved_original.get('command') if managed_launcher(configured) else configured}
+    s.atomic(original_path, json.dumps(saved_original))
+    original = saved_original.get('command')
     if managed_launcher(original):
         original = None
     command = original or request['command']
@@ -321,7 +322,8 @@ def prepare(request):
     window = window_directory(request['window'])
     binding = {'workspace': workspace, 'nonce': request['window'], 'ownerPid': request['ownerPid'],
         'profile': tomllib.loads(global_text()).get('profile'), 'config': str(s.CONFIG),
-        'command': command, 'python': str(s.PYTHON), 'launcher': str(s.ROOT / 'window_launcher.py'),
+        'command': command, 'ignoredCommand': saved_original.get('ignoredCommand'),
+        'python': str(s.PYTHON), 'launcher': str(s.ROOT / 'window_launcher.py'),
         'cwd': request['cwd'], 'args': arguments(selected), 'provider': selected['provider'],
         'revision': revision(selected), 'providerRevision': provider_revision(selected)}
     s.atomic(window / 'binding.json', json.dumps(binding))

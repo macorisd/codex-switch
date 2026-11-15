@@ -5,6 +5,7 @@ const os = require('node:os');
 const process = require('node:process');
 const codexAccount = require('./codex-account');
 const recovery = require('./recovery');
+const spawnBridge = require('./codex-spawn');
 
 function windowIdentity(vscode, context) {
   // Desktop logUri identifies the workbench window; the exthost suffix can
@@ -42,6 +43,7 @@ class WorkspaceRuntime {
       recovery.atomic(this.owner, { pid: process.pid, binding: this.binding,
         created: Date.now(), ownerStart: null, state: 'preparing' });
       recovery.register(context.extensionPath, root);
+      this.bridge = spawnBridge.install(this.binding, context.extensionPath);
     }
   }
   async initialize(resetCommand = false) {
@@ -55,40 +57,36 @@ class WorkspaceRuntime {
   async prepare(resetCommand) {
     const config = this.vscode.workspace.getConfiguration('chatgpt');
     const configured = config.get('cliExecutable');
-    const originalValue = config.inspect?.('cliExecutable')?.globalValue;
+    const previous = this.lifecycle ? recovery.read(path.join(this.root, 'recovery.json')) : {};
     const installed = await this.request({ action: 'prepareWindow', command: codexAccount.executable(this.vscode),
-      configuredCommand: resetCommand ? null : configured, resetCommand, ownerPid: process.pid, node: process.execPath,
+      configuredCommand: configured, resetCommand, ownerPid: process.pid, node: process.execPath,
       cwd: this.vscode.workspace.workspaceFolders?.find(folder => folder.uri.scheme === 'file')?.uri.fsPath || os.homedir() });
     if (installed.binding !== this.binding) throw new Error('Window binding mismatch');
     const apply = async () => {
-      const previous = this.lifecycle ? recovery.read(path.join(this.root, 'recovery.json')) : {};
-      if (config.get('cliExecutable') !== configured && config.get('cliExecutable') !== installed.launcher) {
+      if (config.get('cliExecutable') !== configured) {
         throw new Error('Codex executable changed during setup');
       }
       if (this.lifecycle) {
-        let original = previous.original, hadOriginal = previous.hadOriginal;
-        if (resetCommand) { original = undefined; hadOriginal = false; }
-        else if (!recovery.managed(configured)) {
-          original = originalValue;
-          hadOriginal = original !== undefined;
-        } else if (hadOriginal === undefined) {
-          // Upgrade from 0.5.0, which saved custom executable choices here.
-          original = recovery.read(path.join(this.root, 'original-cli.json')).command;
-          hadOriginal = Boolean(original);
-        }
         recovery.atomic(path.join(this.root, 'recovery.json'), {
-          ...recovery.read(path.join(this.root, 'recovery.json')), original, hadOriginal,
-          settings: recovery.settingsPath(this.context), extensionPath: this.context.extensionPath,
+          ...recovery.read(path.join(this.root, 'recovery.json')),
+          extensionPath: this.context.extensionPath,
         });
       }
-      if (config.get('cliExecutable') !== installed.launcher) {
-        await config.update('cliExecutable', installed.launcher, this.vscode.ConfigurationTarget.Global);
+      // Only retire an old selector belonging to this local root. Application
+      // settings in a remote window belong to the client, not this filesystem.
+      if (this.lifecycle && !this.vscode.env.remoteName && recovery.managed(configured) &&
+          path.resolve(path.dirname(configured)) === path.resolve(this.root)) {
+        const original = previous.hadOriginal === undefined
+          ? recovery.read(path.join(this.root, 'original-cli.json')).command : previous.original;
+        await config.update('cliExecutable', previous.hadOriginal === false ? undefined : original,
+          this.vscode.ConfigurationTarget.Global);
       }
       this.error = false;
     };
     return this.lifecycle ? recovery.locked(this.root, apply) : apply();
   }
   async release() {
+    this.bridge?.dispose();
     if (!this.lifecycle) return;
     await this.prepared;
     await recovery.locked(this.root, async () => {
@@ -100,7 +98,7 @@ class WorkspaceRuntime {
       if (recovery.hasClients(this.root)) return;
       const record = recovery.read(path.join(this.root, 'recovery.json'));
       const config = this.vscode.workspace.getConfiguration('chatgpt');
-      if (!this.reloading && config.get('cliExecutable') === record.launcher) {
+      if (!this.reloading && !this.vscode.env.remoteName && config.get('cliExecutable') === record.launcher) {
         try {
           await config.update('cliExecutable', record.hadOriginal ? record.original : undefined,
             this.vscode.ConfigurationTarget.Global);

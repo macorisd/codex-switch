@@ -330,9 +330,27 @@ class WorkspaceTests(unittest.TestCase):
                    'configuredCommand': str(self.root / 'missing-custom-cli'),
                    'ownerPid': os.getpid(), 'cwd': str(self.root)}
         with self.assertRaises(ValueError): ws.prepare(request)
-        request.update(configuredCommand=None, resetCommand=True)
+        request.update(resetCommand=True)
         prepared = ws.prepare(request)
         self.assertEqual(json.loads(Path(prepared['binding']).read_text())['command'], sys.executable)
+        request['resetCommand'] = False
+        reopened = ws.prepare(request)
+        binding = json.loads(Path(reopened['binding']).read_text())
+        self.assertEqual(binding['command'], sys.executable)
+        self.assertEqual(binding['ignoredCommand'], request['configuredCommand'])
+
+    def test_legacy_selector_recovery_remembers_the_missing_original_on_reopening(self):
+        self.prepare()
+        missing = str(self.root / 'missing-original-cli')
+        s.atomic(s.ROOT / 'original-cli.json', json.dumps({'command': missing}))
+        legacy = r'C:\Users\example\.codex\provider-switcher\codex-window-123456789abc.exe'
+        request = {'window': 'b' * 32, 'command': sys.executable, 'configuredCommand': legacy,
+                   'resetCommand': True, 'ownerPid': os.getpid(), 'cwd': str(self.root)}
+        prepared = ws.prepare(request)
+        self.assertEqual(json.loads(Path(prepared['binding']).read_text())['ignoredCommand'], missing)
+        request.update(configuredCommand=missing, resetCommand=False)
+        reopened = ws.prepare(request)
+        self.assertEqual(json.loads(Path(reopened['binding']).read_text())['command'], sys.executable)
 
     def test_model_preferences_are_isolated_while_account_metadata_is_shared(self):
         data = {'models': [{'id': 'first', 'efforts': []}, {'id': 'second', 'efforts': []}],

@@ -2,7 +2,7 @@
   "name": "codex-provider-switch",
   "displayName": "Codex Switch",
   "description": "Switch Codex between ChatGPT and nine API-key providers from the VS Code sidebar.",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "publisher": "macor-local",
   "license": "GPL-3.0-only",
   "repository": {
@@ -16,7 +16,7 @@
     "Other"
   ],
   "extensionKind": [
-    "ui"
+    "workspace"
   ],
   "main": "./extension.js",
   "activationEvents": [
@@ -36,7 +36,8 @@
         "codexSwitch.pythonPath": {
           "type": "string",
           "default": "",
-          "description": "Python 3.11+ executable for the local connector. Defaults to python on Windows and python3 on macOS/Linux. No additional Python packages are required."
+          "scope": "machine",
+          "description": "Python 3.11+ executable on the host running Codex (the server for remote workspaces). Automatically discovers a compatible interpreter when empty. No additional Python packages are required."
         }
       }
     },
@@ -96,6 +97,9 @@
     "backend/api_providers.py",
     "backend/providers.json",
     "workspace-runtime.js",
+    "codex-spawn.js",
+    "window-entry.js",
+    "python-runtime.js",
     "backend/workspace_state.py",
     "backend/window_launcher.py",
     "backend/window_launcher.cs",

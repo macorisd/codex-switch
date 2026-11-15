@@ -32,6 +32,22 @@ test('conditional settings cleanup preserves JSON comments, other edits, custom 
   assert.deepEqual(JSON.parse(fs.readFileSync(settings)), { 'chatgpt.cliExecutable': null });
 });
 
+test('independent retirement waits for a final live client and restores its late model write without another launch', async t => {
+  const root = fixture(t), config = path.join(root, 'config.toml');
+  const receipt = path.join(root, 'windows/window-a/runtime.json');
+  recovery.atomic(receipt, { pid: process.pid, processStart: recovery.identity(process.pid) });
+  const retiring = recovery.retire(root, 50);
+  await new Promise(resolve => setTimeout(resolve, 1200));
+  fs.writeFileSync(config, 'model = "late-api-model"\n');
+  recovery.atomic(path.join(root, 'model-defaults.json'), { config, edits: [
+    { table: '', key: 'model', before: 'model = "gpt-model"\n', after: 'model = "late-api-model"\n' },
+  ] });
+  recovery.atomic(receipt, { pid: process.pid, processStart: 'stale' });
+  await retiring;
+  assert.equal(fs.readFileSync(config, 'utf8'), 'model = "gpt-model"\n');
+  assert.equal(fs.existsSync(path.join(root, 'retirement.json')), false);
+});
+
 test('default and named profiles resolve the same application settings file', () => {
   const context = value => ({ globalStorageUri: { fsPath: path.join('/data/User', value, 'globalStorage', 'macor-local.codex-provider-switch') } });
   assert.equal(recovery.settingsPath(context('')), path.join('/data/User', 'settings.json'));

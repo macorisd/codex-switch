@@ -9,6 +9,7 @@ const process = require('node:process');
 const codexAccount = require('./codex-account');
 const { ApiSessions } = require('./api-session');
 const { WorkspaceRuntime } = require('./workspace-runtime');
+const pythonRuntime = require('./python-runtime');
 const balanceAlerts = require('./media/balance-alerts');
 const DEFINITIONS = require('./backend/providers.json');
 const PROVIDERS = [{ id: 'openai', name: 'ChatGPT', subtitle: 'Your Plan' }, ...DEFINITIONS];
@@ -16,11 +17,11 @@ const PROVIDER_LAYOUT_KEY = 'providerLayout';
 const BALANCE_ALERT_KEY = 'apiBalanceAlerts';
 const codexHome = (process.env.CODEX_HOME || '.codex').replace(/^~(?=$|[/\\])/, os.homedir());
 const root = path.join(path.resolve(os.homedir(), codexHome), 'provider-switcher');
-const python = process.platform === 'win32' ? 'python' : 'python3';
 
-function backend(request, signal) {
+async function backend(request, signal) {
+  const interpreter = await pythonRuntime.resolve(vscode.workspace.getConfiguration?.('codexSwitch')?.get('pythonPath') || '');
+  signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
-    const interpreter = vscode.workspace.getConfiguration?.('codexSwitch')?.get('pythonPath') || python;
     const child = spawn(interpreter, [path.join(__dirname, 'backend', 'bridge.py')], {
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],

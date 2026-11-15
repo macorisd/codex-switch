@@ -65,8 +65,9 @@ Source: explicit multi-window bug report and requested behavior, 2026-11-14.
 Implementation approved in the 0.5.0 workspace-isolation PLAN, 2026-11-14:
 
 - Launch the official Codex with per-window overrides, keeping CODEX_HOME and its
-  authentication store. The shared executable setting selects a common launcher,
-  never a shared provider. Preserve a pre-existing custom executable and offer
+  authentication store. Bind its IDE app-server spawn within the owning extension
+  host, preserving application settings across local and remote hosts. Preserve
+  a pre-existing custom executable and offer
   explicit recovery to the bundled Codex when it is unavailable.
 - Confirm the provider through a private config/read exchange with that exact
   app-server process. Bind receipts to workspace, activation nonce, configuration
@@ -406,8 +407,14 @@ host. Source for automatic credential setup: explicit Mac failure report and
 Windows/macOS/Linux usability requirement, 2026-11-12.
 Use Python 3.11+, defaulting to python on Windows and python3 on macOS/Linux;
 allow codexSwitch.pythonPath to select a compatible virtual environment.
-Honor CODEX_HOME consistently. Keep extensionKind=ui: remote workspaces continue
-to manage the local desktop account. CI must test real native credential stores,
+Honor CODEX_HOME consistently. Run alongside the official Codex workspace
+extension, locally for local folders and on the remote host for SSH/remote
+folders. Read that host's account and credentials. This replaces the earlier
+local-desktop-only assumption, corrected by the picasso SSH failure reported
+on 2026-11-15. Never copy authentication or API keys between hosts automatically.
+Select an available Python 3.11+ automatically when the default command resolves
+to an older interpreter, while respecting an explicit pythonPath setting.
+CI must test real native credential stores,
 provider behavior and packaging across the three OSes and x64/ARM64, with
 minimum/current Python coverage. Report actual execution evidence separately
 from platform detection tests; do not claim untested systems are verified.
@@ -504,6 +511,16 @@ Source: lifecycle proposal approved explicitly by the user, 2026-11-14.
   before subprocesses or asynchronous setup. A client that starts unbound stays
   explicitly unconfirmed until the user chooses the existing reload action.
   Source: reported infinite workspace-startup reload loop, 2026-11-15.
+- Attach the per-window launcher to the official IDE app-server spawn in its own
+  extension host. Match the IDE origin marker and app-server arguments, delegate
+  unrelated spawns unchanged and restore the hook on deactivation. Keep all
+  bridge/bootstrap code in the VSIX. This replaces changing the application-wide
+  executable setting, which cannot represent local Windows and remote Linux
+  paths simultaneously. Retire a legacy owned selector only on its owning host
+  with the saved original setting. Preserve custom executable choices.
+  A retained independent cleanup monitor retires final owned model writes after
+  the last owner and client exit, including forced shutdown. It must not require
+  an installed extension, Python or a later managed executable invocation.
 - The retained launcher and recovery code must work without Python and without
   the removed extension directory. Resolve the current official Codex binary
   from the invoking official extension's PATH, avoiding a pinned extension version.

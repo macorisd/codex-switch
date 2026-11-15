@@ -41,20 +41,25 @@ Unavailable data is labeled explicitly. No resets are consumed. This requires
 the Codex executable bundled with the OpenAI extension, or Codex on PATH.
 
 Requires VS Code desktop on Windows, macOS or Linux (x64/ARM64), Python 3.11+
-and a compatible Codex installation. Set codexSwitch.pythonPath for a custom
+and a compatible Codex installation. Compatible Python interpreters are discovered
+automatically. Set codexSwitch.pythonPath for a custom
 Python executable. Credential storage needs no additional Python packages:
 Windows preserves DPAPI keys, macOS uses Keychain directly, and Linux includes
 its Secret Service connector. The OS may request keyring authorization or unlock.
 Linux needs its desktop secure vault; no plaintext fallback is used.
 Runtime paths honor CODEX_HOME. See the repository installation requirements.
+For SSH, WSL and containers, install alongside Codex on the remote host. The
+extension uses that host's account and credentials; it never copies them from
+your desktop automatically. A headless Linux server still needs a secure vault
+to save API keys.
 
 An existing custom Codex executable is preserved. If it becomes unavailable,
 **Use bundled Codex** restores the executable shipped with the official extension.
 If Python cannot start, first correct `codexSwitch.pythonPath`, then reload.
-Disabling or removing Codex Switch restores the previous executable setting when
-the last enabled window releases it. Other windows can keep their workspace
-providers. A retained recovery launcher starts ordinary Codex in unbound windows,
-including after an interrupted shutdown, without Python or the removed extension.
+Disabling or removing Codex Switch lets the official extension launch ordinary
+Codex directly. Other windows can keep their workspace providers. Old managed
+executable settings are retired automatically on their owning host; their retained
+recovery launcher still works without Python or the removed extension.
 Keys, sign-in, conversations and workspace choices are retained.
 
 [Providers, version history and downloads](https://github.com/macorisd/codex-switch)
