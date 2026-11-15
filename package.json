@@ -74,7 +74,7 @@
   },
   "scripts": {
     "brand": "node scripts/build-brand-assets.cjs",
-    "test": "node --test test/*.test.js && python -S backend/test_switcher.py && python -S backend/test_api_providers.py && python -S backend/test_workspace.py && python -S -m unittest discover -s backend -p test_credential*.py && python -m unittest discover -s scripts -p test_*.py",
+    "test": "node scripts/run-tests.cjs",
     "package": "vsce package --readme-path docs/extension-readme.md --allow-star-activation",
     "vscode:uninstall": "node ./recovery.js"
   },
@@ -101,6 +101,8 @@
     "window-entry.js",
     "python-runtime.js",
     "client-settings.js",
+    "credential-vault.js",
+    "backend/credential_bridge.py",
     "backend/workspace_state.py",
     "backend/window_launcher.py",
     "backend/window_launcher.cs",

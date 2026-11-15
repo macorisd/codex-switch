@@ -20,6 +20,14 @@ test('shared sessions deduplicate requests without losing cleanup on failure',as
  assert.equal(h.calls.filter(c=>c.operation==='refresh').length,1); assert(!h.api.sessions.get('openrouter').working);
 });
 
+test('credential storage errors are distinct and never expose arbitrary backend messages',async()=>{
+ const h=harness(()=>{throw Object.assign(new Error('private secret response'),{code:'credential-store-unavailable'});});
+ await h.api.refresh('openrouter',true);
+ assert.match(h.api.sessions.get('openrouter').error,/Secure credential storage/);
+ assert(!JSON.stringify(h.messages).includes('private secret response'));
+ assert(!h.api.sessions.get('openrouter').working);
+});
+
 test('rapid hide and reenable aborts the old request and starts fresh validation',async()=>{
  let count=0;
  const h=harness((m,signal)=>{

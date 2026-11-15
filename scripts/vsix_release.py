@@ -128,6 +128,12 @@ def verify_vsix(content, tag):
                          'extension/node_modules/jsonc-parser/lib/umd/main.js'):
                 if name not in files:
                     raise ValueError('VSIX is missing lifecycle recovery support')
+        if tuple(map(int, manifest['version'].split('.'))) >= (0, 5, 4):
+            for name in ('extension/credential-vault.js', 'extension/backend/credential_bridge.py',
+                         'extension/codex-spawn.js', 'extension/window-entry.js', 'extension/python-runtime.js',
+                         'extension/client-settings.js'):
+                if name not in files:
+                    raise ValueError('VSIX is missing remote credential/runtime support')
             if manifest.get('scripts', {}).get('vscode:uninstall') != 'node ./recovery.js':
                 raise ValueError('VSIX is missing its uninstall hook')
 

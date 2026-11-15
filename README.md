@@ -44,17 +44,18 @@ with Python 3.11+ and a compatible Codex installation. A compatible interpreter
 is discovered automatically. Set `codexSwitch.pythonPath` to select another
 interpreter, including a virtual environment.
 
-Credential storage is ready to use: Windows retains DPAPI-encrypted keys, macOS
-uses Keychain directly, and Linux includes its Secret Service connector. No
-Python packages, pip commands or virtual environment are needed. Existing keys
-remain accessible. The OS may ask to unlock or authorize its keyring; Linux needs
-a desktop session with a Secret Service vault, such as GNOME Keyring or KWallet.
-If no secure vault is available, saving fails safely instead of using plaintext.
+API keys use VS Code SecretStorage, encrypted on the client and shared between
+local and SSH windows. Opening a local workspace automatically migrates existing
+DPAPI/Keychain/Secret Service keys, preserving local encrypted copies for the
+standalone helper. A connected remote Codex receives keys in memory; the server
+needs no desktop keyring and stores no API keys. No Python packages, pip commands
+or virtual environment are needed. Secure-storage failures are reported explicitly.
 
 Runtime state stays in `~/.codex/provider-switcher`, or under `CODEX_HOME` when
 set, outside the repository. For SSH, WSL and containers, install Codex Switch
 alongside Codex on the remote host. It uses that host's account, Python and secure
-vault. Authentication and API keys are never copied between hosts automatically.
+vault for standalone use. ChatGPT sign-in remains on its owning host. Shared API
+keys stay encrypted on the client and are available remotely while VS Code is connected.
 
 ## Version History
 

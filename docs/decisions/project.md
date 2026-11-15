@@ -411,13 +411,25 @@ Honor CODEX_HOME consistently. Run alongside the official Codex workspace
 extension, locally for local folders and on the remote host for SSH/remote
 folders. Read that host's account and credentials. This replaces the earlier
 local-desktop-only assumption, corrected by the picasso SSH failure reported
-on 2026-11-15. Never copy authentication or API keys between hosts automatically.
+on 2026-11-15. Keep ChatGPT authentication on its owning host.
 Select an available Python 3.11+ automatically when the default command resolves
 to an older interpreter, while respecting an explicit pythonPath setting.
 CI must test real native credential stores,
 provider behavior and packaging across the three OSes and x64/ARM64, with
 minimum/current Python coverage. Report actual execution evidence separately
 from platform detection tests; do not claim untested systems are verified.
+
+Source: explicit shared-key choice after the picasso headless-vault failure,
+2026-11-15. Share API keys across local/SSH workspaces of the same VS Code
+profile using SecretStorage, encrypted on the client. Automatically migrate
+existing native desktop keys on local activation without overwriting a newer
+explicit key or resurrecting a deleted key. Keep local native encrypted copies
+in sync for the standalone helper. Remote hosts obtain keys only in memory
+through an authenticated, window-owned local IPC broker while VS Code is
+connected; never persist API keys on the server. A remote standalone CLI without
+that connection requires its own secure vault. Ship/deploy the broker and helper
+in the VSIX. Preserve ChatGPT sign-in and independent workspace provider/model
+choices. Report credential-storage failures distinctly from invalid API keys.
 
 - Preserve the existing API key, ChatGPT sign-in and user configuration during
   migration. Credentials and local configuration backups remain outside Git.

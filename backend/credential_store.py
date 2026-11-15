@@ -5,6 +5,7 @@ import hashlib
 from pathlib import Path
 import sys
 from credential_native import MacKeychain, LinuxSecretService, StoreUnavailable
+import credential_bridge
 
 
 class Blob(ctypes.Structure):
@@ -47,7 +48,7 @@ def service(key_path):
     return 'codex-switch.' + provider + '.' + hashlib.sha256(identity).hexdigest()
 
 
-def save(key_path, value):
+def native_save(key_path, value):
     if sys.platform == 'win32':
         return protect(value.encode()).hex()
     native_store().set_password(service(key_path), 'api-key', value)
@@ -55,7 +56,9 @@ def save(key_path, value):
     return 'system-keyring-v1'
 
 
-def load(key_path):
+def native_load(key_path):
+    if Path(key_path).read_text('ascii').strip() == 'vscode-secret-storage-v1':
+        raise StoreUnavailable('Connect VS Code to access this API key.')
     if sys.platform == 'win32':
         return protect(bytes.fromhex(Path(key_path).read_text('ascii')), True).decode('utf-8')
     value = native_store().get_password(service(key_path), 'api-key')
@@ -64,9 +67,55 @@ def load(key_path):
     return value
 
 
-def remove(key_path):
+def native_remove(key_path):
     if sys.platform != 'win32':
         native_store().delete_password(service(key_path), 'api-key')
     Path(key_path).unlink(missing_ok=True)
+
+
+def provider(key_path):
+    return Path(key_path).name.split('-key.')[0]
+
+
+def status(key_path):
+    if credential_bridge.configuration():
+        return credential_bridge.exchange(provider(key_path), 'status')
+    return {'hasKey': Path(key_path).is_file(), 'revision': None, 'known': Path(key_path).is_file()}
+
+
+def save(key_path, value):
+    config = credential_bridge.configuration()
+    if not config:
+        return native_save(key_path, value)
+    credential_bridge.exchange(provider(key_path), 'store', value)
+    if not config.get('remote'):
+        try:
+            return native_save(key_path, value)
+        except (StoreUnavailable, OSError, RuntimeError):
+            pass
+    return 'vscode-secret-storage-v1'
+
+
+def load(key_path):
+    if credential_bridge.configuration():
+        value = credential_bridge.exchange(provider(key_path), 'get').get('value')
+        if not value:
+            raise StoreUnavailable('Save an API key in Codex Switch.')
+        return value
+    return native_load(key_path)
+
+
+def remove(key_path):
+    config = credential_bridge.configuration()
+    if config:
+        credential_bridge.exchange(provider(key_path), 'delete')
+        if config.get('remote'):
+            Path(key_path).unlink(missing_ok=True)
+            return
+    # A SecretStorage-only marker has no corresponding native-vault item.
+    if Path(key_path).is_file() and Path(key_path).read_text('ascii').strip() == 'vscode-secret-storage-v1':
+        Path(key_path).unlink(missing_ok=True)
+    else:
+        native_remove(key_path)
 
 

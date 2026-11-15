@@ -305,6 +305,8 @@ async function launch(root, pid, started, args) {
   }
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
+  delete env.CODEX_SWITCH_OWNER;
+  delete env.CODEX_SWITCH_PARENT_CREATED;
   const child = spawn(command, arguments_, { stdio: 'inherit', windowsHide: true, env,
     detached: process.platform !== 'win32' });
   let guard;

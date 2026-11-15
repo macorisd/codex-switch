@@ -10,6 +10,7 @@ const codexAccount = require('./codex-account');
 const { ApiSessions } = require('./api-session');
 const { WorkspaceRuntime } = require('./workspace-runtime');
 const pythonRuntime = require('./python-runtime');
+const { CredentialVault } = require('./credential-vault');
 const balanceAlerts = require('./media/balance-alerts');
 const DEFINITIONS = require('./backend/providers.json');
 const PROVIDERS = [{ id: 'openai', name: 'ChatGPT', subtitle: 'Your Plan' }, ...DEFINITIONS];
@@ -19,6 +20,7 @@ const codexHome = (process.env.CODEX_HOME || '.codex').replace(/^~(?=$|[/\\])/, 
 const root = path.join(path.resolve(os.homedir(), codexHome), 'provider-switcher');
 
 async function backend(request, signal) {
+  await activeVault?.ready;
   const interpreter = await pythonRuntime.resolve(vscode.workspace.getConfiguration?.('codexSwitch')?.get('pythonPath') || '');
   signal?.throwIfAborted();
   return new Promise((resolve, reject) => {
@@ -27,6 +29,7 @@ async function backend(request, signal) {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: os.homedir(),
       signal,
+      env: { ...process.env, ...(activeVault?.connection ? { CODEX_SWITCH_VAULT: activeVault.connection } : {}) },
     });
     let stdout = '';
     const timer = setTimeout(() => {
@@ -48,10 +51,10 @@ async function backend(request, signal) {
       clearTimeout(timer);
       try {
         const result = JSON.parse(stdout);
-        if (!result.ok) throw new Error(result.error);
+        if (!result.ok) throw Object.assign(new Error(result.error), { code: result.code });
         resolve(result.data);
       } catch (error) {
-        reject(new Error(error instanceof SyntaxError ? 'The local Codex configuration could not be read.' : error.message));
+        reject(Object.assign(new Error(error instanceof SyntaxError ? 'The local Codex configuration could not be read.' : error.message), { code: error.code }));
       }
     });
     child.stdin.end(JSON.stringify(request));
@@ -319,12 +322,41 @@ class Selector {
 
 }
 
-let activeRuntime;
+let activeRuntime, activeVault;
 function activate(context) {
+  const previousVault = process.env.CODEX_SWITCH_VAULT;
+  const vault = activeVault = new CredentialVault(context, DEFINITIONS, Boolean(vscode.env?.remoteName));
+  void vault.ready.then(() => { if (vault.connection) process.env.CODEX_SWITCH_VAULT = vault.connection; });
   const runtime = new WorkspaceRuntime(vscode, context, backend, root);
   activeRuntime = runtime;
-  runtime.prepared = runtime.initialize();
+  runtime.prepared = (async () => {
+    if (vault.enabled) {
+      await vault.ready;
+      await backend({ action: 'credentialMaintenance', mode: 'migrate' }).catch(() => {});
+      await backend({ action: 'credentialMaintenance', mode: 'sync' }).catch(() => {});
+    }
+    await runtime.initialize();
+  })();
   const selector = new Selector(context, runtime);
+  let maintenance = Promise.resolve();
+  if (vault.enabled) context.subscriptions.push(context.secrets.onDidChange(event => {
+    const id = vault.provider(event.key);
+    if (!id) return;
+    maintenance = maintenance.then(async () => {
+      await runtime.prepared;
+      if (!vscode.env.remoteName) await backend({ action: 'credentialMaintenance', mode: 'sync' }).catch(() => {});
+      if (selector.canLoad(id)) await selector.api.refresh(id, true);
+    }).catch(() => {});
+  }));
+  context.subscriptions.push({ dispose: () => {
+    if (process.env.CODEX_SWITCH_VAULT === vault.connection) {
+      if (previousVault === undefined) delete process.env.CODEX_SWITCH_VAULT;
+      else process.env.CODEX_SWITCH_VAULT = previousVault;
+    }
+    // Live Codex clients keep their in-memory credential access until their
+    // owning extension host exits. Fresh ordinary launches inherit no broker.
+    if (!require('./recovery').hasClients(root)) void vault.close();
+  } });
   context.subscriptions.push(vscode.window.registerWebviewViewProvider('codexSwitch.selector', selector));
   context.subscriptions.push(vscode.commands.registerCommand(
     'codexSwitch.open',

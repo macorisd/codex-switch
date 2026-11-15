@@ -181,6 +181,7 @@ function harness(options = {}) {
     },
     clearInterval: timer => clearedIntervals.push(timer),
     require: name => {
+      if (name === './credential-vault') return { CredentialVault: class { constructor() { this.ready = Promise.resolve(); } close() {} } };
       if (name === './python-runtime') return { resolve: async explicit => explicit || (process.platform === 'win32' ? 'python' : 'python3') };
       if (name === 'vscode') return vscode;
       if (name === './workspace-runtime') return { WorkspaceRuntime: class {

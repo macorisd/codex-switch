@@ -84,6 +84,7 @@ class WindowLauncher {
             var start = new ProcessStartInfo(command, arguments);
             start.EnvironmentVariables["ELECTRON_RUN_AS_NODE"] = "1";
             start.EnvironmentVariables["CODEX_SWITCH_PARENT_CREATED"] = new DateTimeOffset(parent.StartTime.ToUniversalTime()).ToUnixTimeMilliseconds().ToString();
+            start.EnvironmentVariables.Remove("CODEX_SWITCH_OWNER");
             start.UseShellExecute = false; start.CreateNoWindow = true;
             start.RedirectStandardInput = true; start.RedirectStandardOutput = true; start.RedirectStandardError = true;
             using (var child = Process.Start(start)) {

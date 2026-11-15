@@ -43,15 +43,15 @@ the Codex executable bundled with the OpenAI extension, or Codex on PATH.
 Requires VS Code desktop on Windows, macOS or Linux (x64/ARM64), Python 3.11+
 and a compatible Codex installation. Compatible Python interpreters are discovered
 automatically. Set codexSwitch.pythonPath for a custom
-Python executable. Credential storage needs no additional Python packages:
-Windows preserves DPAPI keys, macOS uses Keychain directly, and Linux includes
-its Secret Service connector. The OS may request keyring authorization or unlock.
-Linux needs its desktop secure vault; no plaintext fallback is used.
+Python executable. API keys use VS Code's encrypted SecretStorage on the client,
+shared by local and SSH windows. Existing desktop keys migrate automatically
+when a local workspace opens. Local native encrypted copies remain available
+for the standalone credential helper. No additional Python packages are needed.
 Runtime paths honor CODEX_HOME. See the repository installation requirements.
 For SSH, WSL and containers, install alongside Codex on the remote host. The
-extension uses that host's account and credentials; it never copies them from
-your desktop automatically. A headless Linux server still needs a secure vault
-to save API keys.
+extension uses that host's ChatGPT sign-in. API keys reach Codex in memory through
+the connected VS Code window; headless servers need no desktop keyring and store
+no API keys. A standalone remote CLI without VS Code needs its own secure vault.
 
 An existing custom Codex executable is preserved. If it becomes unavailable,
 **Use bundled Codex** restores the executable shipped with the official extension.
