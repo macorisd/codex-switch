@@ -64,6 +64,9 @@ class PackageTests(unittest.TestCase):
                  'credential-vault.js', 'backend/credential_bridge.py', 'codex-spawn.js',
                  'window-entry.js', 'python-runtime.js', 'client-settings.js']
         extras = {'extension/' + name: b'fixture' for name in names}
+        extras['extension/package.json'] = json.dumps({'name': 'codex-provider-switch',
+            'publisher': 'macor-local', 'version': '0.5.4', 'activationEvents': ['*'],
+            'scripts': {'vscode:uninstall': 'node ./recovery.js'}}).encode()
         release.verify_vsix(package('0.5.4', extra=extras), 'v0.5.4')
         for name in names[-6:]:
             incomplete = {k: v for k, v in extras.items() if k != 'extension/' + name}
