@@ -35,7 +35,14 @@ test('conditional settings cleanup preserves JSON comments, other edits, custom 
 test('independent retirement waits for a final live client and restores its late model write without another launch', async t => {
   const root = fixture(t), config = path.join(root, 'config.toml');
   const receipt = path.join(root, 'windows/window-a/runtime.json');
-  recovery.atomic(receipt, { pid: process.pid, processStart: recovery.identity(process.pid) });
+  // A cold PowerShell on a busy Windows runner can exceed the bounded lookup.
+  // Publish an actual live receipt, rather than testing a missing identity as
+  // though it were a client that the monitor must retain.
+  let started;
+  for (let attempt = 0; attempt < 3 && !started; attempt++) started = recovery.identity(process.pid);
+  assert.ok(started, 'The live-client fixture requires its OS creation identity');
+  recovery.atomic(receipt, { pid: process.pid, processStart: started });
+  assert.equal(recovery.hasClients(root), true, 'The client must be live before retirement starts');
   const retiring = recovery.retire(root, 50);
   await new Promise(resolve => setTimeout(resolve, 1200));
   fs.writeFileSync(config, 'model = "late-api-model"\n');
