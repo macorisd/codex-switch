@@ -244,7 +244,8 @@ class WorkspaceTests(unittest.TestCase):
         def read():
             for raw in child.stdout:
                 messages.put(json.loads(raw))
-        threading.Thread(target=read, daemon=True).start()
+        child.fixture_reader = threading.Thread(target=read, daemon=True)
+        child.fixture_reader.start()
         def send(value):
             child.stdin.write((json.dumps(value) + '\n').encode())
             child.stdin.flush()
@@ -309,8 +310,11 @@ class WorkspaceTests(unittest.TestCase):
     def test_terminating_bootstrap_closes_descendant_pipes(self):
         child, _, _, _ = self.client()
         child.kill(); child.wait(timeout=10)
-        # On Windows the bootstrap job kills both Python and app-server; on Unix
-        # tests terminate the Python launcher, whose parent-death path owns child.
+        # On Windows a job closes the process tree. Unix guards observe the
+        # bootstrap's closed pipe asynchronously, so wait for the inherited
+        # stdout writers to close before checking the descendant receipt.
+        child.fixture_reader.join(timeout=10)
+        self.assertFalse(child.fixture_reader.is_alive(), 'Descendants kept the bootstrap pipe open')
         if sys.platform == 'win32':
             self.assertEqual(child.stderr.read(), b'')
         self.assertFalse(ws.status('a' * 32)['verified'])
