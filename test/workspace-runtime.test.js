@@ -206,7 +206,7 @@ test('startup publishes its provisional claim before querying OS process identit
   assert.equal(owner.binding, h.runtime.binding);
 });
 
-test('a remote host never replaces the local application selector while local migration restores its saved CLI', async t => {
+test('a remote host without a client snapshot preserves the application selector while local migration restores its saved CLI', async t => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'codex host migration '));
   const root = path.join(directory, 'provider-switcher');
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
@@ -220,4 +220,24 @@ test('a remote host never replaces the local application selector while local mi
   await local.runtime.initialize();
   assert.equal(local.executable(), '/original/custom');
   assert.equal(local.runtime.error, false);
+});
+
+test('remote upgrade retires only the client-owned selector and ignores the server original snapshot', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'codex remote migration '));
+  const root = path.join(directory, 'provider-switcher');
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  t.mock.method(recovery, 'register', () => {});
+  const legacy = 'C:\\Users\\client\\.codex\\provider-switcher\\codex-window-123456789abc.exe';
+  recovery.atomic(path.join(root, 'recovery.json'), { hadOriginal: true, original: '/server/not-client' });
+  const h = harness({ custom: legacy, remoteName: 'ssh-remote', lifecycleRoot: root });
+  h.vscode.Uri = { from: value => value };
+  h.vscode.workspace.fs = { readFile: async uri => {
+    assert.equal(uri.scheme, 'vscode-userdata');
+    assert.match(uri.path, /^\/C:\/Users\/client\//);
+    return Buffer.from(JSON.stringify({ launcher: legacy, hadOriginal: true, original: 'C:\\client-custom.exe' }));
+  } };
+  await h.runtime.initialize();
+  assert.equal(h.executable(), 'C:\\client-custom.exe');
+  assert.equal(h.calls[0].configuredCommand, 'C:\\client-custom.exe');
+  assert.equal(h.runtime.error, false);
 });

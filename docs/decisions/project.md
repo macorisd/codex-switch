@@ -516,8 +516,13 @@ Source: lifecycle proposal approved explicitly by the user, 2026-11-14.
   unrelated spawns unchanged and restore the hook on deactivation. Keep all
   bridge/bootstrap code in the VSIX. This replaces changing the application-wide
   executable setting, which cannot represent local Windows and remote Linux
-  paths simultaneously. Retire a legacy owned selector only on its owning host
-  with the saved original setting. Preserve custom executable choices.
+  paths simultaneously. Retire a legacy owned selector with its owning host's
+  saved original setting. A remote activation may read the client's recovery
+  metadata through VS Code's client file service, then conditionally restore
+  only that still-owned application setting. Never substitute server snapshots
+  for desktop settings or read/copy authentication. If the client snapshot is
+  unavailable, retain the setting and explain the required local activation.
+  Preserve custom executable choices.
   A retained independent cleanup monitor retires final owned model writes after
   the last owner and client exit, including forced shutdown. It must not require
   an installed extension, Python or a later managed executable invocation.

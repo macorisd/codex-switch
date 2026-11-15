@@ -6,6 +6,7 @@ const process = require('node:process');
 const codexAccount = require('./codex-account');
 const recovery = require('./recovery');
 const spawnBridge = require('./codex-spawn');
+const clientSettings = require('./client-settings');
 
 function windowIdentity(vscode, context) {
   // Desktop logUri identifies the workbench window; the exthost suffix can
@@ -56,7 +57,18 @@ class WorkspaceRuntime {
   }
   async prepare(resetCommand) {
     const config = this.vscode.workspace.getConfiguration('chatgpt');
-    const configured = config.get('cliExecutable');
+    let configured = config.get('cliExecutable');
+    if (this.lifecycle && this.vscode.env.remoteName && recovery.managed(configured)) {
+      const saved = await clientSettings.previousSetting(this.vscode, configured);
+      if (saved && config.get('cliExecutable') === configured) {
+        await config.update('cliExecutable', saved.hadOriginal ? saved.original : undefined,
+          this.vscode.ConfigurationTarget.Global);
+      } else if (!saved && !this.migrationWarning) {
+        this.migrationWarning = true;
+        void this.vscode.window?.showWarningMessage('Codex Switch could not read its desktop recovery record. Open a local workspace with this version once before disabling it in a remote window.');
+      }
+      configured = config.get('cliExecutable');
+    }
     const previous = this.lifecycle ? recovery.read(path.join(this.root, 'recovery.json')) : {};
     const installed = await this.request({ action: 'prepareWindow', command: codexAccount.executable(this.vscode),
       configuredCommand: configured, resetCommand, ownerPid: process.pid, node: process.execPath,
@@ -72,8 +84,8 @@ class WorkspaceRuntime {
           extensionPath: this.context.extensionPath,
         });
       }
-      // Only retire an old selector belonging to this local root. Application
-      // settings in a remote window belong to the client, not this filesystem.
+      // Local activation can retire its own selector directly. A remote host
+      // uses only the client-owned snapshot above, never this host's snapshot.
       if (this.lifecycle && !this.vscode.env.remoteName && recovery.managed(configured) &&
           path.resolve(path.dirname(configured)) === path.resolve(this.root)) {
         const original = previous.hadOriginal === undefined
