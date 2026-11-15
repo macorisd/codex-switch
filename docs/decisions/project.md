@@ -375,14 +375,13 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
   may wrap within its paragraph (for example after "Without"), never as a forced
   new paragraph between the two sentences. Source: explicit correction rejecting
   unsolicited logo/type changes, 2026-11-12.
-- Use a restrained minimal banner with a considered switching motif in its right
-  sector. Preserve the supplied logo, its purple identity, the title and complete
-  slogan. This redesign supersedes the earlier white/purple background-gradient
-  and no-decoration requirements. Source: explicit redesign request, 2026-11-12.
-  The first tiny two-line detail was rejected as too sparse. Develop the same
-  concept with stronger presence, deliberate proportions and refined execution
-  integrated with the overall composition. Preserve restraint and the continuous
-  slogan. Source: explicit design-review correction, 2026-11-12.
+- Replace the right-hand crossing ribbons with the user's supplied pixel art
+  (`image-pixelart.png`, supplied 2026-11-15). Blend it smoothly into the light
+  background, avoiding a hard image edge and protecting text legibility. Preserve
+  the original logo, typography, placement and complete slogan. Keep the pixel
+  art sharp and embed it in the SVG so the banner renders independently of local
+  paths and external resources. The repository keeps the source image for the
+  existing brand generator. This supersedes the previous switching motif.
 - Use a transparent monochrome SVG for the VS Code Activity Bar, with the gear
   expressed as negative space. It replaces the original two-arrow symbol and
   follows the editor's icon color in both light and dark themes.
