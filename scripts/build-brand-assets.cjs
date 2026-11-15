@@ -16,12 +16,12 @@ const banner = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320
   <desc id="description">The purple Codex Switch rosette and gear beside the words: ${subtitle} Pixel art fades into the light background on the right.</desc>
   <defs>
     ${defs}
-    <linearGradient id="pixel-art-fade" gradientUnits="userSpaceOnUse" x1="718.28" y1="0" x2="815" y2="0">
+    <linearGradient id="pixel-art-fade" gradientUnits="userSpaceOnUse" x1="718.28" y1="0" x2="1040" y2="0">
       <stop stop-color="#FFF" stop-opacity="0"/>
-      <stop offset=".2" stop-color="#FFF" stop-opacity=".1"/>
-      <stop offset=".45" stop-color="#FFF" stop-opacity=".4"/>
-      <stop offset=".7" stop-color="#FFF" stop-opacity=".75"/>
-      <stop offset=".9" stop-color="#FFF" stop-opacity=".96"/>
+      <stop offset=".2" stop-color="#FFF" stop-opacity=".2"/>
+      <stop offset=".45" stop-color="#FFF" stop-opacity=".5"/>
+      <stop offset=".7" stop-color="#FFF" stop-opacity=".8"/>
+      <stop offset=".9" stop-color="#FFF" stop-opacity=".95"/>
       <stop offset="1" stop-color="#FFF"/>
     </linearGradient>
     <mask id="pixel-art-blend" maskUnits="userSpaceOnUse" x="700" y="0" width="500" height="320">

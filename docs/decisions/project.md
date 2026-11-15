@@ -377,13 +377,14 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
   superseding the prior wrap after "Without".
 - Replace the right-hand crossing ribbons with the user's supplied pixel art
   (`image-pixelart.png`, supplied 2026-11-15). Blend it smoothly into the light
-  background using only a narrow fade at its left edge, showing almost the whole
-  illustration at its original intensity and protecting text legibility. Preserve
+  background with a longer, gradual fade that softens its prominence while
+  retaining the full left-inclusive framing and visible scene detail. Preserve
   the original logo, typography, placement and complete slogan. Keep the pixel
   art sharp and embed it in the SVG so the banner renders independently of local
   paths and external resources. The repository keeps the source image for the
   existing brand generator. This supersedes the previous switching motif and
-  the initially broad fade rejected by the user on 2026-11-15.
+  the initial fade and the subsequently too-prominent narrow fade rejected by
+  the user on 2026-11-15.
 - Use a transparent monochrome SVG for the VS Code Activity Bar, with the gear
   expressed as negative space. It replaces the original two-arrow symbol and
   follows the editor's icon color in both light and dark themes.
