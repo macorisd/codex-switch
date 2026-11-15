@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const recovery = require('../recovery');
+const vm = require('node:vm');
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex recovery '));
@@ -30,6 +31,47 @@ test('conditional settings cleanup preserves JSON comments, other edits, custom 
   fs.writeFileSync(settings, JSON.stringify({ 'chatgpt.cliExecutable': launcher }));
   recovery.restoreSettings({ settings, launcher, hadOriginal: true, original: null });
   assert.deepEqual(JSON.parse(fs.readFileSync(settings)), { 'chatgpt.cliExecutable': null });
+});
+
+test('independent retirement waits for a final live client and restores its late model write without another launch', async t => {
+  const root = fixture(t), config = path.join(root, 'config.toml');
+  const receipt = path.join(root, 'windows/window-a/runtime.json');
+  // A cold PowerShell on a busy Windows runner can exceed the bounded lookup.
+  // Publish an actual live receipt, rather than testing a missing identity as
+  // though it were a client that the monitor must retain.
+  let started;
+  for (let attempt = 0; attempt < 3 && !started; attempt++) started = recovery.identity(process.pid);
+  assert.ok(started, 'The live-client fixture requires its OS creation identity');
+  recovery.atomic(receipt, { pid: process.pid, processStart: started });
+  assert.equal(recovery.hasClients(root), true, 'The client must be live before retirement starts');
+  const retiring = recovery.retire(root, 50);
+  await new Promise(resolve => setTimeout(resolve, 1200));
+  fs.writeFileSync(config, 'model = "late-api-model"\n');
+  recovery.atomic(path.join(root, 'model-defaults.json'), { config, edits: [
+    { table: '', key: 'model', before: 'model = "gpt-model"\n', after: 'model = "late-api-model"\n' },
+  ] });
+  recovery.atomic(receipt, { pid: process.pid, processStart: 'stale' });
+  await retiring;
+  assert.equal(fs.readFileSync(config, 'utf8'), 'model = "gpt-model"\n');
+  assert.equal(fs.existsSync(path.join(root, 'retirement.json')), false);
+});
+
+test('an unavailable OS identity lookup cannot retire a live owner or client', t => {
+  const root = fixture(t), module = { exports: {} };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../recovery.js'), 'utf8'), {
+    module, __dirname, process: { platform: 'win32', pid: process.pid, env: {}, kill: process.kill.bind(process) },
+    require: name => name === 'node:child_process' ? { spawnSync: () => ({ status: 1 }) } : require(name),
+  });
+  const unknown = module.exports;
+  recovery.atomic(path.join(root, 'owners', `${process.pid}.json`), {
+    pid: process.pid, ownerStart: 'known-creation-identity', binding: 'this-window', state: 'ready',
+  });
+  recovery.atomic(path.join(root, 'windows/window-a/runtime.json'), {
+    pid: process.pid, processStart: 'known-creation-identity',
+  });
+  assert.equal(unknown.identity(process.pid), null);
+  assert.equal(unknown.hasOwners(root), true);
+  assert.equal(unknown.hasClients(root), true);
 });
 
 test('default and named profiles resolve the same application settings file', () => {

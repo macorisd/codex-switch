@@ -38,7 +38,7 @@ def initialize():
     # Deploy dependencies before the facade so an existing auth command never
     # observes a new credential_store with its native implementation missing.
     (ROOT / 'vendor').mkdir(exist_ok=True)
-    for name in ('credential_native.py', 'vendor/jeepney-0.9.0-py3-none-any.whl', 'credential_store.py'):
+    for name in ('credential_native.py', 'vendor/jeepney-0.9.0-py3-none-any.whl', 'credential_bridge.py', 'credential_store.py'):
         content = (SOURCE / name).read_bytes()
         target = ROOT / name
         if not target.exists() or target.read_bytes() != content:
@@ -71,7 +71,7 @@ def atomic(path, text):
 
 
 def token():
-    if not KEY.exists():
+    if not credential_store.status(KEY)['hasKey']:
         raise RuntimeError('Save a DeepSeek API key in the local provider selector first.')
     return credential_store.load(KEY)
 
@@ -185,7 +185,7 @@ def switch(model=None, effort='high', provider='deepseek'):
     original = CONFIG.read_text('utf-8-sig')
     current = tomllib.loads(original)
     if model:
-        if not api.key_path(provider).exists():
+        if not credential_store.status(api.key_path(provider))['hasKey']:
             raise RuntimeError('Save your API key first.')
         credential_store.load(api.key_path(provider))
         models = json.loads(api.catalog_path(provider).read_text('utf-8'))['models']

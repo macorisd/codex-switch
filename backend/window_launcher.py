@@ -156,11 +156,12 @@ def launch(binding_path, arguments):
     native_path = Path(binding_path).parents[2] / 'workspaces' / binding['workspace'] / 'native-model.json'
     changes = ModelChanges(binding, lambda event: atomic(native_path, event))
     observation_lock = threading.Lock()
-    command = [binding['command'], *binding['args'], *arguments]
+    executable = os.environ.pop('CODEX_SWITCH_EXECUTABLE', None) or binding['command']
+    command = [executable, *binding['args'], *arguments]
     creationflags = 0x08000000 if sys.platform == 'win32' else 0
     if 'app-server' not in arguments:
         # Version/probe commands must not create a false app-server receipt.
-        return subprocess.call([binding['command'], *arguments], creationflags=creationflags)
+        return subprocess.call([executable, *arguments], creationflags=creationflags)
     receipt_path = Path(binding_path).with_name('runtime.json')
     private_id = 'codex-switch-config-' + binding['nonce']
     base = {k: binding[k] for k in ('nonce', 'workspace', 'revision', 'ownerPid')}

@@ -37,8 +37,10 @@ class ApiSessions {
     const pending = (async () => {
       await this.publish(id);
       try { await work({ state, request, live }); }
-      catch {
-        if (live()) { if (state.loading) state.valid = false; state.error = 'Operation failed. Check the key, endpoint, model access and connection.'; }
+      catch (error) {
+        if (live()) { if (state.loading) state.valid = false; state.error = error.code === 'credential-store-unavailable'
+          ? 'Secure credential storage is unavailable. Reconnect VS Code or unlock your local keychain.'
+          : 'Operation failed. Check the key, endpoint, model access and connection.'; }
       } finally {
         state.working = false; state.loading = false;
         if (state.feedback) state.feedback.ok = !state.error;

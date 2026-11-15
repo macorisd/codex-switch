@@ -65,8 +65,9 @@ Source: explicit multi-window bug report and requested behavior, 2026-11-14.
 Implementation approved in the 0.5.0 workspace-isolation PLAN, 2026-11-14:
 
 - Launch the official Codex with per-window overrides, keeping CODEX_HOME and its
-  authentication store. The shared executable setting selects a common launcher,
-  never a shared provider. Preserve a pre-existing custom executable and offer
+  authentication store. Bind its IDE app-server spawn within the owning extension
+  host, preserving application settings across local and remote hosts. Preserve
+  a pre-existing custom executable and offer
   explicit recovery to the bundled Codex when it is unavailable.
 - Confirm the provider through a private config/read exchange with that exact
   app-server process. Bind receipts to workspace, activation nonce, configuration
@@ -392,8 +393,9 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
 ## Credentials and verification
 
 Source for cross-platform compatibility: explicit user request, 2026-11-11.
-Windows, macOS and Linux desktop use the same provider features. Preserve the
-Windows DPAPI format and existing keys; use macOS Keychain and Linux Secret
+Windows, macOS and Linux desktop use the same provider features. For legacy and
+standalone desktop compatibility, preserve the Windows DPAPI format and existing
+keys; use macOS Keychain and Linux Secret
 Service directly, without requiring users to install Python keyring or configure
 a virtual environment. Bundle the small Linux D-Bus client with the extension
 and deploy it with the standalone auth helper. No runtime pip installation or
@@ -406,11 +408,29 @@ host. Source for automatic credential setup: explicit Mac failure report and
 Windows/macOS/Linux usability requirement, 2026-11-12.
 Use Python 3.11+, defaulting to python on Windows and python3 on macOS/Linux;
 allow codexSwitch.pythonPath to select a compatible virtual environment.
-Honor CODEX_HOME consistently. Keep extensionKind=ui: remote workspaces continue
-to manage the local desktop account. CI must test real native credential stores,
+Honor CODEX_HOME consistently. Run alongside the official Codex workspace
+extension, locally for local folders and on the remote host for SSH/remote
+folders. Read that host's account and credentials. This replaces the earlier
+local-desktop-only assumption, corrected by the picasso SSH failure reported
+on 2026-11-15. Keep ChatGPT authentication on its owning host.
+Select an available Python 3.11+ automatically when the default command resolves
+to an older interpreter, while respecting an explicit pythonPath setting.
+CI must test real native credential stores,
 provider behavior and packaging across the three OSes and x64/ARM64, with
 minimum/current Python coverage. Report actual execution evidence separately
 from platform detection tests; do not claim untested systems are verified.
+
+Source: explicit shared-key choice after the picasso headless-vault failure,
+2026-11-15. Share API keys across local/SSH workspaces of the same VS Code
+profile using SecretStorage, encrypted on the client. Automatically migrate
+existing native desktop keys on local activation without overwriting a newer
+explicit key or resurrecting a deleted key. Keep local native encrypted copies
+in sync for the standalone helper. Remote hosts obtain keys only in memory
+through an authenticated, window-owned local IPC broker while VS Code is
+connected; never persist API keys on the server. A remote standalone CLI without
+that connection requires its own secure vault. Ship/deploy the broker and helper
+in the VSIX. Preserve ChatGPT sign-in and independent workspace provider/model
+choices. Report credential-storage failures distinctly from invalid API keys.
 
 - Preserve the existing API key, ChatGPT sign-in and user configuration during
   migration. Credentials and local configuration backups remain outside Git.
@@ -504,6 +524,23 @@ Source: lifecycle proposal approved explicitly by the user, 2026-11-14.
   before subprocesses or asynchronous setup. A client that starts unbound stays
   explicitly unconfirmed until the user chooses the existing reload action.
   Source: reported infinite workspace-startup reload loop, 2026-11-15.
+- Attach the per-window launcher to the official IDE app-server spawn in its own
+  extension host. Match the IDE origin marker and app-server arguments, delegate
+  unrelated spawns unchanged and restore the hook on deactivation. Keep all
+  bridge/bootstrap code in the VSIX. This replaces changing the application-wide
+  executable setting, which cannot represent local Windows and remote Linux
+  paths simultaneously. Retire a legacy owned selector with its owning host's
+  saved original setting. A remote activation may read the client's recovery
+  metadata through VS Code's client file service, then conditionally restore
+  only that still-owned application setting. Never substitute server snapshots
+  for desktop settings or read/copy authentication. If the client snapshot is
+  unavailable, retain the setting and explain the required local activation.
+  Preserve custom executable choices.
+  A retained independent cleanup monitor retires final owned model writes after
+  the last owner and client exit, including forced shutdown. It must not require
+  an installed extension, Python or a later managed executable invocation.
+  An unavailable OS creation-identity lookup must retain live ownership and
+  locks until verified, rather than authorize cleanup. It never confirms a client.
 - The retained launcher and recovery code must work without Python and without
   the removed extension directory. Resolve the current official Codex binary
   from the invoking official extension's PATH, avoiding a pinned extension version.

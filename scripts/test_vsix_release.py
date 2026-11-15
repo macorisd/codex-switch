@@ -56,6 +56,23 @@ class HistoryTests(unittest.TestCase):
 
 
 class PackageTests(unittest.TestCase):
+    def test_remote_credentials_require_every_shipped_runtime_component(self):
+        names = ['workspace-runtime.js', 'backend/workspace_state.py', 'backend/window_launcher.py',
+                 'backend/window_launcher.cs', 'backend/credential_native.py', 'backend/credential_store.py',
+                 'backend/vendor/NOTICE.md', 'backend/vendor/jeepney-fixture.whl', 'recovery.js',
+                 'backend/model_defaults.py', 'node_modules/jsonc-parser/lib/umd/main.js',
+                 'credential-vault.js', 'backend/credential_bridge.py', 'codex-spawn.js',
+                 'window-entry.js', 'python-runtime.js', 'client-settings.js']
+        extras = {'extension/' + name: b'fixture' for name in names}
+        extras['extension/package.json'] = json.dumps({'name': 'codex-provider-switch',
+            'publisher': 'macor-local', 'version': '0.5.4', 'activationEvents': ['*'],
+            'scripts': {'vscode:uninstall': 'node ./recovery.js'}}).encode()
+        release.verify_vsix(package('0.5.4', extra=extras), 'v0.5.4')
+        for name in names[-6:]:
+            incomplete = {k: v for k, v in extras.items() if k != 'extension/' + name}
+            with self.assertRaisesRegex(ValueError, 'remote credential/runtime'):
+                release.verify_vsix(package('0.5.4', extra=incomplete), 'v0.5.4')
+
     def test_workspace_release_requires_launcher_sources_and_early_activation(self):
         extras = {name: b'fixture' for name in ('extension/workspace-runtime.js',
             'extension/backend/workspace_state.py', 'extension/backend/window_launcher.py',

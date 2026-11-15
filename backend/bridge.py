@@ -28,6 +28,35 @@ def handle(request):
     if ws.workspace:
         ws.adopt_native()
     action = request.get('action')
+    if action == 'credentialMaintenance':
+        import credential_bridge
+        config = credential_bridge.configuration()
+        if not config or config.get('remote'):
+            return {}
+        for provider in api.PROVIDERS:
+            key_path = api.key_path(provider)
+            try:
+                if request.get('mode') == 'migrate':
+                    if key_path.is_file():
+                        key = s.credential_store.native_load(key_path)
+                        credential_bridge.exchange(provider, 'migrate', key)
+                elif request.get('mode') == 'sync':
+                    credential = s.credential_store.status(key_path)
+                    if credential['hasKey']:
+                        key = s.credential_store.load(key_path)
+                        try:
+                            if key_path.is_file() and s.credential_store.native_load(key_path) == key:
+                                continue
+                        except Exception:
+                            pass
+                        s.atomic(key_path, s.credential_store.native_save(key_path, key))
+                    elif credential.get('known') and key_path.exists():
+                        s.credential_store.native_remove(key_path)
+            except Exception:
+                # Missing/locked native vaults cannot erase the encrypted
+                # client copy. Never return a credential or upstream error.
+                pass
+        return {}
     if action == 'prepareWindow':
         return ws.prepare(request)
     if action == 'windowStatus':
@@ -101,7 +130,7 @@ if __name__ == '__main__':
         result = handle(request)
         print(json.dumps({'ok': True, 'data': result}, ensure_ascii=True, allow_nan=False))
     except s.credential_store.StoreUnavailable:
-        print(json.dumps({'ok': False, 'error': 'Your system keychain is locked or unavailable. Unlock it and try again.'}))
+        print(json.dumps({'ok': False, 'code': 'credential-store-unavailable', 'error': 'Secure credential storage is unavailable. Reconnect VS Code or unlock your local system keychain.'}))
         sys.exit(1)
     except Exception:
         # Do not expose exception text, request bodies, or upstream responses.

@@ -105,7 +105,7 @@ def save_key(provider, value):
         raise ValueError('Invalid API key')
     s.atomic(key_path(provider), s.credential_store.save(key_path(provider), value.strip()))
     data = saved(provider)
-    data['credentialRevision'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    data['credentialRevision'] = s.credential_store.status(key_path(provider)).get('revision') or datetime.datetime.now(datetime.timezone.utc).isoformat()
     data.pop('validatedAt', None)
     data.pop('tested', None)
     persist(provider, data)
@@ -254,6 +254,7 @@ def codex_catalog(provider, models):
 
 
 def refresh(provider):
+    state(provider)  # Adopt a changed shared credential before validating it.
     models, validated = discover(provider)
     if not models:
         raise RuntimeError('No text/tool-capable models were discovered.')
@@ -278,7 +279,14 @@ def refresh(provider):
 
 def state(provider):
     data = saved(provider)
-    has_key = key_path(provider).exists()
+    credential = s.credential_store.status(key_path(provider))
+    has_key = credential['hasKey']
+    revision = credential.get('revision')
+    if revision and revision != data.get('credentialRevision'):
+        for field in ('validatedAt', 'tested', 'needsTest'):
+            data.pop(field, None)
+        data['credentialRevision'] = revision
+        persist(provider, data)
     return {'hasKey': has_key, 'models': data.get('models', []),
         'model': data.get('model', ''), 'effort': data.get('effort', ''), 'baseUrl': endpoint(provider),
         'valid': has_key and bool(data.get('validatedAt')), 'needsTest': data.get('needsTest', False), 'tested': data.get('tested')}

@@ -2,7 +2,7 @@
   "name": "codex-provider-switch",
   "displayName": "Codex Switch",
   "description": "Switch Codex between ChatGPT and nine API-key providers from the VS Code sidebar.",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "publisher": "macor-local",
   "license": "GPL-3.0-only",
   "repository": {
@@ -16,7 +16,7 @@
     "Other"
   ],
   "extensionKind": [
-    "ui"
+    "workspace"
   ],
   "main": "./extension.js",
   "activationEvents": [
@@ -36,7 +36,8 @@
         "codexSwitch.pythonPath": {
           "type": "string",
           "default": "",
-          "description": "Python 3.11+ executable for the local connector. Defaults to python on Windows and python3 on macOS/Linux. No additional Python packages are required."
+          "scope": "machine",
+          "description": "Python 3.11+ executable on the host running Codex (the server for remote workspaces). Automatically discovers a compatible interpreter when empty. No additional Python packages are required."
         }
       }
     },
@@ -73,7 +74,7 @@
   },
   "scripts": {
     "brand": "node scripts/build-brand-assets.cjs",
-    "test": "node --test test/*.test.js && python -S backend/test_switcher.py && python -S backend/test_api_providers.py && python -S backend/test_workspace.py && python -S -m unittest discover -s backend -p test_credential*.py && python -m unittest discover -s scripts -p test_*.py",
+    "test": "node scripts/run-tests.cjs",
     "package": "vsce package --readme-path docs/extension-readme.md --allow-star-activation",
     "vscode:uninstall": "node ./recovery.js"
   },
@@ -96,6 +97,12 @@
     "backend/api_providers.py",
     "backend/providers.json",
     "workspace-runtime.js",
+    "codex-spawn.js",
+    "window-entry.js",
+    "python-runtime.js",
+    "client-settings.js",
+    "credential-vault.js",
+    "backend/credential_bridge.py",
     "backend/workspace_state.py",
     "backend/window_launcher.py",
     "backend/window_launcher.cs",
