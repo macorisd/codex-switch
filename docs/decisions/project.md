@@ -393,8 +393,9 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
 ## Credentials and verification
 
 Source for cross-platform compatibility: explicit user request, 2026-11-11.
-Windows, macOS and Linux desktop use the same provider features. Preserve the
-Windows DPAPI format and existing keys; use macOS Keychain and Linux Secret
+Windows, macOS and Linux desktop use the same provider features. For legacy and
+standalone desktop compatibility, preserve the Windows DPAPI format and existing
+keys; use macOS Keychain and Linux Secret
 Service directly, without requiring users to install Python keyring or configure
 a virtual environment. Bundle the small Linux D-Bus client with the extension
 and deploy it with the standalone auth helper. No runtime pip installation or
