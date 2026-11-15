@@ -371,17 +371,19 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
 - Preserve the original banner logo scale/placement and typography when changing
   its decorative detail: logo at (74,70), scale .18; title Segoe UI/Arial 64px,
   weight 650, tracking -2px, at (282,141); subtitle 23px at (285,188), with 31px
-  line spacing when wrapped. Keep the original text colors. The longer slogan
-  may wrap within its paragraph (for example after "Without"), never as a forced
-  new paragraph between the two sentences. Source: explicit correction rejecting
-  unsolicited logo/type changes, 2026-11-12.
+  line spacing when wrapped. Keep the original text colors. Wrap the slogan
+  before "Without", placing "Without ever leaving VS Code." on the second line
+  of the same text element. Source: explicit banner refinement, 2026-11-15,
+  superseding the prior wrap after "Without".
 - Replace the right-hand crossing ribbons with the user's supplied pixel art
   (`image-pixelart.png`, supplied 2026-11-15). Blend it smoothly into the light
-  background, avoiding a hard image edge and protecting text legibility. Preserve
+  background using only a narrow fade at its left edge, showing almost the whole
+  illustration at its original intensity and protecting text legibility. Preserve
   the original logo, typography, placement and complete slogan. Keep the pixel
   art sharp and embed it in the SVG so the banner renders independently of local
   paths and external resources. The repository keeps the source image for the
-  existing brand generator. This supersedes the previous switching motif.
+  existing brand generator. This supersedes the previous switching motif and
+  the initially broad fade rejected by the user on 2026-11-15.
 - Use a transparent monochrome SVG for the VS Code Activity Bar, with the gear
   expressed as negative space. It replaces the original two-arrow symbol and
   follows the editor's icon color in both light and dark themes.

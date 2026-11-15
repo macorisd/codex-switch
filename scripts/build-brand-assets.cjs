@@ -8,7 +8,7 @@ const geometry = logo.match(/<path id="mark"[^>]*d="([^"]+)"/)[1];
 const defs = logo.match(/<defs>([\s\S]+?)<\/defs>/)[1];
 const title = 'Codex Switch';
 const subtitle = 'Switch AI providers in Codex with a click. Without ever leaving VS Code.';
-const wrapAt = subtitle.indexOf(' ever ') + 1;
+const wrapAt = subtitle.indexOf(' Without ') + 1;
 const subtitleLines = [subtitle.slice(0, wrapAt), subtitle.slice(wrapAt)];
 const pixelArt = fs.readFileSync(path.join(root, 'docs/banner-pixelart.png')).toString('base64');
 const banner = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title description">
@@ -16,13 +16,12 @@ const banner = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320
   <desc id="description">The purple Codex Switch rosette and gear beside the words: ${subtitle} Pixel art fades into the light background on the right.</desc>
   <defs>
     ${defs}
-    <linearGradient id="pixel-art-fade" gradientUnits="userSpaceOnUse" x1="700" y1="0" x2="1100" y2="0">
+    <linearGradient id="pixel-art-fade" gradientUnits="userSpaceOnUse" x1="718.28" y1="0" x2="815" y2="0">
       <stop stop-color="#FFF" stop-opacity="0"/>
-      <stop offset=".2" stop-color="#FFF" stop-opacity="0"/>
-      <stop offset=".35" stop-color="#FFF" stop-opacity=".08"/>
-      <stop offset=".55" stop-color="#FFF" stop-opacity=".35"/>
-      <stop offset=".75" stop-color="#FFF" stop-opacity=".7"/>
-      <stop offset=".92" stop-color="#FFF" stop-opacity=".95"/>
+      <stop offset=".2" stop-color="#FFF" stop-opacity=".1"/>
+      <stop offset=".45" stop-color="#FFF" stop-opacity=".4"/>
+      <stop offset=".7" stop-color="#FFF" stop-opacity=".75"/>
+      <stop offset=".9" stop-color="#FFF" stop-opacity=".96"/>
       <stop offset="1" stop-color="#FFF"/>
     </linearGradient>
     <mask id="pixel-art-blend" maskUnits="userSpaceOnUse" x="700" y="0" width="500" height="320">
