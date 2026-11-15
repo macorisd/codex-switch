@@ -62,6 +62,7 @@ the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
+| 0.5.3 | Prevent repeated window reloads when opening a workspace, apply its provider when Codex starts before the selector, and blend the supplied pixel art into the banner. |
 | [0.5.2](https://github.com/macorisd/codex-switch/releases/tag/v0.5.2) | Fit short model lists to their options, unify multi-provider card widths and labels, and add percentage colors and time markers to ChatGPT usage bars. |
 | [0.5.1](https://github.com/macorisd/codex-switch/releases/tag/v0.5.1) | Keep Codex usable when Codex Switch is disabled or removed, restore owned settings conditionally and retain workspace choices and credentials. |
 | [0.5.0](https://github.com/macorisd/codex-switch/releases/tag/v0.5.0) | Remember provider and model choices per workspace, isolate simultaneous Codex windows, confirm the applied configuration and open a new chat after switching. |

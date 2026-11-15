@@ -40,17 +40,13 @@ class WorkspaceRuntime {
       // Claim startup before Python, account requests or configuration awaits.
       // A failing enabled activation must remain distinguishable from disable.
       recovery.atomic(this.owner, { pid: process.pid, binding: this.binding,
-        created: Date.now(), ownerStart: recovery.identity(process.pid), state: 'preparing' });
+        created: Date.now(), ownerStart: null, state: 'preparing' });
       recovery.register(context.extensionPath, root);
     }
   }
   async initialize(resetCommand = false) {
     try {
-      const earlyStart = await this.prepare(resetCommand);
-      if (earlyStart) {
-        // Let activation settle before reload can call deactivate.
-        this.recoveryTimer = setTimeout(() => { void this.reload(false).catch(() => { this.error = true; }); }, 0);
-      }
+      await this.prepare(resetCommand);
     } catch {
       this.error = true;
       if (this.lifecycle) recovery.atomic(this.owner, { ...recovery.read(this.owner), state: 'error' });
@@ -89,20 +85,10 @@ class WorkspaceRuntime {
         await config.update('cliExecutable', installed.launcher, this.vscode.ConfigurationTarget.Global);
       }
       this.error = false;
-      if (this.lifecycle) {
-        const bypass = recovery.read(path.join(this.root, 'owners', `${process.pid}-bypass.json`));
-        if (bypass.pid === process.pid) {
-          // An early official start had no workspace owner. Reload only after
-          // preparation has succeeded, so it cannot become a false confirmation.
-          recovery.remove(path.join(this.root, 'owners', `${process.pid}-bypass.json`));
-          return true;
-        }
-      }
     };
     return this.lifecycle ? recovery.locked(this.root, apply) : apply();
   }
   async release() {
-    clearTimeout(this.recoveryTimer);
     if (!this.lifecycle) return;
     await this.prepared;
     await recovery.locked(this.root, async () => {

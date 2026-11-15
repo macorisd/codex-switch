@@ -104,6 +104,12 @@ class WorkspaceTests(unittest.TestCase):
         _, _, _, state = self.client(preparing=True)
         self.assertEqual(state['provider'], 'fixture-api')
 
+    def test_launcher_started_before_activation_waits_for_its_own_workspace_claim(self):
+        s.atomic(ws.directory() / 'selection.json', json.dumps({'provider': 'fixture-api', 'model': 'fixture-model'}))
+        _, _, _, state = self.client(late_claim=True)
+        self.assertTrue(state['verified'])
+        self.assertEqual(state['provider'], 'fixture-api')
+
     def test_upgrade_imports_only_a_matching_accepted_api_model_with_a_saved_binding(self):
         import model_defaults
         prepared = self.prepare()
@@ -208,7 +214,7 @@ class WorkspaceTests(unittest.TestCase):
             str(s.SOURCE.parent / 'recovery.js'), str(s.ROOT)], check=True, timeout=15)
         self.assertEqual(tomllib.loads(s.CONFIG.read_text())['model'], 'gpt-model')
 
-    def client(self, nonce='a' * 32, provider=None, early=False, send_initialized=True, initialize_id=1, preparing=False):
+    def client(self, nonce='a' * 32, provider=None, early=False, send_initialized=True, initialize_id=1, preparing=False, late_claim=False):
         prepared = self.prepare(nonce)
         binding = Path(prepared['binding'])
         spec = json.loads(binding.read_text())
@@ -216,6 +222,12 @@ class WorkspaceTests(unittest.TestCase):
         if provider:
             spec['args'] += ['-c', 'model_provider=' + json.dumps(provider)]
         s.atomic(binding, json.dumps(spec))
+        if late_claim:
+            owner = s.ROOT / 'owners' / (str(os.getpid()) + '.json')
+            record = json.loads(owner.read_text())
+            owner.unlink()
+            threading.Timer(.5, lambda: s.atomic(owner, json.dumps({**record, 'state': 'preparing'}))).start()
+            threading.Timer(.9, lambda: s.atomic(owner, json.dumps(record))).start()
         if preparing:
             owner = s.ROOT / 'owners' / (str(os.getpid()) + '.json')
             record = json.loads(owner.read_text())
@@ -232,7 +244,8 @@ class WorkspaceTests(unittest.TestCase):
         def read():
             for raw in child.stdout:
                 messages.put(json.loads(raw))
-        threading.Thread(target=read, daemon=True).start()
+        child.fixture_reader = threading.Thread(target=read, daemon=True)
+        child.fixture_reader.start()
         def send(value):
             child.stdin.write((json.dumps(value) + '\n').encode())
             child.stdin.flush()
@@ -297,8 +310,11 @@ class WorkspaceTests(unittest.TestCase):
     def test_terminating_bootstrap_closes_descendant_pipes(self):
         child, _, _, _ = self.client()
         child.kill(); child.wait(timeout=10)
-        # On Windows the bootstrap job kills both Python and app-server; on Unix
-        # tests terminate the Python launcher, whose parent-death path owns child.
+        # On Windows a job closes the process tree. Unix guards observe the
+        # bootstrap's closed pipe asynchronously, so wait for the inherited
+        # stdout writers to close before checking the descendant receipt.
+        child.fixture_reader.join(timeout=10)
+        self.assertFalse(child.fixture_reader.is_alive(), 'Descendants kept the bootstrap pipe open')
         if sys.platform == 'win32':
             self.assertEqual(child.stderr.read(), b'')
         self.assertFalse(ws.status('a' * 32)['verified'])

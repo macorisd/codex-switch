@@ -265,6 +265,13 @@ async function launch(root, pid, started, args) {
   let owner = read(ownerFile);
   const valid = record => record.pid === pid && record.state !== 'inactive' && alive(pid)
     && (record.ownerStart ? record.ownerStart === started : record.created >= Number(process.env.CODEX_SWITCH_PARENT_CREATED || 0));
+  // Codex can spawn before our eager activation is called. Wait here for the
+  // owning host's claim instead of causing the workbench to reload at startup.
+  const discoveryDeadline = Date.now() + 3000;
+  while (!valid(owner) && Date.now() < discoveryDeadline) {
+    await new Promise(resolve => setTimeout(resolve, 25));
+    owner = read(ownerFile);
+  }
   let command, arguments_;
   if (valid(owner)) {
     // A registered activation owns startup even when setup is slow or fails.
@@ -280,9 +287,8 @@ async function launch(root, pid, started, args) {
     command = binding.python;
     arguments_ = [binding.launcher, owner.binding, ...args];
   } else {
-    // No extension activation claims this invocation. Record the early-start
-    // case so a subsequent activation can reload before confirming a provider.
-    atomic(path.join(root, 'owners', `${pid}-bypass.json`), { pid, started });
+    // No extension activation claims this invocation. Disabled and removed
+    // extensions still delegate to the ordinary executable after startup grace.
     await locked(root, () => {
       restoreModels(root);
       if (!hasOwners(root) && !hasClients(root)) restoreSettings(read(path.join(root, 'recovery.json')));

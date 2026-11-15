@@ -371,18 +371,20 @@ Source: user-supplied logo and explicit instructions, 2026-11-07.
 - Preserve the original banner logo scale/placement and typography when changing
   its decorative detail: logo at (74,70), scale .18; title Segoe UI/Arial 64px,
   weight 650, tracking -2px, at (282,141); subtitle 23px at (285,188), with 31px
-  line spacing when wrapped. Keep the original text colors. The longer slogan
-  may wrap within its paragraph (for example after "Without"), never as a forced
-  new paragraph between the two sentences. Source: explicit correction rejecting
-  unsolicited logo/type changes, 2026-11-12.
-- Use a restrained minimal banner with a considered switching motif in its right
-  sector. Preserve the supplied logo, its purple identity, the title and complete
-  slogan. This redesign supersedes the earlier white/purple background-gradient
-  and no-decoration requirements. Source: explicit redesign request, 2026-11-12.
-  The first tiny two-line detail was rejected as too sparse. Develop the same
-  concept with stronger presence, deliberate proportions and refined execution
-  integrated with the overall composition. Preserve restraint and the continuous
-  slogan. Source: explicit design-review correction, 2026-11-12.
+  line spacing when wrapped. Keep the original text colors. Wrap the slogan
+  before "Without", placing "Without ever leaving VS Code." on the second line
+  of the same text element. Source: explicit banner refinement, 2026-11-15,
+  superseding the prior wrap after "Without".
+- Replace the right-hand crossing ribbons with the user's supplied pixel art
+  (`image-pixelart.png`, supplied 2026-11-15). Blend it smoothly into the light
+  background with a longer, gradual fade that softens its prominence while
+  retaining the full left-inclusive framing and visible scene detail. Preserve
+  the original logo, typography, placement and complete slogan. Keep the pixel
+  art sharp and embed it in the SVG so the banner renders independently of local
+  paths and external resources. The repository keeps the source image for the
+  existing brand generator. This supersedes the previous switching motif and
+  the initial fade and the subsequently too-prominent narrow fade rejected by
+  the user on 2026-11-15.
 - Use a transparent monochrome SVG for the VS Code Activity Bar, with the gear
   expressed as negative space. It replaces the original two-arrow symbol and
   follows the editor's icon color in both light and dark themes.
@@ -496,8 +498,12 @@ Source: lifecycle proposal approved explicitly by the user, 2026-11-14.
 - Register each activation synchronously before asynchronous setup. An owned
   activation that is preparing or has failed must never silently substitute a
   different provider. An invocation without an owning activation delegates to
-  ordinary Codex. A launch that races eager activation must trigger recovery
-  reload before the workspace can claim a confirmed selection.
+  ordinary Codex after a bounded startup wait for its own activation claim.
+  Opening or restoring a workspace must never automatically reload the window.
+  Resolve startup ordering in the launcher and publish the provisional claim
+  before subprocesses or asynchronous setup. A client that starts unbound stays
+  explicitly unconfirmed until the user chooses the existing reload action.
+  Source: reported infinite workspace-startup reload loop, 2026-11-15.
 - The retained launcher and recovery code must work without Python and without
   the removed extension directory. Resolve the current official Codex binary
   from the invoking official extension's PATH, avoiding a pinned extension version.
