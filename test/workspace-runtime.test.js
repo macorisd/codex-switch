@@ -68,6 +68,14 @@ test('empty windows have independent identities and bind synchronously before pr
   assert.equal(identity(a.vscode, a.context), a.runtime.workspace);
 });
 
+test('a folderless window retains its identity across new log folders and sessions', () => {
+  const h = harness({ folders: [], session: 'first', logUri: 'file:///logs/day-one/window2/exthost' });
+  const saved = h.runtime.workspace;
+  h.vscode.env.sessionId = 'after-reboot';
+  h.context.logUri = { toString: () => 'file:///logs/day-two/window1/exthost' };
+  assert.equal(identity(h.vscode, h.context), saved);
+});
+
 test('every backend request carries the same window/workspace, preserving custom CLI and original home', async () => {
   const original = process.env.CODEX_HOME;
   const h = harness({ custom: '/my/custom codex' });

@@ -15,12 +15,20 @@ function windowIdentity(vscode, context) {
   return logWindow || `session:${vscode.env.sessionId}`;
 }
 
-function identity(vscode, context) {
+function identity(vscode, context, root) {
   // Prefer the workspace file even for a single-folder saved workspace.
   const workspace = vscode.workspace.workspaceFile;
   const folder = vscode.workspace.workspaceFolders?.[0];
   let key = workspace?.toString() || (folder && vscode.workspace.workspaceFolders.length === 1 ? folder.uri.toString() : null);
-  if (!key) key = `empty:${windowIdentity(vscode, context)}`;
+  if (!key) {
+    const saved = context.workspaceState.get('emptyWorkspaceIdentity');
+    if (typeof saved === 'string' && /^[a-f0-9]{64}$/.test(saved)) return saved;
+    const old = crypto.createHash('sha256').update(`empty:${windowIdentity(vscode, context)}`).digest('hex');
+    const existing = root && require('node:fs').existsSync(path.join(root, 'workspaces', old, 'selection.json'));
+    const value = existing ? old : crypto.createHash('sha256').update(context.storageUri?.toString() || crypto.randomUUID()).digest('hex');
+    void context.workspaceState.update('emptyWorkspaceIdentity', value).catch(() => {});
+    return value;
+  }
   if (process.platform === 'win32' && key.startsWith('file:')) key = key.toLowerCase();
   return crypto.createHash('sha256').update(key).digest('hex');
 }
@@ -28,7 +36,7 @@ function identity(vscode, context) {
 class WorkspaceRuntime {
   constructor(vscode, context, request, root) {
     Object.assign(this, { vscode, context, root });
-    this.workspace = identity(vscode, context);
+    this.workspace = identity(vscode, context, root);
     this.window = crypto.randomBytes(16).toString('hex');
     this.pendingKey = `newChat:${crypto.createHash('sha256').update(windowIdentity(vscode, context)).digest('hex')}`;
     this.request = (value, signal) => request({ ...value, workspace: this.workspace, window: this.window }, signal);
@@ -95,7 +103,11 @@ class WorkspaceRuntime {
       }
       this.error = false;
     };
-    return this.lifecycle ? recovery.locked(this.root, apply) : apply();
+    await (this.lifecycle ? recovery.locked(this.root, apply) : apply());
+    if (this.lifecycle) require('./codex-adapter').install(this.vscode, this.context, this.root);
+    if (!process.env.CODEX_SWITCH_OFFICIAL_STARTUP && this.vscode.extensions.getExtension('openai.chatgpt')?.isActive) {
+      await this.bridge?.attachExisting?.(this.request);
+    }
   }
   async release() {
     this.bridge?.dispose();

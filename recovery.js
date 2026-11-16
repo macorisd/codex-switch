@@ -242,6 +242,7 @@ async function uninstall(extensionPath = __dirname) {
       if (hasOwners(root)) return false;
       const record = read(path.join(root, 'recovery.json'));
       if (!record.extensionPath || installationId(record.extensionPath) !== id) return;
+      require('./codex-adapter').restore(root, extensionPath);
       restoreModels(root);
       if (hasClients(root)) return false;
       restoreSettings(record);

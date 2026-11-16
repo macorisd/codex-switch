@@ -18,7 +18,7 @@ trash button that removes only the selected provider's credential. DeepSeek API
 usage is billed separately.
 
 Select a model inside the collapsed **Model catalog**; set reasoning in Codex's
-chat. OpenRouter spans a full row in wide panels and includes search, laboratory
+chat. OpenRouter includes search, laboratory
 and free-model filtering. Its model list shows readable provider/model names
 without model IDs, adding **(free)** only to verified free models. **Test model**
 (uses API credits) checks a synthetic function call and its result via two Responses
@@ -61,6 +61,12 @@ Codex directly. Other windows can keep their workspace providers. Old managed
 executable settings are retired automatically on their owning host; their retained
 recovery launcher still works without Python or the removed extension.
 Keys, sign-in, conversations and workspace choices are retained.
+
+Startup setup adds an optional entry beside the official Codex extension and
+updates its manifest entry point. Its original code and binaries stay intact.
+The entry waits for Switch when enabled and starts ordinary Codex when Switch
+is disabled, removed or fails to activate. Uninstall restores the owned manifest
+entry conditionally, preserving subsequent user and extension changes.
 
 [Providers, version history and downloads](https://github.com/macorisd/codex-switch)
 

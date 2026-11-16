@@ -9,7 +9,9 @@ for (const key of Object.keys(env)) {
 }
 delete env.ELECTRON_RUN_AS_NODE;
 const tests = [
-  [process.execPath, '--test', ...fs.readdirSync('test').filter(file => file.endsWith('.test.js')).map(file => 'test/' + file)],
+  // Several integration files start native interpreters and OS identity probes.
+  // Bound process fan-out on cold/emulated Windows ARM runners.
+  [process.execPath, '--test', '--test-concurrency=2', ...fs.readdirSync('test').filter(file => file.endsWith('.test.js')).map(file => 'test/' + file)],
   ...['test_switcher.py', 'test_api_providers.py', 'test_workspace.py'].map(file => ['python', '-S', 'backend/' + file]),
   ['python', '-S', '-m', 'unittest', 'discover', '-s', 'backend', '-p', 'test_credential*.py'],
   ['python', '-m', 'unittest', 'discover', '-s', 'scripts', '-p', 'test_*.py'],
