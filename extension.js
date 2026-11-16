@@ -378,6 +378,11 @@ function activate(context) {
       watcher.onDidDelete?.(refresh) || { dispose() {} });
   }
   context.subscriptions.push({ dispose: () => clearTimeout(pending) });
+  if (vscode.extensions?.onDidChange) context.subscriptions.push(vscode.extensions.onDidChange(() => {
+    // New official versions receive the same optional adapter automatically.
+    // Never restart another extension or a workbench as a side effect.
+    try { require('./codex-adapter').install(vscode, context, root); } catch {}
+  }));
   // VS Code waits for eager activation before onStartupFinished consumers.
   // Do not await opening a view here: that can recursively activate Codex.
   void runtime.prepared.then(() => runtime.openPendingChat());

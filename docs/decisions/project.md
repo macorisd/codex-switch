@@ -522,8 +522,21 @@ Source: lifecycle proposal approved explicitly by the user, 2026-11-14.
   Opening or restoring a workspace must never automatically reload the window.
   Resolve startup ordering in the launcher and publish the provisional claim
   before subprocesses or asynchronous setup. A client that starts unbound stays
-  explicitly unconfirmed until the user chooses the existing reload action.
+  explicitly unconfirmed unless the exact live child can be verified through
+  the attachment described below; otherwise retain the explicit reload action.
   Source: reported infinite workspace-startup reload loop, 2026-11-15.
+- An optional startup adapter must await Codex Switch before activating the
+  original Codex module, even when restored views activate first after an
+  extension-host restart. Generate a small separate entry file beside the
+  installed official extension and conditionally point only its manifest main
+  field to that entry. Preserve the official source and binaries byte-for-byte.
+  When Switch is disabled, uninstalled, unavailable or fails activation, delegate straight to
+  the original module without requiring Switch files, Python or runtime state.
+  Restore only the still-owned manifest field on uninstall and retain the tiny
+  inert entry for stale scan caches; preserve newer adapters and unrelated edits.
+  Deploy and maintain it automatically from the VSIX on both local/remote hosts.
+  Never set a shared launcher path/command that is absent on another server.
+  Source: repeated cold-start failure with restored local/SSH views, 2026-11-16.
 - Attach the per-window launcher to the official IDE app-server spawn in its own
   extension host. Match the IDE origin marker and app-server arguments, delegate
   unrelated spawns unchanged and restore the hook on deactivation. Keep all
@@ -553,6 +566,16 @@ Source: lifecycle proposal approved explicitly by the user, 2026-11-14.
   If a launched client is still alive during deactivation, retain recovery until
   an ordinary startup can retire its final in-flight model writes and restore
   the executable setting.
+- If a client started before the initial upgrade installed the startup adapter,
+  attach only to the exact live IDE child of that extension host. Confirm it
+  through its own private config/read response and OS process identity, never
+  infer it from a separate account process. Preserve its byte stream and observe
+  acknowledged model changes. A genuinely unapplied saved provider still needs
+  the explicit reload action; never hide that mismatch or reload automatically.
+- Verification must restore the official view without manually activating Codex
+  Switch first, force the official-first order, restart the extension host and
+  cover folderless windows, saved API providers, concurrent local/SSH hosts,
+  native model selection and disabled/uninstalled ordinary startup.
 - Track only the model-setting edits made through API-provider clients. Restore
   incompatible shared defaults conditionally, preserving later user changes and
   unrelated TOML. Never restore an entire old configuration file.

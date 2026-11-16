@@ -24,7 +24,9 @@ async function main() {
   } while (Date.now() < deadline);
   if (owner.state !== 'ready') throw Error('Setup timeout');
   const recovery = require(path.join(root, 'recovery.js'));
-  if (!owner.ownerStart || recovery.identity(ownerPid) !== owner.ownerStart) throw Error('Owner changed');
+  // The Windows native bootstrap checks the exact birth identity through the
+  // OS API. A cold PowerShell lookup here can time out during desktop startup.
+  if (!owner.ownerStart || process.platform !== 'win32' && recovery.identity(ownerPid) !== owner.ownerStart) throw Error('Owner changed');
   const binding = read(bindingPath);
   recovery.monitorRetirement(root);
   const original = process.env.CODEX_SWITCH_EXECUTABLE;
@@ -32,7 +34,8 @@ async function main() {
   if (process.platform !== 'win32') return recovery.launch(root, ownerPid, owner.ownerStart, process.argv.slice(2));
   const launcher = read(path.join(root, 'recovery.json')).launcher;
   if (!launcher || !fs.existsSync(launcher)) throw Error('Bootstrap unavailable');
-  const child = spawn(launcher, process.argv.slice(2), { stdio: 'inherit', windowsHide: true });
+  const child = spawn(launcher, process.argv.slice(2), { stdio: 'inherit', windowsHide: true,
+    env: { ...process.env, CODEX_SWITCH_EXPECTED_START: owner.ownerStart } });
   child.once('error', () => { process.exitCode = 1; });
   child.once('exit', code => { process.exitCode = code ?? 1; });
 }

@@ -66,6 +66,8 @@ class WindowLauncher {
                 parent = Parent(directParent);
                 if (owner != parent.Id.ToString()) throw new Exception();
             }
+            string expected = Environment.GetEnvironmentVariable("CODEX_SWITCH_EXPECTED_START");
+            if (!String.IsNullOrEmpty(expected) && expected != parent.StartTime.ToUniversalTime().ToFileTimeUtc().ToString()) throw new Exception();
             string command = (string)data["node"];
             // VS Code may have moved or updated since the launcher was deployed.
             string current = parent.MainModule.FileName;
@@ -85,6 +87,7 @@ class WindowLauncher {
             start.EnvironmentVariables["ELECTRON_RUN_AS_NODE"] = "1";
             start.EnvironmentVariables["CODEX_SWITCH_PARENT_CREATED"] = new DateTimeOffset(parent.StartTime.ToUniversalTime()).ToUnixTimeMilliseconds().ToString();
             start.EnvironmentVariables.Remove("CODEX_SWITCH_OWNER");
+            start.EnvironmentVariables.Remove("CODEX_SWITCH_EXPECTED_START");
             start.UseShellExecute = false; start.CreateNoWindow = true;
             start.RedirectStandardInput = true; start.RedirectStandardOutput = true; start.RedirectStandardError = true;
             using (var child = Process.Start(start)) {

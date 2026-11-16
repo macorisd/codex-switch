@@ -61,6 +61,8 @@ def handle(request):
         return ws.prepare(request)
     if action == 'windowStatus':
         return ws.status(request['window'])
+    if action == 'adoptClient':
+        return ws.adopt_client(request)
     if action == 'api':
         provider = request.get('provider')
         api.definition(provider)

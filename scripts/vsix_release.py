@@ -136,6 +136,10 @@ def verify_vsix(content, tag):
                     raise ValueError('VSIX is missing remote credential/runtime support')
             if manifest.get('scripts', {}).get('vscode:uninstall') != 'node ./recovery.js':
                 raise ValueError('VSIX is missing its uninstall hook')
+        if tuple(map(int, manifest['version'].split('.'))) >= (0, 5, 5):
+            for name in ('extension/codex-adapter.js', 'extension/live-client.js', 'extension/backend/model_observer.py'):
+                if name not in files:
+                    raise ValueError('VSIX is missing restored-client startup support')
 
 
 def checksum(content, name):

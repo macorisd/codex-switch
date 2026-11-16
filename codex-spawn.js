@@ -8,6 +8,7 @@ const path = require('node:path');
 function install(binding, extensionPath, api = childProcess) {
   const original = api.spawn;
   let active = true;
+  let attached;
   function spawn(command, args, options) {
     if (!active || !Array.isArray(args) || !args.includes('app-server') ||
         options?.env?.CODEX_INTERNAL_ORIGINATOR_OVERRIDE !== 'codex_vscode') {
@@ -19,6 +20,9 @@ function install(binding, extensionPath, api = childProcess) {
     }]);
   }
   api.spawn = spawn;
-  return { dispose() { active = false; if (api.spawn === spawn) api.spawn = original; } };
+  return {
+    async attachExisting(request) { attached = await require('./live-client').attachExisting(binding, request); },
+    dispose() { active = false; attached?.release(); if (api.spawn === spawn) api.spawn = original; },
+  };
 }
 module.exports = { install };

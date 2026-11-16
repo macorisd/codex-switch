@@ -228,6 +228,8 @@ def install_launcher(node=None):
     if not target.exists() or target.read_bytes() != content:
         s.atomic(target, content)
     s.atomic(s.ROOT / 'model_defaults.py', (s.SOURCE / 'model_defaults.py').read_bytes())
+    s.atomic(s.ROOT / 'model_observer.py', (s.SOURCE / 'model_observer.py').read_bytes())
+    s.atomic(s.ROOT / 'codex-adapter.js', (s.SOURCE.parent / 'codex-adapter.js').read_bytes())
     recovery = s.SOURCE.parent / 'recovery.js'
     s.atomic(s.ROOT / 'recovery.js', recovery.read_bytes())
     vendor = s.SOURCE.parent / 'node_modules/jsonc-parser/lib/umd'
@@ -323,6 +325,7 @@ def prepare(request):
     binding = {'workspace': workspace, 'nonce': request['window'], 'ownerPid': request['ownerPid'],
         'profile': tomllib.loads(global_text()).get('profile'), 'config': str(s.CONFIG),
         'command': command, 'ignoredCommand': saved_original.get('ignoredCommand'),
+        'model': selected.get('model', ''),
         'python': str(s.PYTHON), 'launcher': str(s.ROOT / 'window_launcher.py'),
         'cwd': request['cwd'], 'args': arguments(selected), 'provider': selected['provider'],
         'revision': revision(selected), 'providerRevision': provider_revision(selected)}
@@ -337,6 +340,38 @@ def prepare(request):
         'binding': str(window / 'binding.json'), 'ownerStart': process_identity(request['ownerPid']),
         'pid': request['ownerPid'], 'state': 'ready'}))
     return {'launcher': str(launcher), 'binding': str(window / 'binding.json')}
+
+
+def adopt_client(request):
+    """Confirm only the exact initialized child queried through its own pipe."""
+    from window_launcher import process_identity
+    binding = read(window_directory(request['window']) / 'binding.json', {})
+    pid = request.get('pid')
+    started = request.get('started')
+    if not isinstance(pid, int) or not started or process_identity(pid) != started:
+        raise ValueError('Client is no longer alive')
+    if sys.platform == 'win32':
+        shell = Path(os.environ.get('WINDIR', 'C:/Windows')) / 'System32/WindowsPowerShell/v1.0/powershell.exe'
+        result = subprocess.run([str(shell), '-NoProfile', '-NonInteractive', '-Command',
+            '(Get-CimInstance Win32_Process -Filter "ProcessId=' + str(pid) + '").ParentProcessId'],
+            capture_output=True, text=True, timeout=5, creationflags=0x08000000)
+        parent = int(result.stdout.strip())
+    elif sys.platform.startswith('linux'):
+        parent = int(Path('/proc/' + str(pid) + '/stat').read_text().split(') ').pop().split()[1])
+    else:
+        parent = int(subprocess.check_output(['ps', '-o', 'ppid=', '-p', str(pid)], text=True, timeout=5).strip())
+    if parent != binding.get('ownerPid'):
+        raise ValueError('Client belongs to a different host')
+    config = request.get('config', {})
+    provider, model = config.get('model_provider') or 'openai', config.get('model') or ''
+    if not isinstance(provider, str) or not re.fullmatch(r'[a-zA-Z0-9_-]{1,128}', provider) or not isinstance(model, str) or len(model) > 512:
+        raise ValueError('Invalid client metadata')
+    receipt = {k: binding[k] for k in ('nonce', 'workspace', 'ownerPid')}
+    receipt.update(pid=pid, processStart=started, provider=provider, model=model,
+        phase='verified' if provider == binding.get('provider') else 'mismatch',
+        revision=binding.get('revision') if not binding.get('model') or binding['model'] == model else None)
+    s.atomic(window_directory(request['window']) / 'runtime.json', json.dumps(receipt))
+    return {'verified': receipt['phase'] == 'verified'}
 
 
 def status(nonce):

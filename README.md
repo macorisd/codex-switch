@@ -64,6 +64,7 @@ the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
+| 0.5.5 | Confirm restored Codex clients after cold startup, preserve saved providers when Codex activates first, and retain folderless-window selections. |
 | [0.5.4](https://github.com/macorisd/codex-switch/releases/tag/v0.5.4) | Confirm the correct Codex account and provider in SSH workspaces, share encrypted API keys without storing them on headless servers, discover compatible Python and preserve ordinary Codex startup. |
 | [0.5.3](https://github.com/macorisd/codex-switch/releases/tag/v0.5.3) | Prevent repeated window reloads when opening a workspace, apply its provider when Codex starts before the selector, and blend the supplied pixel art into the banner. |
 | [0.5.2](https://github.com/macorisd/codex-switch/releases/tag/v0.5.2) | Fit short model lists to their options, unify multi-provider card widths and labels, and add percentage colors and time markers to ChatGPT usage bars. |
