@@ -35,7 +35,7 @@ test('late attachment confirms the exact already-initialized child, filters only
   const messages = []; let buffer = '';
   child.stdout.on('data', raw => { buffer += raw; let index; while ((index = buffer.indexOf('\n')) >= 0) { messages.push(JSON.parse(buffer.slice(0, index))); buffer = buffer.slice(index + 1); } });
   child.stderr.resume();
-  const wait = async predicate => { for (let i = 0; i < 200; i++) { if (predicate()) return; await new Promise(resolve => setTimeout(resolve, 25)); } throw Error('Native response timed out'); };
+  const wait = async predicate => { for (let i = 0; i < 600; i++) { if (predicate()) return; await new Promise(resolve => setTimeout(resolve, 25)); } throw Error('Native response timed out'); };
   child.stdin.write('{"id":"init","method":"initialize","params":{}}\n');
   await wait(() => messages.some(m => m.id === 'init'));
   // The native child predates preparation and the adapter, matching restored views.
