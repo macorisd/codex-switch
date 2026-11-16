@@ -15,6 +15,14 @@ class WindowLauncher {
     [DllImport("kernel32.dll")] static extern bool AssignProcessToJobObject(IntPtr h, IntPtr p);
     [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
     [DllImport("ntdll.dll")] static extern int NtQueryInformationProcess(IntPtr h, int c, IntPtr[] p, int n, out int length);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool QueryFullProcessImageName(IntPtr h, int flags, StringBuilder name, ref int size);
+    static string Executable(Process process) {
+        int size = 32768; var name = new StringBuilder(size);
+        if (!QueryFullProcessImageName(process.Handle, 0, name, ref size))
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+        return name.ToString();
+    }
     // The limit structure is 144 bytes on x64/ARM64, 112 on x86. LimitFlags is
     // at offset 16 on all three. KILL_ON_JOB_CLOSE prevents orphan app servers.
     static IntPtr Job() {
@@ -56,9 +64,11 @@ class WindowLauncher {
     }
     static int Main(string[] args) {
         IntPtr job = IntPtr.Zero;
+        string stage = "bootstrap";
         try {
-            string root = Path.GetDirectoryName(Process.GetCurrentProcess().MainModule.FileName);
+            string root = Path.GetDirectoryName(Executable(Process.GetCurrentProcess()));
             var data = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(Path.Combine(root, "recovery.json")));
+            stage = "parent";
             var directParent = Parent(Process.GetCurrentProcess());
             var parent = directParent;
             string owner = Environment.GetEnvironmentVariable("CODEX_SWITCH_OWNER");
@@ -70,11 +80,14 @@ class WindowLauncher {
             if (!String.IsNullOrEmpty(expected) && expected != parent.StartTime.ToUniversalTime().ToFileTimeUtc().ToString()) throw new Exception();
             string command = (string)data["node"];
             // VS Code may have moved or updated since the launcher was deployed.
-            string current = parent.MainModule.FileName;
+            // Query the executable image, not cross-architecture module memory.
+            stage = "parent-executable";
+            string current = Executable(parent);
             if (Path.GetFileName(current).Equals(Path.GetFileName(command), StringComparison.OrdinalIgnoreCase)) command = current;
             string arguments = Quote(Path.Combine(root, "recovery.js")) + " --launch " + parent.Id + " "
                 + Quote(parent.StartTime.ToUniversalTime().ToFileTimeUtc().ToString());
             foreach (string arg in args) arguments += " " + Quote(arg);
+            stage = "job";
             job = Job();
             // Enroll this bootstrap before starting children: descendants inherit
             // the job, with no race between starting and enrolling a child.
@@ -90,14 +103,15 @@ class WindowLauncher {
             start.EnvironmentVariables.Remove("CODEX_SWITCH_EXPECTED_START");
             start.UseShellExecute = false; start.CreateNoWindow = true;
             start.RedirectStandardInput = true; start.RedirectStandardOutput = true; start.RedirectStandardError = true;
+            stage = "runtime";
             using (var child = Process.Start(start)) {
                 Pump(Console.OpenStandardInput(), child.StandardInput.BaseStream, true);
                 var stdout = Pump(child.StandardOutput.BaseStream, Console.OpenStandardOutput(), false);
                 var stderr = Pump(child.StandardError.BaseStream, Console.OpenStandardError(), false);
                 child.WaitForExit(); stdout.Join(); stderr.Join(); return child.ExitCode;
             }
-        } catch {
-            Console.Error.WriteLine("Codex Switch could not start this window. Open Codex Switch to recover its configuration.");
+        } catch (Exception error) {
+            Console.Error.WriteLine("Codex Switch could not start this window (" + stage + "/" + error.GetType().Name + "). Open Codex Switch to recover its configuration.");
             return 1;
         }
         // The OS closes the job handle when this process exits, including kills.
