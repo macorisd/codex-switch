@@ -310,6 +310,34 @@ Source: user request and approved 0.3.0 PLAN, 2026-11-11.
 - Keep tokens, email, account identifiers and unfiltered service responses
   outside the webview and logs. Preserve existing credentials and configuration.
 
+## Provider usage status bar
+
+Source: explicit study-and-plan request with Codex Usage screenshot, 2026-11-17.
+Implementation is pending approval of the proposed plan; record these requested
+outcomes separately from its unapproved technical/interaction proposals.
+
+- Add a native status-bar indicator inspired by ganymede404's Codex Usage:
+  provider icon (preferably a monochrome derivative of its logo) and remaining
+  usage for the provider verified in that workspace. Preserve multi-window/SSH
+  isolation and do not infer activation from saved preferences or a global file.
+- For usage windows, match the reference's compact label, remaining percentage,
+  reset countdown and separators. Show the windows actually available; do not
+  assume every ChatGPT plan has both five-hour and weekly limits.
+- For this status-bar window indicator, any remaining percentage <=10 is red,
+  otherwise any <=25 is yellow, otherwise normal. Red takes precedence. Missing
+  data is not zero. Keep the existing ChatGPT card's percentage rules.
+- For money or native Credits, show the actual remaining amount/unit. Reuse the
+  provider card's positive Balance alert threshold: yellow below it, red when
+  exhausted. At threshold 0, keep the normal color even when exhausted.
+- Study each integrated billing modality and its accessible API before coding.
+  Do not fabricate balances, convert arbitrary credits to money, or confuse
+  inference rate limits/key spending caps with account funds. Preserve existing
+  credential permissions and the requirement that all behavior ships in VSIX.
+- The user requested the plan before implementation. New quota adapters,
+  background polling demand, unknown-state UI and API-card percentage changes
+  in that plan remain proposals until approved; existing card/alert rules are
+  not replaced by this documentation-only study.
+
 ## DeepSeek Usage
 
 Source: approved PLAN for version 0.2.0, 2026-11-09.
