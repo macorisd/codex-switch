@@ -77,6 +77,9 @@ def handle(request):
         if operation == 'status': return api.state(provider)
         if operation == 'refresh': return api.refresh(provider)
         if operation == 'balance': return api.balance(provider)
+        if operation == 'usage':
+            from usage_metrics import read
+            return read(provider)
         if operation == 'test': return api.test_model(provider)
         if operation == 'select': return api.select(provider, request.get('model'), request.get('effort', ''))
         if operation == 'apply':

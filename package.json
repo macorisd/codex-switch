@@ -2,7 +2,7 @@
   "name": "codex-provider-switch",
   "displayName": "Codex Switch",
   "description": "Switch Codex between ChatGPT and nine API-key providers from the VS Code sidebar.",
-  "version": "0.5.5",
+  "version": "0.6.0",
   "publisher": "macor-local",
   "license": "GPL-3.0-only",
   "repository": {
@@ -70,7 +70,79 @@
         "command": "codexSwitch.useBundledCodex",
         "title": "Codex Switch: Use bundled Codex executable"
       }
-    ]
+    ],
+    "icons": {
+      "codex-switch-openai": {
+        "description": "openai provider",
+        "default": {
+          "fontPath": "./media/status-icons/providers.woff",
+          "fontCharacter": "\\E900"
+        }
+      },
+      "codex-switch-deepseek": {
+        "description": "deepseek provider",
+        "default": {
+          "fontPath": "./media/status-icons/providers.woff",
+          "fontCharacter": "\\E901"
+        }
+      },
+      "codex-switch-openrouter": {
+        "description": "openrouter provider",
+        "default": {
+          "fontPath": "./media/status-icons/providers.woff",
+          "fontCharacter": "\\E902"
+        }
+      },
+      "codex-switch-openai-api": {
+        "description": "openai-api provider",
+        "default": {
+          "fontPath": "./media/status-icons/providers.woff",
+          "fontCharacter": "\\E903"
+        }
+      },
+      "codex-switch-zai": {
+        "description": "zai provider",
+        "default": {
+          "fontPath": "./media/status-icons/providers.woff",
+          "fontCharacter": "\\E904"
+        }
+      },
+      "codex-switch-moonshot": {
+        "description": "moonshot provider",
+        "default": {
+          "fontPath": "./media/status-icons/providers.woff",
+          "fontCharacter": "\\E905"
+        }
+      },
+      "codex-switch-qwen": {
+        "description": "qwen provider",
+        "default": {
+          "fontPath": "./media/status-icons/providers.woff",
+          "fontCharacter": "\\E906"
+        }
+      },
+      "codex-switch-xai": {
+        "description": "xai provider",
+        "default": {
+          "fontPath": "./media/status-icons/providers.woff",
+          "fontCharacter": "\\E907"
+        }
+      },
+      "codex-switch-minimax": {
+        "description": "minimax provider",
+        "default": {
+          "fontPath": "./media/status-icons/providers.woff",
+          "fontCharacter": "\\E908"
+        }
+      },
+      "codex-switch-mimo": {
+        "description": "mimo provider",
+        "default": {
+          "fontPath": "./media/status-icons/providers.woff",
+          "fontCharacter": "\\E909"
+        }
+      }
+    }
   },
   "scripts": {
     "brand": "node scripts/build-brand-assets.cjs",
@@ -113,7 +185,10 @@
     "recovery.js",
     "node_modules/jsonc-parser/lib/umd/**",
     "node_modules/jsonc-parser/package.json",
-    "node_modules/jsonc-parser/LICENSE.md"
+    "node_modules/jsonc-parser/LICENSE.md",
+    "usage-service.js",
+    "usage-status.js",
+    "backend/usage_metrics.py"
   ],
   "devDependencies": {
     "@vscode/vsce": "4.1.0",

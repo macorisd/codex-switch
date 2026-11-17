@@ -20,6 +20,7 @@ function harness(options = {}) {
   const intervals = [];
   const clearedIntervals = [];
   const accountCalls = [];
+  const statusItems = [];
   const pendingBackend = [];
   const backendSignals = [];
   const globalValues = new Map(Object.entries(options.globalValues || {}));
@@ -50,8 +51,13 @@ function harness(options = {}) {
         this.id = id;
       }
     },
+    ThemeColor: class { constructor(id) { this.id = id; } },
+    StatusBarAlignment: { Right: 2 },
     RelativePattern: class {},
     window: {
+      ...(options.statusBar ? { createStatusBarItem: () => {
+        const item = { show() {}, dispose() { this.disposed = true; } }; statusItems.push(item); return item;
+      } } : {}),
       registerWebviewViewProvider: (id, value) => {
         provider = value;
         return disposable;
@@ -156,6 +162,7 @@ function harness(options = {}) {
               const index = calls.filter(call => (call.operation || call.action) === 'balance').length - 1;
               result = balances[Math.min(index, balances.length - 1)];
             }
+            if (operation === 'usage') result = options.usage?.(request.provider) || { balance: { total: 2, currency: 'USD' } };
             child.stdout.emit('data', JSON.stringify({ ok: true, data: result }));
           }
           child.emit('close', 0);
@@ -227,9 +234,13 @@ function harness(options = {}) {
       },
     },
   };
-  provider.resolveWebviewView(view);
+  if (!options.noView) provider.resolveWebviewView(view);
   return {
     calls,
+    statusItems,
+    selector: provider,
+    openView: () => provider.resolveWebviewView(view),
+    dispose: () => context.subscriptions.forEach(d => d.dispose?.()),
     messages,
     commands,
     errors,
@@ -255,6 +266,49 @@ function harness(options = {}) {
 }
 
 const definitions = require('../backend/providers.json');
+
+test('native usage starts before the sidebar opens and follows only the verified workspace provider', async () => {
+  const h = harness({ statusBar: true, noView: true, provider: 'deepseek' });
+  try {
+    for (let i = 0; i < 12; i++) await new Promise(r => setImmediate(r));
+    assert.match(h.statusItems[0].text, /DeepSeek USD 2.00/);
+    assert.equal(h.calls.filter(c => c.operation === 'usage').length, 1);
+    assert.equal(h.calls.filter(c => ['refresh', 'balance'].includes(c.operation)).length, 0);
+    assert.equal(h.accountCalls.length, 0);
+    h.backendState.provider = 'openrouter'; await h.updateConfiguration();
+    for (let i = 0; i < 6; i++) await new Promise(r => setImmediate(r));
+    assert.match(h.statusItems[0].text, /OpenRouter USD 2.00/);
+    assert.equal(h.calls.filter(c => c.operation === 'usage').length, 2);
+  } finally { h.dispose(); }
+  assert(h.statusItems[0].disposed);
+});
+
+test('open sidebar reuses pending usage and closing it retains only active-provider demand', async () => {
+  const h = harness({ statusBar: true, noView: true, provider: 'deepseek', hangActions: ['usage'] });
+  try {
+    for (let i = 0; i < 6; i++) await new Promise(r => setImmediate(r));
+    h.openView(); const ready = h.receive({ action: 'ready' });
+    for (let i = 0; i < 6; i++) await new Promise(r => setImmediate(r));
+    assert.equal(h.calls.filter(c => c.operation === 'usage' && c.provider === 'deepseek').length, 1);
+    for (const task of h.pendingBackend.splice(0)) task.respond();
+    await ready; h.setVisible(false);
+    assert.equal(h.selector.usage.demanded('deepseek'), true);
+    assert.equal(h.selector.usage.demanded('openrouter'), false);
+    const state = h.selector.api.sessions.get('deepseek');
+    assert.equal(state.balance.total, h.selector.usage.get('deepseek').balance.total);
+  } finally { h.dispose(); }
+});
+
+test('unknown workspace status never attributes usage or starts provider reads', async () => {
+  const h = harness({ statusBar: true, noView: true, runtimeStatus: { verified: false, provider: null } });
+  try {
+    for (let i = 0; i < 6; i++) await new Promise(r => setImmediate(r));
+    assert.match(h.statusItems[0].text, /Codex Switch —/);
+    assert.equal(h.calls.filter(c => c.operation === 'usage').length, 0);
+    assert.equal(h.accountCalls.length, 0);
+    assert.equal(h.statusItems[0].backgroundColor, undefined);
+  } finally { h.dispose(); }
+});
 const apiMessage = (provider, operation, extra = {}) => ({ action: 'api', provider, operation, ...extra });
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
@@ -562,7 +616,7 @@ test('real sidebar and host keep repeated provider toggles hidden across refresh
       acquireVsCodeApi:()=>({postMessage:m=>outgoing.push(plain(m))}),
       setInterval:()=>1,clearInterval(){},setTimeout:()=>1,clearTimeout(){},
     });
-    for (const file of ['balance-alerts.js','api-view.js','view.js']) {
+    for (const file of ['balance-alerts.js','usage-metrics.js','api-view.js','view.js']) {
       vm.runInContext(fs.readFileSync(path.join(extensionRoot,'media',file),'utf8'),context);
     }
     return {host,document,

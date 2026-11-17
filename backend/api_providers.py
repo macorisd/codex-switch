@@ -85,11 +85,15 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def request(provider, route, data=None):
+def request(provider, route, data=None, *, origin=None, raw_authorization=False):
     key = s.credential_store.load(key_path(provider))
-    req = urllib.request.Request(endpoint(provider) + route,
+    if origin is not None and (provider != 'zai' or origin != 'https://api.z.ai'):
+        raise ValueError('Unsupported usage host')
+    if raw_authorization and provider != 'zai':
+        raise ValueError('Unsupported authentication mode')
+    req = urllib.request.Request((origin or endpoint(provider)) + route,
         data=None if data is None else json.dumps(data).encode(),
-        headers={'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json'})
+        headers={'Authorization': key if raw_authorization else 'Bearer ' + key, 'Content-Type': 'application/json'})
     with urllib.request.build_opener(NoRedirect()).open(req, timeout=25) as response:
         payload = response.read(4_000_001)
         if len(payload) > 4_000_000:
@@ -304,6 +308,9 @@ def select(provider, model, effort):
 
 
 def balance(provider):
+    if provider in ('zai', 'mimo'):
+        from usage_metrics import provider_balance
+        return provider_balance(provider)
     if provider == 'deepseek':
         return s.balance()
     if provider == 'openrouter':
@@ -335,7 +342,9 @@ def balance(provider):
                     continue
                 value *= boost / 1000
             reset = entry.get(reset_key)
-            windows.append({'label': label, 'remaining': value, 'resetsAt': reset / 1000 if type(reset) in (int, float) and math.isfinite(reset) and 0 < reset <= 253402300799000 else None})
+            start = entry.get('start_time' if prefix == 'current_interval' else 'weekly_start_time')
+            duration = (reset - start) / 60000 if type(start) in (int, float) and type(reset) in (int, float) and math.isfinite(start) and math.isfinite(reset) and 0 < reset - start <= 315360000000 else None
+            windows.append({'label': label, 'durationMins': duration, 'remaining': value, 'resetsAt': reset / 1000 if type(reset) in (int, float) and math.isfinite(reset) and 0 < reset <= 253402300799000 else None})
         return {'windows': windows} if windows else None
     return None
 

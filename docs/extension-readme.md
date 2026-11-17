@@ -11,6 +11,21 @@ Codex process for new chats. If it has not been confirmed, or another window of
 the same workspace saved a change, use **Reload this window**. The panel never
 marks a saved preference as active without a runtime confirmation.
 
+The right-hand status bar shows that workspace's confirmed provider and remaining
+usage: quota windows with reset countdowns, monetary balance, or native Credits.
+Its monochrome provider logo is bundled. Click it to open Codex Switch. The active
+provider keeps refreshing every minute with the sidebar closed; opening its card
+shares the same reading. Hidden/inactive providers do not acquire background demand.
+Window percentages turn yellow at 25% and red at 10% remaining. Monetary/Credits
+colors use the card's Balance alert threshold; 0 keeps them neutral even at zero.
+An unavailable reading shows a neutral dash and its explanation in the tooltip.
+OpenAI API, Qwen and xAI need separate billing permissions and do not show a guessed
+balance. Z.AI personal-plan quotas and MiMo PAYG/Token Plan use official read APIs.
+MiMo Credits are not dollars. No additional billing keys or Codex Usage installation
+are required. Existing Codex Usage items are left untouched.
+In a remote window, tooltip dates use explicit UTC until the sidebar supplies
+the client's time zone; relative countdowns are independent of this.
+
 The rosette-and-gear icon opens the selector. Your existing encrypted key is
 reused; **Set API key** opens VS Code's native password dialog. No keys are
 saved in workspace settings. When a key already exists, that dialog includes a

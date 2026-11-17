@@ -12,6 +12,8 @@ const { WorkspaceRuntime } = require('./workspace-runtime');
 const pythonRuntime = require('./python-runtime');
 const { CredentialVault } = require('./credential-vault');
 const balanceAlerts = require('./media/balance-alerts');
+const { UsageService } = require('./usage-service');
+const { UsageStatus } = require('./usage-status');
 const DEFINITIONS = require('./backend/providers.json');
 const PROVIDERS = [{ id: 'openai', name: 'ChatGPT', subtitle: 'Your Plan' }, ...DEFINITIONS];
 const PROVIDER_LAYOUT_KEY = 'providerLayout';
@@ -74,11 +76,50 @@ class Selector {
     const savedAlerts = context.globalState.get(BALANCE_ALERT_KEY, {});
     this.balanceAlerts = Object.fromEntries(DEFINITIONS.map(p => [p.id, { threshold: balanceAlerts.threshold(savedAlerts?.[p.id]?.threshold) }]));
     this.alertTracker = new balanceAlerts.Tracker();
+    if (vscode.window.createStatusBarItem) {
+      this.usage = new UsageService({ demanded: id => this.canLoad(id) || this.activeProvider === id,
+        load: async (id, signal) => {
+          if (id !== 'openai') return DEFINITIONS.find(p => p.id === id)?.usage
+            ? runtime.request({ action: 'api', provider: id, operation: 'usage' }, signal)
+            : { balance: null, reason: 'Remaining usage is not available with this provider credential.' };
+          const account = await codexAccount.readAccount(codexAccount.executable(vscode), { signal });
+          const windows = account.windows || [{ ...account.fiveHour, durationMins: 300 }, { ...account.weekly, durationMins: 10080 }];
+          return { account, balance: account.configured ? { windows } : null, reason: 'ChatGPT usage is unavailable.' };
+        }, changed: id => this.usageChanged(id) });
+      this.statusBar = new UsageStatus(vscode, PROVIDERS, id => this.balanceAlerts[id]?.threshold || 0);
+      const poll = setInterval(() => { if (!this.viewVisible) void this.update(); }, 60000);
+      const clock = setInterval(() => this.renderUsage(), 30000);
+      poll.unref?.(); clock.unref?.();
+      context.subscriptions.push(this.statusBar, { dispose: () => { clearInterval(poll); clearInterval(clock); this.usage.dispose(); } });
+    }
     this.api = new ApiSessions({ definitions: DEFINITIONS, request: runtime.request,
       visible: id => this.canLoad(id), post: value => this.post(value),
       input: options => this.input(options),
       apply: work => this.applyProvider(work),
-      alerts: (id, balance) => this.checkBalance(id, balance) });
+      alerts: (id, balance) => this.checkBalance(id, balance),
+      balance: this.usage ? async (id, signal, manual) => {
+        const reading = await this.usage.read(id, manual); signal?.throwIfAborted(); return reading?.balance || null;
+      } : undefined,
+      invalidate: id => this.invalidateUsage(id) });
+  }
+  invalidateUsage(id) {
+    this.alertTracker.reset(id);
+    const state = this.api?.sessions.get(id); if (state) state.balance = null;
+    this.usage?.invalidate(id);
+  }
+  renderUsage() { this.statusBar?.render(this.activeProvider, this.usage?.get(this.activeProvider)); }
+  usageChanged(id) {
+    const reading = this.usage.get(id);
+    if (id === 'openai' && reading) {
+      this.chatgpt = reading.account ? { ...reading.account, loading: false, stale: reading.status !== 'ready' }
+        : { ...this.chatgpt, loading: false, stale: true };
+      void this.post({ type: 'chatgpt', account: this.chatgpt });
+    } else if (reading && this.api) {
+      const state = this.api.sessions.get(id);
+      if (state) { state.balance = reading.balance; if (reading.balance) this.checkBalance(id, reading.balance); }
+      if (!this.api.pending.has(id)) void this.api.publish(id);
+    }
+    this.renderUsage();
   }
   canLoad(id) { return this.viewVisible && this.providerLayout().some(p => p.id === id && p.visible); }
   input({ allowRemove, ...options }) {
@@ -124,7 +165,7 @@ class Selector {
     const nonce = crypto.randomBytes(24).toString('base64');
     let html = fs.readFileSync(path.join(this.context.extensionPath, 'media', 'index.html'), 'utf8');
     const replacements = { '{{NONCE}}': nonce, '{{CSP}}': view.webview.cspSource };
-    for (const [name, file] of Object.entries({ STYLE: 'style.css', SCRIPT: 'view.js', API_SCRIPT: 'api-view.js', ALERT_SCRIPT: 'balance-alerts.js', CHATGPT_ICON: 'providers/openai.svg', DEEPSEEK_ICON: 'providers/deepseek.svg' })) {
+    for (const [name, file] of Object.entries({ STYLE: 'style.css', SCRIPT: 'view.js', API_SCRIPT: 'api-view.js', ALERT_SCRIPT: 'balance-alerts.js', METRICS_SCRIPT: 'usage-metrics.js', CHATGPT_ICON: 'providers/openai.svg', DEEPSEEK_ICON: 'providers/deepseek.svg' })) {
       replacements[`{{${name}}}`] = view.webview.asWebviewUri(vscode.Uri.joinPath(media, ...file.split('/'))).toString();
     }
     for (const [key, value] of Object.entries(replacements)) html = html.split(key).join(value);
@@ -133,17 +174,19 @@ class Selector {
       view.onDidChangeVisibility(() => {
         this.viewVisible = view.visible;
         if (this.viewVisible) void this.ready();
-        else { this.api.reconcile(); this.stopAccountPolling(); this.reconcilePolling(); }
+        else { this.api.reconcile(); this.stopAccountPolling(); this.reconcilePolling(); this.usage?.reconcile(); }
       }), { dispose: () => { this.viewVisible = false; this.api.dispose(); this.stopAccountPolling(); this.reconcilePolling(); } });
     if (view.onDidDispose) this.context.subscriptions.push(view.onDidDispose(() => {
-      this.viewVisible = false; this.api.dispose(); this.stopAccountPolling(); this.reconcilePolling();
+      this.viewVisible = false; this.api.dispose(); this.stopAccountPolling(); this.reconcilePolling(); this.usage?.reconcile();
     }));
   }
   async update(busy = this.busy) {
-    if (!this.view) return;
     try {
       const local = await this.runtime.status();
       this.activeProvider = local.verified ? local.provider : null;
+      this.usage?.reconcile();
+      this.renderUsage();
+      if (this.activeProvider) void this.usage?.read(this.activeProvider);
       this.selectedProvider = local.selectedProvider;
       const native = local.nativeSelection;
       if (native?.sequence && native.sequence !== this.nativeSequence) {
@@ -157,7 +200,7 @@ class Selector {
         }
       }
       await this.post({ type: 'state', busy, state: { ...local,
-        providers: PROVIDERS.map(p => ({ ...p, iconUri: p.icon ? this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'providers', p.icon)).toString() : undefined })), providerLayout: this.providerLayout(), providerLayoutRevision: this.layoutRevision,
+        providers: PROVIDERS.map(p => ({ ...p, iconUri: p.icon && this.view ? this.view.webview.asWebviewUri(vscode.Uri.joinPath(this.context.extensionUri, 'media', 'providers', p.icon)).toString() : undefined })), providerLayout: this.providerLayout(), providerLayoutRevision: this.layoutRevision,
         chatgpt: this.chatgpt, balanceAlerts: this.balanceAlerts } });
       this.api.reconcile();
       this.reconcilePolling();
@@ -166,11 +209,12 @@ class Selector {
   }
   async ready() {
     await this.update();
-    await Promise.allSettled([this.syncAccount(), this.api.refreshAll(true)]);
+    await Promise.allSettled([this.syncAccount(true), this.api.refreshAll(true)]);
   }
   stopAccountPolling() { this.accountAbort?.abort(); }
-  syncAccount() {
+  syncAccount(manual = false) {
     if (!this.canLoad('openai')) return Promise.resolve();
+    if (this.usage) return this.usage.read('openai', manual);
     if (this.accountRequest) return this.accountAbort?.signal.aborted ? this.accountRequest.then(() => this.syncAccount()) : this.accountRequest;
     this.accountAbort = new AbortController();
     const controller = this.accountAbort;
@@ -189,7 +233,8 @@ class Selector {
     if (!warning) return;
     const name = DEFINITIONS.find(p => p.id === id).name;
     const remaining = warning.unit === '%' ? `${warning.value.toFixed(1)}%`
-      : new Intl.NumberFormat('en-US', { style: 'currency', currency: warning.unit, currencyDisplay: 'code' }).format(warning.value);
+      : warning.unit === 'Credits' ? `${warning.value.toLocaleString('en-US')} Credits`
+        : new Intl.NumberFormat('en-US', { style: 'currency', currency: warning.unit, currencyDisplay: 'code' }).format(warning.value);
     void vscode.window.showWarningMessage(warning.level === 'zero'
       ? `${name} ${warning.unit === '%' ? 'quota' : 'credits'} exhausted.`
       : `${name} ${warning.unit === '%' ? 'quota' : 'balance'} is low: ${remaining} remaining.`);
@@ -209,7 +254,7 @@ class Selector {
     try {
       await this.post({ type: 'syncLoading', loading: true, quiet: !manual });
       await this.update();
-      await Promise.allSettled([this.syncAccount(), this.api.refreshAll(manual)]);
+      await Promise.allSettled([this.syncAccount(manual), this.api.refreshAll(manual)]);
       // Provider management stays available; include any newly enabled provider.
       while (this.accountRequest || this.api.pending.size) {
         await Promise.allSettled([this.accountRequest, ...this.api.pending.values()]);
@@ -224,7 +269,7 @@ class Selector {
   }
   async run(message) {
     if (!message || typeof message.action !== 'string') return;
-    if (message.action === 'ready') return this.ready();
+    if (message.action === 'ready') { this.statusBar?.setTimeZone(message.timeZone); this.renderUsage(); return this.ready(); }
     if (message.action === 'reloadWindow' && !this.busy) return this.runtime.reload();
     if (message.action === 'repairWindow' && !this.busy) return this.runtime.repair();
     if (message.action === 'saveProviderLayout') return this.saveProviderLayout(message.layout, message.revision);
@@ -238,6 +283,7 @@ class Selector {
       this.alertTracker.observe(id, this.api.sessions.get(id).balance, value);
       await this.context.globalState.update(BALANCE_ALERT_KEY, this.balanceAlerts);
       await this.view?.webview.postMessage({ type: 'balanceAlerts', balanceAlerts: this.balanceAlerts });
+      this.renderUsage();
       return;
     }
     if (message.action === 'syncAll') {
@@ -297,6 +343,7 @@ class Selector {
         await this.context.globalState.update(PROVIDER_LAYOUT_KEY, layout);
         if (!this.canLoad('openai')) this.stopAccountPolling();
         this.api.reconcile();
+        this.usage?.reconcile();
         await this.view?.webview.postMessage({
           type: 'providerLayout',
           layout,
@@ -342,10 +389,12 @@ function activate(context) {
   if (vault.enabled) context.subscriptions.push(context.secrets.onDidChange(event => {
     const id = vault.provider(event.key);
     if (!id) return;
+    selector.invalidateUsage(id);
     maintenance = maintenance.then(async () => {
       await runtime.prepared;
       if (!vscode.env.remoteName) await backend({ action: 'credentialMaintenance', mode: 'sync' }).catch(() => {});
       if (selector.canLoad(id)) await selector.api.refresh(id, true);
+      else if (selector.activeProvider === id) await selector.usage?.read(id, true);
     }).catch(() => {});
   }));
   context.subscriptions.push({ dispose: () => {
@@ -385,7 +434,7 @@ function activate(context) {
   }));
   // VS Code waits for eager activation before onStartupFinished consumers.
   // Do not await opening a view here: that can recursively activate Codex.
-  void runtime.prepared.then(() => runtime.openPendingChat());
+  void runtime.prepared.then(() => { if (selector.usage) void selector.update(); return runtime.openPendingChat(); });
   return runtime.prepared;
 }
 

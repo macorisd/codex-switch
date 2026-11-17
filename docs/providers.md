@@ -119,10 +119,29 @@ Selection is checked against the saved catalog before writing Codex config.
   so no percentages are guessed from counts. PAYG monetary balance stays hidden
   because that response does not identify its currency.
 
-OpenAI organization-admin billing requires different permissions from ordinary
-inference keys. No dependable ordinary-key remaining balance/limit contract was
-established for Z.AI, Qwen, xAI or MiMo. Those cards show no fabricated zero
-balances, estimated spend or guessed limits. Missing/non-finite data stays hidden.
+Z.AI personal Coding Plan quotas use the official plugin's
+[`/api/monitor/usage/quota/limit`](https://github.com/zai-org/zai-coding-plugins/blob/main/plugins/glm-plan-usage/skills/usage-query-skill/scripts/query-usage.mjs).
+Only recognized model quota windows are shown; MCP pools and unknown schemas are
+not substituted for model allowance. Legacy token and newer credit windows are
+normalized by duration, without guessing a weekly reset from a five-hour slot.
+
+MiMo supplies [monetary balance](https://mimo.mi.com/docs/en-US/api/asset/balance-get)
+on its PAYG endpoint and [native Credits](https://mimo.mi.com/docs/en-US/api/asset/credits-get)
+on the Token Plan endpoint with its dedicated key. Frozen funds are excluded from
+spendable balance. Credits keep their own unit and period expiry, never USD.
+
+OpenAI organization-admin billing requires different permissions from inference
+keys. Qwen subscription statistics require signed AccessKey/RAM requests; xAI
+requires a separate Management Key. Those three providers show no invented
+balance or inferred spend. A billing-permission failure does not invalidate
+model access. This feature never asks for administrative billing credentials.
+
+The native status bar uses the same window-local readings as provider cards.
+Only its verified active provider refreshes with the sidebar closed. Other visible
+cards refresh while their panel is open, with no duplicate requests. Unconfirmed
+providers and unavailable/stale usage show a neutral dash; tooltips explain why.
+No quota refill is assumed when a countdown reaches zero. Usage background reads
+do not refresh model catalogs, perform inference or change Codex configuration.
 
 Every API card has an independent **Balance alert**, disabled at the default 0.
 The new opt-in preferences replace the legacy automatic DeepSeek alert setting.
@@ -131,8 +150,10 @@ even when exhausted, and no warnings appear. A positive threshold uses the
 reported currency, or the lowest reported remaining percentage for quota-only
 providers. Cards without reliable readings explain why alerts cannot run.
 
-At/above the threshold the amount is neutral; below it is yellow; at/below 0 is
-red. Initial readings after starting the extension are silent. Notify only when
+At/above the threshold the monetary/native-credit amount is neutral; below it is
+yellow; at/below 0 is red. Quota display colors instead use fixed remaining
+percentages: <=10 red, >10 through25 yellow, otherwise normal. Quota notifications
+still honor their configured opt-in percentage threshold. Initial readings are silent. Notify only when
 crossing from neutral to yellow or from yellow to red; a direct neutral-to-red
 drop produces one exhausted warning. Repeated reads and recovery never notify.
 Recovery rearms subsequent downward crossings, including red Ã¢â€ â€™ yellow Ã¢â€ â€™ red.

@@ -132,6 +132,7 @@
     $('chatgpt-stale').hidden = !account.stale && account.usageAvailable !== false;
     const now = Date.now();
     for (const [prefix, value, duration] of [['five-hour', account.fiveHour, 300], ['weekly', account.weekly, 10080]]) {
+      $(prefix + '-value').closest('.usage-window').hidden = Array.isArray(account.windows) && !account.windows.some(w => w.durationMins === duration);
       const remaining = Number.isFinite(value?.remaining) ? value.remaining : null;
       $(prefix + '-value').textContent = remaining === null ? 'Unavailable' : `${Math.round(remaining)}%`;
       $(prefix + '-bar').hidden = remaining === null;
@@ -160,6 +161,26 @@
       $(prefix + '-countdown').textContent = minutes === null ? '' : countdown
         ? `Resets in ${countdown}` : "Resets in a few seconds. Blink and you'll miss it!";
     }
+    const otherWindows = $('chatgpt-other-windows');
+    otherWindows.replaceChildren(...(account.windows || []).filter(w => ![300, 10080].includes(w.durationMins)).map(value => {
+      const row = document.createElement('div'); row.className = 'usage-window';
+      const label = document.createElement('p'); label.textContent = `${window.UsageMetrics.label(value)} usage remaining`;
+      const amount = document.createElement('strong'); amount.textContent = Number.isFinite(value.remaining) ? `${Math.round(value.remaining)}%` : 'Unavailable';
+      const bar = document.createElement('progress'); bar.max = 100; bar.value = value.remaining || 0;
+      bar.hidden = !Number.isFinite(value.remaining); bar.dataset.level = value.remaining <= 10 ? 'critical' : value.remaining <= 25 ? 'low' : 'normal';
+      bar.setAttribute('aria-label', label.textContent);
+      const reset = document.createElement('p'); reset.className = 'usage-note';
+      reset.textContent = value.resetsAt ? `Resets ${new Date(value.resetsAt * 1000).toLocaleString()} · ${window.UsageMetrics.duration(Math.max(0, value.resetsAt - now / 1000))}` : 'Reset: Unavailable';
+      const meter = document.createElement('div'); meter.className = 'usage-meter'; meter.hidden = bar.hidden;
+      meter.append(bar);
+      if (value.resetsAt && value.durationMins && !bar.hidden) {
+        meter.style.setProperty('--time-remaining', `${Math.max(0, Math.min(100, (value.resetsAt * 1000 - now) / (value.durationMins * 60000) * 100))}%`);
+        for (const [className, text] of [['usage-now', ''], ['usage-now-label', 'Now']]) {
+          const marker = document.createElement('span'); marker.className = className; marker.textContent = text; marker.setAttribute('aria-hidden', 'true'); meter.append(marker);
+        }
+      }
+      row.append(label, amount, meter, reset); return row;
+    }));
     $('banked-resets').textContent = Number.isInteger(account.bankedResets) ? String(account.bankedResets) : 'Unavailable';
   }
 
@@ -245,5 +266,5 @@
     }
   }
   window.addEventListener('message', ({ data }) => receive(data));
-  send({ action: 'ready' });
+  send({ action: 'ready', timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone });
 })();
