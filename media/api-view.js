@@ -141,7 +141,7 @@ window.ApiCards = class {
   renderBalance(entry) {
     const { get, state, provider } = entry;
     const threshold = this.alerts[provider.id]?.threshold ?? 0;
-    const level = window.BalanceAlerts.level(state.balance, threshold);
+    const level = window.UsageMetrics.level(state.balance, threshold);
     for (const [name, target] of [['balance-low', 'low'], ['balance-zero', 'zero']]) {
       get('amount').classList.toggle(name, level === target);
       get('windows').classList.toggle(name, level === target);
@@ -188,11 +188,12 @@ window.ApiCards = class {
       const row = document.createElement('div'); row.className = 'usage-window';
       const label = document.createElement('p'); label.textContent = `${value.label}: ${value.remaining.toFixed(1)}%`;
       const bar = document.createElement('progress'); bar.max = Math.max(100, value.remaining); bar.value = value.remaining; bar.setAttribute('aria-label', value.label);
+      bar.dataset.level = window.UsageMetrics.level({ windows: [value] }) === 'zero' ? 'critical' : value.remaining <= 25 ? 'low' : 'normal';
       row.append(label, bar);
       if (value.resetsAt) { const reset = document.createElement('p'); reset.className = 'usage-note'; reset.textContent = `Resets ${new Intl.DateTimeFormat(undefined, {dateStyle:'short',timeStyle:'medium'}).format(new Date(value.resetsAt * 1000))}`; row.append(reset); }
       return row;
     }));
-    get('amount').textContent = Number.isFinite(state.balance?.total) && ['USD', 'CNY'].includes(state.balance.currency) ? new Intl.NumberFormat('en-US', { style: 'currency', currency: state.balance.currency, currencyDisplay: 'code' }).format(state.balance.total) : '';
+    get('amount').textContent = window.UsageMetrics.amount(state.balance);
     this.renderBalance(entry);
     const disabled = state.loading || state.working;
     for (const role of ['key', 'refresh', 'refresh-models', 'endpoint', 'model', 'test']) get(role).disabled = Boolean(disabled);

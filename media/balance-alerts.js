@@ -6,8 +6,8 @@
 })(typeof window === 'object' ? window : globalThis, () => {
   const threshold = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
   function metric(balance) {
-    if (Number.isFinite(balance?.total) && ['USD', 'CNY'].includes(balance.currency)) {
-      return { value: balance.total, unit: balance.currency };
+    if (Number.isFinite(balance?.total) && (['USD', 'CNY'].includes(balance.currency) || balance.unit === 'Credits')) {
+      return { value: balance.total, unit: balance.unit || balance.currency };
     }
     const remaining = (balance?.windows || []).map(w => w.remaining).filter(Number.isFinite);
     return remaining.length ? { value: Math.min(...remaining), unit: '%' } : null;

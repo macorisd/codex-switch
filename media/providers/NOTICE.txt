@@ -1,4 +1,8 @@
 Provider logo vectors from LobeHub Icons.
+Monochrome copies in ../status-icons and the derived providers.woff use the
+same pinned source revision below (non-color variants). Only font conversion,
+glyph positioning and monochrome rendering are applied. Generator:
+scripts/build-status-icons.py; fontTools is a development-only dependency.
 https://github.com/lobehub/lobe-icons
 Source: packages/static-svg/icons/{openai,deepseek,zai,grok,xiaomimimo}.svg
 Color variants: packages/static-svg/icons/{openrouter,kimi,qwen,minimax}-color.svg

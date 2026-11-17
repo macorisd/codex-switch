@@ -118,7 +118,7 @@
       }
     ],
     "icon": "zai.svg",
-    "usage": false
+    "usage": true
   },
   {
     "id": "moonshot",
@@ -269,6 +269,6 @@
       }
     ],
     "icon": "mimo.svg",
-    "usage": false
+    "usage": true
   }
 ]

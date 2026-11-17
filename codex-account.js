@@ -22,14 +22,17 @@ function normalize(account, response) {
   const fallback = response?.rateLimits;
   const bucket = response?.rateLimitsByLimitId?.codex
     ?? (fallback && (!fallback.limitId || fallback.limitId === 'codex') ? fallback : null);
-  const windows = [bucket?.primary, bucket?.secondary];
+  const windows = [bucket?.primary, bucket?.secondary].filter(Boolean).map((value, index) => ({
+    id: String(index), durationMins: Number.isFinite(value.windowDurationMins) && value.windowDurationMins > 0 ? value.windowDurationMins : null,
+    remaining: typeof value.usedPercent === 'number' && Number.isFinite(value.usedPercent)
+      ? Math.max(0, Math.min(100, 100 - value.usedPercent)) : null,
+    resetsAt: Number.isSafeInteger(value.resetsAt) && value.resetsAt > 0 && value.resetsAt <= 253402300799 ? value.resetsAt : null,
+  })).sort((a, b) => (a.durationMins ?? Infinity) - (b.durationMins ?? Infinity));
   const window = duration => {
-    const value = windows.find(item => item?.windowDurationMins === duration);
+    const value = windows.find(item => item.durationMins === duration);
     if (!value) return null;
     return {
-      remaining: typeof value.usedPercent === 'number' && Number.isFinite(value.usedPercent)
-        ? Math.max(0, Math.min(100, 100 - value.usedPercent)) : null,
-      resetsAt: Number.isSafeInteger(value.resetsAt) && value.resetsAt > 0 ? value.resetsAt : null,
+      remaining: value.remaining, resetsAt: value.resetsAt,
     };
   };
   const count = response?.rateLimitResetCredits?.availableCount;
@@ -37,7 +40,7 @@ function normalize(account, response) {
   const planType = account?.planType || bucket?.planType;
   const plan = configured && Object.hasOwn(plans, planType) ? plans[planType] : null;
   return {
-    configured, plan, fiveHour: configured ? window(300) : null,
+    configured, plan, windows: configured ? windows : [], fiveHour: configured ? window(300) : null,
     weekly: configured ? window(10080) : null,
     bankedResets: configured && Number.isSafeInteger(count) && count >= 0 ? count : null,
     usageAvailable: configured && Boolean(response),

@@ -140,6 +140,21 @@ def verify_vsix(content, tag):
             for name in ('extension/codex-adapter.js', 'extension/live-client.js', 'extension/backend/model_observer.py'):
                 if name not in files:
                     raise ValueError('VSIX is missing restored-client startup support')
+        if tuple(map(int, manifest['version'].split('.'))) >= (0, 6, 0):
+            for name in ('usage-service.js', 'usage-status.js', 'media/usage-metrics.js', 'backend/usage_metrics.py',
+                         'media/status-icons/providers.woff'):
+                if 'extension/' + name not in files:
+                    raise ValueError('VSIX is missing provider usage support')
+            if archive.read('extension/media/status-icons/providers.woff')[:4] != b'wOFF':
+                raise ValueError('Invalid provider icon font')
+            icons = manifest.get('contributes', {}).get('icons', {})
+            providers = ['openai', 'deepseek', 'openrouter', 'openai-api', 'zai', 'moonshot', 'qwen', 'xai', 'minimax', 'mimo']
+            for index, provider in enumerate(providers):
+                icon = icons.get('codex-switch-' + provider, {}).get('default', {})
+                if (icon.get('fontPath') != './media/status-icons/providers.woff'
+                        or icon.get('fontCharacter') != '\\' + format(0xE900 + index, 'X')
+                        or 'extension/media/status-icons/' + provider + '.svg' not in files):
+                    raise ValueError('VSIX is missing provider icon declarations or vector sources')
 
 
 def checksum(content, name):

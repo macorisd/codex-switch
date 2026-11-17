@@ -281,8 +281,10 @@ Source: user request and approved 0.3.0 PLAN, 2026-11-11.
   with the corresponding neutral, green or red indicator. A request failure
   is not proof that no account exists; mark retained information as out of date.
 - ChatGPT never shows a model catalog.
-- Show remaining percentages in accessible five-hour and weekly usage bars,
-  identifying windows by their actual duration. Each includes an exact local
+- Show remaining percentages in accessible usage bars for the windows actually
+  reported, identifying them by duration rather than plan or response slot.
+  Preserve the five-hour/weekly presentation when those windows exist; hide
+  absent windows and render additional durations. Each includes an exact local
   reset date and time in the user's local time zone without a GMT/UTC suffix.
   Label countdowns **Resets in**; use hours and minutes for five-hour usage
   and days, hours and minutes (`xd xh xm`) for weekly usage. Source: explicit
@@ -292,8 +294,8 @@ Source: user request and approved 0.3.0 PLAN, 2026-11-11.
   Source: explicit refinement, 2026-11-11.
 - Color each ChatGPT remaining-usage fill by its actual percentage: 0–10%
   inclusive red, above 10% through 25% inclusive yellow, above 25% the existing
-  theme blue. Keep accessible numeric values and apply these colors only to
-  ChatGPT plan bars, independently for the five-hour and weekly windows.
+  theme blue. Keep accessible numeric values and apply these colors independently
+  to ChatGPT and API quota windows (expanded by approved 0.6.0 plan).
 - Overlay a thin current-time marker on each available ChatGPT usage bar. Its
   horizontal position is remaining time divided by the actual window duration
   (five hours or seven days), clamped to 0–100%: right at the start, left at
@@ -306,9 +308,53 @@ Source: user request and approved 0.3.0 PLAN, 2026-11-11.
 - Show the available **Banked resets** count, without consuming resets.
 - Missing fields are **Unavailable**, never assumed to be zero. Refresh when
   the panel opens and every 60 seconds while visible, without overlapping
-  requests; stop polling when hidden/disposed. Update countdowns each minute.
+  requests; stop inactive/hidden polling when the panel is closed. The verified
+  active provider retains demand from its status-bar item, sharing the same
+  reading. Update countdowns locally without additional requests.
 - Keep tokens, email, account identifiers and unfiltered service responses
   outside the webview and logs. Preserve existing credentials and configuration.
+
+## Provider usage status bar
+
+Source: explicit study-and-plan request with Codex Usage screenshot, 2026-11-17.
+Plan approved explicitly with "sí, implementa", 2026-11-17. Apply the following
+rules with the approved 0.6.0 plan.
+
+- Add a native status-bar indicator inspired by ganymede404's Codex Usage:
+  provider icon (preferably a monochrome derivative of its logo) and remaining
+  usage for the provider verified in that workspace. Preserve multi-window/SSH
+  isolation and do not infer activation from saved preferences or a global file.
+- For usage windows, match the reference's compact label, remaining percentage,
+  reset countdown and separators. Show the windows actually available; do not
+  assume every ChatGPT plan has both five-hour and weekly limits.
+- For this status-bar window indicator, any remaining percentage <=10 is red,
+  otherwise any <=25 is yellow, otherwise normal. Red takes precedence. Missing
+  data is not zero. Keep the existing ChatGPT card's percentage rules.
+- For money or native Credits, show the actual remaining amount/unit. Reuse the
+  provider card's positive Balance alert threshold: yellow below it, red when
+  exhausted. At threshold 0, keep the normal color even when exhausted.
+- Study each integrated billing modality and its accessible API before coding.
+  Do not fabricate balances, convert arbitrary credits to money, or confuse
+  inference rate limits/key spending caps with account funds. Preserve existing
+  credential permissions and the requirement that all behavior ships in VSIX.
+- Use one shared metric service for sidebar and status bar. While the sidebar
+  is closed, the verified active provider still has usage demand; poll only that
+  provider every 60 seconds, deduplicate requests and update countdowns locally.
+  Existing stop-when-hidden rules still apply to inactive/unchecked providers.
+- Render unavailable/stale readings as a neutral dash with an explanation;
+  never invent a zero, a reset or a provider confirmation. Reject late readings
+  after provider, endpoint or credential changes.
+- Apply fixed percentage colors to API quota windows too (MiniMax/Z.AI),
+  replacing threshold-based display colors for those windows. Monetary/native
+  credit thresholds and opt-in notification crossings remain unchanged.
+- Use native status-bar warning/error backgrounds and accessible theme text,
+  a right-aligned item, compact reference format, useful tooltip and the existing
+  open-selector command on click. Package monochrome glyphs derived from the
+  bundled SVG logos as WOFF; no runtime downloads or Codex Usage dependency.
+- Remote tooltips must not assume the server's timezone is the client's. Obtain
+  the client zone from the sidebar's normal ready message. Until it is known,
+  label absolute tooltip dates explicitly as UTC; relative countdowns remain
+  correct and the sidebar formats its dates on the client as before.
 
 ## DeepSeek Usage
 
@@ -335,7 +381,9 @@ Source: approved PLAN for version 0.2.0, 2026-11-09.
   Keep its copy concise: omit "Initial readings are silent"; silent startup is
   behavior, not explanatory UI copy. Source: explicit correction, 2026-11-12.
   Clamp negative input to 0 on blur. At 0, disable every notification and keep
-  the balance in the normal theme foreground, including exhausted balances.
+  monetary/native-credit balances in the normal foreground, even when exhausted.
+  Quota-window display colors use fixed 10/25 boundaries; their optional alert
+  notifications still use the configured percentage threshold.
 - With a positive threshold, balances at/above it use the normal foreground,
   positive balances below it are yellow, and exhausted balances are red.
   Use reported currency units or, for quota-only providers, the lowest reported

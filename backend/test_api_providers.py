@@ -204,7 +204,7 @@ class ProvidersTest(unittest.TestCase):
         self.assertEqual(api.balance('moonshot')['currency'],'USD')
         api.configure_endpoint('moonshot','https://api.moonshot.cn/v1')
         self.assertEqual(api.balance('moonshot')['currency'],'CNY')
-        for provider in ('openai-api','zai','qwen','xai','mimo'):
+        for provider in ('openai-api','qwen','xai'):
             mock.reset_mock(); self.assertIsNone(api.balance(provider)); mock.assert_not_called()
 
     @patch('api_providers.request')

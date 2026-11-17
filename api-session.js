@@ -2,8 +2,8 @@
 
 // One lifecycle for all API keys. Hidden providers cannot start/continue requests.
 class ApiSessions {
-  constructor({ definitions, request, visible, post, input, apply, alerts }) {
-    Object.assign(this, { definitions, request, visible, post, input, apply, alerts });
+  constructor({ definitions, request, visible, post, input, apply, alerts, balance, invalidate }) {
+    Object.assign(this, { definitions, request, visible, post, input, apply, alerts, balance, invalidate });
     this.sessions = new Map(definitions.map(p => [p.id, { loading: true, valid: false, models: [] }]));
     this.pending = new Map(); this.controllers = new Map();
   }
@@ -31,6 +31,7 @@ class ApiSessions {
       if (!live()) throw new Error('Cancelled');
       const result = await this.request({ action: 'api', provider: id, operation, ...extra }, controller.signal);
       if (!live()) throw new Error('Cancelled');
+      if (['saveKey', 'removeKey', 'endpoint'].includes(operation)) this.invalidate?.(id);
       return result;
     };
     state.working = true;
@@ -59,7 +60,7 @@ class ApiSessions {
         Object.assign(state, await request('refresh'));
       }
       if (state.valid && this.definitions.find(p => p.id === id).usage) {
-        try { state.balance = await request('balance'); state.balanceError = ''; }
+        try { state.balance = this.balance ? await this.balance(id, this.controllers.get(id)?.signal, manual) : await request('balance'); state.balanceError = ''; }
         catch { state.balance = null; state.balanceError = 'Balance unavailable.'; }
         if (state.balance) this.alerts(id, state.balance);
       }

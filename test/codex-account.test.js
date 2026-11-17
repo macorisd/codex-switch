@@ -48,7 +48,7 @@ const rates = {
 test('read-only protocol returns only account and usage display fields and terminates', async () => {
   const s = server({ rates });
   const result = await readAccount('codex', s);
-  assert.deepEqual(result, { configured: true, plan: 'Plus', fiveHour: { remaining: 75, resetsAt: 1794435740 }, weekly: { remaining: 0, resetsAt: 1795003321 }, bankedResets: 0, usageAvailable: true });
+  assert.deepEqual({ ...result, windows: undefined }, { windows: undefined, configured: true, plan: 'Plus', fiveHour: { remaining: 75, resetsAt: 1794435740 }, weekly: { remaining: 0, resetsAt: 1795003321 }, bankedResets: 0, usageAvailable: true });
   assert.deepEqual(s.requests.map(r => r.method), ['initialize', 'initialized', 'account/read', 'account/rateLimits/read']);
   assert.equal(s.requests[2].params.refreshToken, false);
   assert.equal(s.killed(), true);

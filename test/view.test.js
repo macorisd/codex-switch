@@ -15,7 +15,7 @@ function harness({provider='openai',visible=['openai','deepseek'],chatgpt={loadi
   let currentTime = now;
   const sandbox={window,document,Date:class extends Date {static now(){return currentTime ?? Date.now();}},acquireVsCodeApi:()=>({postMessage:m=>messages.push(m)}),setInterval:fn=>{intervals.push(fn);return intervals.length;},clearInterval(){},setTimeout:(fn,delay)=>{timers.push({fn,delay});return timers.length;},clearTimeout(){}};
   const context=vm.createContext(sandbox);
-  for(const file of ['balance-alerts.js','api-view.js','view.js']) vm.runInContext(fs.readFileSync(path.join(root,'media',file),'utf8'),context);
+  for(const file of ['balance-alerts.js','usage-metrics.js','api-view.js','view.js']) vm.runInContext(fs.readFileSync(path.join(root,'media',file),'utf8'),context);
   const receive=data=>{const event=new window.Event('message');event.data=data;window.dispatchEvent(event);};
   receive({type:'state',busy:false,state:{provider,model:'test-model',effort:'high',providers,providerLayout:layout(visible),providerLayoutRevision:0,chatgpt,balanceAlerts:{}}});
   return {window,document,messages,timers,intervals,setNow:value=>{currentTime=value;},receive,$:id=>document.getElementById(id),card:id=>document.querySelector(`article[data-provider="${id}"]`),api:(id,state)=>receive({type:'apiState',provider:id,state})};
@@ -323,7 +323,8 @@ test('all API cards clamp thresholds on blur and update colors independently wit
   const card=h.card('minimax');
   h.api('minimax', {...configured,balance:{windows:[{label:'Weekly',remaining:2}]}});
   field(card,'threshold').value='4'; field(card,'threshold').dispatchEvent(new h.window.Event('blur'));
-  assert(field(card,'windows').classList.contains('balance-low'));
+  assert(!field(card,'windows').classList.contains('balance-low'), 'quota display uses fixed 10/25 boundaries, independently of opt-in alert threshold');
+  assert(field(card,'windows').classList.contains('balance-zero'));
   assert.match(field(card,'alert-description').textContent,/%/);
   h.receive({type:'balanceAlerts',balanceAlerts:{minimax:{threshold:0},openrouter:{threshold:3}}});
   h.receive({type:'chatgpt',account:{loading:false,configured:true}});

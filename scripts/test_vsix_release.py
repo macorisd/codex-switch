@@ -56,6 +56,29 @@ class HistoryTests(unittest.TestCase):
 
 
 class PackageTests(unittest.TestCase):
+    def test_usage_release_requires_all_metrics_files_and_self_contained_icons(self):
+        root = Path(__file__).resolve().parents[1]
+        names = ['workspace-runtime.js', 'backend/workspace_state.py', 'backend/window_launcher.py',
+            'backend/window_launcher.cs', 'backend/credential_native.py', 'backend/credential_store.py',
+            'backend/vendor/NOTICE.md', 'backend/vendor/jeepney-fixture.whl', 'recovery.js',
+            'backend/model_defaults.py', 'node_modules/jsonc-parser/lib/umd/main.js', 'credential-vault.js',
+            'backend/credential_bridge.py', 'codex-spawn.js', 'window-entry.js', 'python-runtime.js',
+            'client-settings.js', 'codex-adapter.js', 'live-client.js', 'backend/model_observer.py',
+            'usage-service.js', 'usage-status.js', 'media/usage-metrics.js', 'backend/usage_metrics.py']
+        extras = {'extension/' + name: b'fixture' for name in names}
+        for source in (root / 'media/status-icons').iterdir():
+            extras['extension/media/status-icons/' + source.name] = source.read_bytes()
+        manifest = json.loads((root / 'package.json').read_text('utf-8'))
+        extras['extension/package.json'] = json.dumps(manifest).encode()
+        tag = 'v' + manifest['version']
+        release.verify_vsix(package(manifest['version'], extra=extras), tag)
+        for missing in ['extension/usage-status.js', 'extension/backend/usage_metrics.py', 'extension/media/status-icons/openai.svg']:
+            with self.assertRaisesRegex(ValueError, 'usage support|icon declarations'):
+                release.verify_vsix(package(manifest['version'], extra={k:v for k,v in extras.items() if k != missing}), tag)
+        extras['extension/media/status-icons/providers.woff'] = b'not-a-font'
+        with self.assertRaisesRegex(ValueError, 'icon font'):
+            release.verify_vsix(package(manifest['version'], extra=extras), tag)
+
     def test_remote_credentials_require_every_shipped_runtime_component(self):
         names = ['workspace-runtime.js', 'backend/workspace_state.py', 'backend/window_launcher.py',
                  'backend/window_launcher.cs', 'backend/credential_native.py', 'backend/credential_store.py',

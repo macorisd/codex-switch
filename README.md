@@ -64,6 +64,7 @@ the matching GitHub Release, including its installable VSIX and checksum.
 
 | Version | Changes |
 | --- | --- |
+| 0.6.0 | Show the verified workspace provider's remaining usage in the status bar, share live metrics with its card, and add Z.AI quota and MiMo balance/Token Plan readings. |
 | 0.5.5 | Confirm restored Codex clients after cold startup, preserve saved providers when Codex activates first, and retain folderless-window selections. |
 | [0.5.4](https://github.com/macorisd/codex-switch/releases/tag/v0.5.4) | Confirm the correct Codex account and provider in SSH workspaces, share encrypted API keys without storing them on headless servers, discover compatible Python and preserve ordinary Codex startup. |
 | [0.5.3](https://github.com/macorisd/codex-switch/releases/tag/v0.5.3) | Prevent repeated window reloads when opening a workspace, apply its provider when Codex starts before the selector, and blend the supplied pixel art into the banner. |
@@ -113,6 +114,12 @@ isolated temporary identities and disable installed site-packages.
    npm run brand
    npm run package
    ```
+
+   The status-bar font is already bundled. To regenerate it after editing its
+   SVG sources, install the development-only dependency with
+   `python -m pip install -r scripts/requirements-icons.txt`, then run
+   `python scripts/build-status-icons.py`. Installed extensions need neither
+   fontTools nor this generation step.
 
 4. Install the resulting VSIX in the VS Code profile you are testing:
 
